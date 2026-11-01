@@ -8807,6 +8807,35 @@ end
         rebuildReturnModeUI()
         _G.VRILZ_RebuildReturnMode = rebuildReturnModeUI
 
+        -- ═══════════════════════════════════════════════════════════
+        -- ⭐ TAMBAHKAN DI SINI — MAGMA MODE DROPDOWN
+        -- ═══════════════════════════════════════════════════════════
+        local magmaModeLbl = Instance.new("TextLabel")
+        magmaModeLbl.Size = UDim2.new(1, 0, 0, 16)
+        magmaModeLbl.BackgroundTransparency = 1
+        magmaModeLbl.Text = "Magma Mode:"
+        magmaModeLbl.TextColor3 = C.Muted
+        magmaModeLbl.Font = Enum.Font.GothamSemibold
+        magmaModeLbl.TextSize = CFG.FONT_MUTED
+        magmaModeLbl.TextXAlignment = Enum.TextXAlignment.Left
+        magmaModeLbl.LayoutOrder = 7
+        magmaModeLbl.Parent = mutContent
+
+        local magmaModeHolder = Instance.new("Frame")
+        magmaModeHolder.Size = UDim2.new(1, 0, 0, CFG.DROPDOWN_H)
+        magmaModeHolder.BackgroundTransparency = 1
+        magmaModeHolder.LayoutOrder = 8
+        magmaModeHolder.Parent = mutContent
+
+        makeDropdownGlobal(magmaModeHolder, {"Teleport", "Glide"}, Shared.MagmaMode or "Teleport", function(v)
+            Shared.MagmaMode = v
+            if v == "Glide" then
+                notify("🌋 Magma Mode: Glide (50 studs/step, lambat)", "info")
+            else
+                notify("🌋 Magma Mode: Teleport (instant)", "success")
+            end
+        end)
+
         -- Status card
         -- Status card
         local infoCard, infoContent = makeCard(mutRight, "📊 STATUS MUTATION", 2)
@@ -11878,6 +11907,7 @@ function UI.Init(sharedState)
     Shared.AutoMutation_Enabled = false
     Shared.MutationReturn_Enabled = false
     Shared.ReturnMode = "Step"
+    Shared.MagmaMode = "Teleport"
         Shared.MutationSelectedEggs = {
         ["Cherub Egg"] = false, ["Volcanic Egg"] = false, ["Blackhole Egg"] = false,
         ["Solaris Egg"] = false, ["Galaxy Egg"] = false, ["Crystal Egg"] = false,
