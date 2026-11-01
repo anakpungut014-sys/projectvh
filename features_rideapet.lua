@@ -3046,8 +3046,8 @@ local function tpToSafeGlide(pos)
     local myRoot = char and char:FindFirstChild("HumanoidRootPart")
     if not myRoot then return false end
 
-    local STEP = 100
-    local WAIT = 0.05
+    local STEP = 125
+    local WAIT = 0.04
 
     local startPos = myRoot.Position
     local targetPos = pos + Vector3.new(0, 5, 0)
