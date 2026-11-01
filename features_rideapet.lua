@@ -3014,6 +3014,7 @@ local function getWaitNotifText()
     return "🔥 Wait 6 seconds!"
 end
 
+-- ⭐⭐⭐ TAMBAHKAN FUNCTION LAMA INI ⭐⭐⭐
 local function tpToSafe(pos)
     local char = LocalPlayer.Character
     local myRoot = char and char:FindFirstChild("HumanoidRootPart")
@@ -3039,6 +3040,90 @@ local function tpToSafe(pos)
     return true
 end
 
+-- ⭐ MAGMA MODE: GLIDE — TP ke magma per 50 studs (gak cepet)
+local function tpToSafeGlide(pos)
+    local char = LocalPlayer.Character
+    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+
+    local STEP = 50
+    local WAIT = 0.12
+
+    local startPos = myRoot.Position
+    local targetPos = pos + Vector3.new(0, 5, 0)
+    local totalDist = (targetPos - startPos).Magnitude
+
+    -- Naik dulu 100 studs
+    local targetY = math.max(startPos.Y, targetPos.Y) + 100
+    local riseStart = os.clock()
+    while myRoot.Parent and myRoot.Position.Y < targetY and (os.clock() - riseStart) < 3 do
+        myRoot.CFrame = myRoot.CFrame + Vector3.new(0, STEP, 0)
+        myRoot.Velocity = Vector3.zero
+        myRoot.AssemblyLinearVelocity = Vector3.zero
+        task.wait(WAIT * 0.5)
+    end
+
+    -- Glide horizontal per 50 studs
+    local steps = math.ceil(totalDist / STEP)
+    if steps < 1 then steps = 1 end
+    local dir = (targetPos - startPos)
+    dir = Vector3.new(dir.X, 0, dir.Z)
+    if dir.Magnitude > 1 then dir = dir.Unit end
+
+    for i = 1, steps do
+        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not r then return false end
+        local dist = math.min(STEP * i, totalDist)
+        local glidePos = Vector3.new(
+            startPos.X + dir.X * dist,
+            r.Position.Y,
+            startPos.Z + dir.Z * dist
+        )
+        r.CFrame = CFrame.new(glidePos)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+        task.wait(WAIT)
+    end
+
+    -- Turun ke target per 50 studs
+    local r2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not r2 then return false end
+    local dropDist = r2.Position.Y - targetPos.Y
+    if dropDist > 0 then
+        local dropSteps = math.ceil(dropDist / STEP)
+        for i = 1, dropSteps do
+            local r3 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not r3 then return false end
+            local newY = math.max(targetPos.Y, r3.Position.Y - STEP)
+            r3.CFrame = CFrame.new(r3.Position.X, newY, r3.Position.Z)
+            r3.Velocity = Vector3.zero
+            r3.AssemblyLinearVelocity = Vector3.zero
+            task.wait(WAIT)
+        end
+    end
+
+    -- Stick 1 detik
+    local stickStart = os.clock()
+    while os.clock() - stickStart < 1.0 do
+        local r4 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not r4 then break end
+        r4.CFrame = CFrame.new(targetPos)
+        r4.Velocity = Vector3.zero
+        r4.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.1)
+    end
+
+    return true
+end
+
+local function tpToSafeMode(pos)
+    local mode = Shared.MagmaMode or "Teleport"
+    if mode == "Glide" then
+        return tpToSafeGlide(pos)
+    else
+        return tpToSafe(pos)
+    end
+end
 local function runMutationOnce()
     MutationState.Running = true
 
@@ -3053,7 +3138,7 @@ local function runMutationOnce()
     task.wait(1.5)
 
     local safePos = findSafeVolcanoPos()
-    tpToSafe(safePos)
+    tpToSafeMode(safePos)  -- ⬅️ UBAH
     task.wait(2)
 
     local dropWaited = 0
@@ -3397,17 +3482,12 @@ end
                     continue
                 end
 
-                -- Step 6: KE MAGMA (drop)
+                                -- Step 6: KE MAGMA (drop)
                 if isHoldingEggMutation() then
                     task.wait(0.5)
                     local safePos = findSafeVolcanoPos()
                     if safePos then
-                        local rootLava = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        if rootLava then
-                            rootLava.CFrame = CFrame.new(safePos)
-                            rootLava.Velocity = Vector3.zero
-                            rootLava.AssemblyLinearVelocity = Vector3.zero
-                        end
+                        tpToSafeMode(safePos)
                     end
                     task.wait(1.5)
 
@@ -3533,12 +3613,7 @@ doReturnToPlot()
             task.wait(0.5)
             local safePos = findSafeVolcanoPos()
             if safePos then
-                local rootLava = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if rootLava then
-                    rootLava.CFrame = CFrame.new(safePos)
-                    rootLava.Velocity = Vector3.zero
-                    rootLava.AssemblyLinearVelocity = Vector3.zero
-                end
+                tpToSafeMode(safePos)  -- ⬅️ UBAH
             end
             task.wait(1.5)
 
@@ -5857,12 +5932,7 @@ local function seStealNormalEgg(egg)
     task.wait(0.5)
     local safePos = findSafeVolcanoPos()
     if safePos then
-        local rootLava = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if rootLava then
-            rootLava.CFrame = CFrame.new(safePos)
-            rootLava.Velocity = Vector3.zero
-            rootLava.AssemblyLinearVelocity = Vector3.zero
-        end
+        tpToSafeMode(safePos)  -- ⬅️ UBAH
     end
     task.wait(1.5)
 
@@ -5974,12 +6044,7 @@ local function seStealVolcanicEgg(egg)
     task.wait(0.5)
     local safePos = findSafeVolcanoPos()
     if safePos then
-        local rootLava = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if rootLava then
-            rootLava.CFrame = CFrame.new(safePos)
-            rootLava.Velocity = Vector3.zero
-            rootLava.AssemblyLinearVelocity = Vector3.zero
-        end
+        tpToSafeMode(safePos)
     end
     task.wait(1.5)
 
