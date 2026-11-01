@@ -6208,7 +6208,7 @@ function Features.Init(sharedState)
 end   -- ⭐⭐⭐ TUTUP Features.Init DI SINI ⭐⭐⭐
 
 -- ============================================================
--- AUTO OBBY (TALK + FLY TO FINISH + 30 MIN COOLDOWN)
+-- AUTO OBBY v3 — TP START → DIAM 8s → TP GLIDE FINISH → TP BALIK HALLOWEEN
 -- ============================================================
 local ObbyState = {
     Running = false,
@@ -6218,7 +6218,6 @@ function Features.startAutoObby()
     if ObbyState.Running then return end
     ObbyState.Running = true
 
-    -- ⭐ SAFETY: force reset kalo stuck >10 menit
     task.delay(600, function()
         if ObbyState.Running then
             ObbyState.Running = false
@@ -6228,12 +6227,9 @@ function Features.startAutoObby()
 
     task.spawn(function()
         local player = game.Players.LocalPlayer
-        local char = player.Character or player.CharacterAdded:Wait()
-        local hrp = char:WaitForChild("HumanoidRootPart")
-        local VIM = game:GetService("VirtualInputManager")
-        local COOLDOWN = 30 * 60 -- 30 menit
+        local COOLDOWN = 30 * 60
 
-        -- ═══ CEK COOLDOWN ═══
+        -- ═══ CEK COOLDOWN LOKAL ═══
         local lastFinish = 0
         if isfile and readfile then
             if isfile("vrilz_obby_time.txt") then
@@ -6244,9 +6240,7 @@ function Features.startAutoObby()
             end
         end
 
-        local now = os.time()
-        local timePassed = now - lastFinish
-        
+        local timePassed = os.time() - lastFinish
         if timePassed < COOLDOWN then
             local sisaMenit = math.ceil((COOLDOWN - timePassed) / 60)
             if Shared.Notify then
@@ -6255,332 +6249,267 @@ function Features.startAutoObby()
             ObbyState.Running = false
             return
         end
-        
-        -- ═══ 1. TALK KE SKELETON ═══
-        local npc = workspace:FindFirstChild("SkeletonNPC")
-        if not npc then 
-            ObbyState.Running = false
-            return 
-        end
-        local rig = npc:FindFirstChild("Rig")
-        if not rig then 
-            ObbyState.Running = false
-            return 
-        end
-        local prompt = rig:FindFirstChildWhichIsA("ProximityPrompt", true)
-        
-        print("[AUTO OBBY] Talk ke Skeleton...")
-        local rigRoot = rig:FindFirstChild("HumanoidRootPart") 
-    or rig:FindFirstChild("Torso") 
-    or rig:FindFirstChild("UpperTorso")
-    or rig:FindFirstChildWhichIsA("BasePart")
 
-if not rigRoot then
-    print("[AUTO OBBY] NPC gak punya part buat dideketin!")
-    ObbyState.Running = false
-    return
-end
+        -- ═══ CEK ATTRIBUTE SERVER ═══
+        local readyAt = tonumber(player:GetAttribute("HalloweenObbyReadyAt") or 0) or 0
+        local endsAt = tonumber(player:GetAttribute("HalloweenObbyEndsAt") or 0) or 0
+        local nowUnix = os.time()
 
-hrp.CFrame = rigRoot.CFrame * CFrame.new(0, 0, 3)
-        task.wait(0.5)
-        if prompt then fireproximityprompt(prompt) end
-        task.wait(1.5)
-        
-        -- ═══ 2. KLIK "LET'S GO" ═══
-print("[AUTO OBBY] Milih Let's go...")
-local startTime = tick()
-local clicked = false
-
-while tick() - startTime < 4 do
-    for _, gui in ipairs(player.PlayerGui:GetDescendants()) do
-        -- Pastiin gui itu TextButton/ImageButton dan punya Visible
-        if (gui:IsA("TextButton") or gui:IsA("ImageButton")) and gui:IsA("GuiObject") then
-            local isVisible = gui.Visible
-            if isVisible then
-                local isTarget = false
-                
-                -- Cek nama
-                local guiName = string.lower(gui.Name or "")
-                if guiName:find("let", 1, true) or guiName:find("go", 1, true) then 
-                    isTarget = true 
-                end
-                
-                -- Cek teks (khusus TextButton)
-                if not isTarget and gui:IsA("TextButton") then
-                    local guiText = string.lower(gui.Text or "")
-                    if guiText:find("let", 1, true) or guiText:find("go", 1, true) then 
-                        isTarget = true 
-                    end
-                end
-                
-                if isTarget then
-                    -- Cek AbsolutePosition & AbsoluteSize valid
-                    local absPos = gui.AbsolutePosition
-                    local absSize = gui.AbsoluteSize
-                    
-                    if absPos and absSize then
-                        local cx = absPos.X + (absSize.X / 2)
-                        local cy = absPos.Y + (absSize.Y / 2)
-                        
-                        -- Pastiin cx, cy itu number valid
-                        if type(cx) == "number" and type(cy) == "number" and cx > 0 and cy > 0 then
-                            print("[AUTO OBBY] Klik tombol:", gui:GetFullName())
-                            
-                            pcall(function() gui.MouseButton1Click:Fire() end)
-                            pcall(function() gui.Activated:Fire() end)
-                            
-                            pcall(function()
-                                VIM:SendMouseMoveEvent(cx, cy, 0)
-                            end)
-                            task.wait(0.05)
-                            pcall(function()
-                                VIM:SendMouseButtonEvent(cx, cy, 0, true, game, 1)
-                            end)
-                            task.wait(0.05)
-                            pcall(function()
-                                VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 1)
-                            end)
-                            
-                            clicked = true
-                        end
-                    end
-                end
+        if readyAt > 0 and nowUnix < readyAt then
+            local sisa = math.ceil(readyAt - nowUnix)
+            if Shared.Notify then
+                Shared.Notify("⏳ Obby cooldown server: " .. sisa .. "s lagi", "warning")
             end
+            ObbyState.Running = false
+            return
         end
-    end
-    
-    if clicked then break end
-    task.wait(0.2)
-end
 
-if clicked then
-    print("[AUTO OBBY] ✅ Berhasil klik Let's go")
-else
-    print("[AUTO OBBY] ⚠️ Gak nemu tombol Let's go yang valid")
-end
+        if endsAt > 0 and nowUnix > endsAt then
+            if Shared.Notify then Shared.Notify("❌ Obby sudah expired (server)", "error") end
+            ObbyState.Running = false
+            return
+        end
 
-        -- ═══ 3. TUNGGU MENTAL KE OBBY ═══
-        print("[AUTO OBBY] Nunggu mental ke obby...")
+        -- ═══ AMBIL RUN FOLDER ═══
+        local obbyFolder = workspace:FindFirstChild("HalloweenObbyRuns")
+        if not obbyFolder then
+            if Shared.Notify then Shared.Notify("❌ HalloweenObbyRuns gak ada", "error") end
+            ObbyState.Running = false
+            return
+        end
+
+        local runFolder = obbyFolder:FindFirstChild(tostring(player.UserId))
+        if not runFolder then
+            if Shared.Notify then
+                Shared.Notify("⚠️ Belum join obby — talk ke Skeleton dulu!", "warning")
+            end
+            ObbyState.Running = false
+            return
+        end
+
+        local startModel = runFolder:FindFirstChild("Start")
+        local finishModel = runFolder:FindFirstChild("Finish")
+        if not startModel or not finishModel then
+            if Shared.Notify then Shared.Notify("❌ Start/Finish gak ketemu", "error") end
+            ObbyState.Running = false
+            return
+        end
+
+        local startPos = startModel:GetPivot().Position
+        local finishPos = finishModel:GetPivot().Position
+        print("[AUTO OBBY] ✅ Start:", startPos, "| Finish:", finishPos)
+
+        -- ═══ STEP 1: TP LANGSUNG KE START ═══
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then
+            if Shared.Notify then Shared.Notify("❌ Character gak valid", "error") end
+            ObbyState.Running = false
+            return
+        end
+
+        if Shared.Notify then Shared.Notify("🏃 TP ke Start obby...", "info") end
+        print("[AUTO OBBY] 🎯 TP ke Start:", startPos)
+
+        hrp.CFrame = CFrame.new(startPos + Vector3.new(0, 5, 0))
+        hrp.Velocity = Vector3.zero
+        hrp.AssemblyLinearVelocity = Vector3.zero
+
+        -- ═══ STEP 2: DIAM 8 DETIK DI START ═══
+        if Shared.Notify then Shared.Notify("⏳ Diam 8 detik di Start...", "info") end
+        print("[AUTO OBBY] ⏳ Diam 8 detik di Start...")
+
         local waitStart = tick()
-        while tick() - waitStart < 15 do
-            if hrp.Position.X > 20000 then break end
-            task.wait(0.5)
+        while tick() - waitStart < 8 do
+            if not ObbyState.Running then
+                ObbyState.Running = false
+                return
+            end
+
+            -- ⭐ Stay di start biar gak goyang (anti gravity/dorong)
+            local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if r then
+                r.CFrame = CFrame.new(startPos + Vector3.new(0, 5, 0))
+                r.Velocity = Vector3.zero
+                r.AssemblyLinearVelocity = Vector3.zero
+            end
+
+            task.wait(0.15)
         end
 
-        -- ⭐ DELAY 8 DETIK — biar obby load dulu sebelum terbang
-        print("[AUTO OBBY] ⏳ Delay 8 detik — nunggu obby load...")
-        task.wait(8)
+        print("[AUTO OBBY] ✅ 8 detik selesai — mulai TP glide ke Finish")
 
-        -- ⭐ Refresh char & hrp setelah delay
-        char = player.Character or player.CharacterAdded:Wait()
-        hrp = char:WaitForChild("HumanoidRootPart")
+        -- ═══ STEP 3: TP GLIDE KE FINISH ═══
+        char = player.Character
+        hrp = char and char:FindFirstChild("HumanoidRootPart")
+        if not hrp then
+            ObbyState.Running = false
+            return
+        end
 
-        -- ═══ 4. TP GLIDE KE FINISH ═══
-        print("[AUTO OBBY] Terbang ke Finish...")
+        if Shared.Notify then Shared.Notify("🛸 TP glide ke Finish...", "info") end
+        print("[AUTO OBBY] 🛸 TP glide ke Finish:", finishPos)
+
+        -- Matikan collision biar gak nyangkut obstacle
         for _, part in ipairs(char:GetDescendants()) do
             if part:IsA("BasePart") then part.CanCollide = false end
         end
-        
-        local obbyFolder = workspace:FindFirstChild("HalloweenObbyRuns")
-        if not obbyFolder then 
-            ObbyState.Running = false
-            return 
-        end
-        local activeFolder = obbyFolder:FindFirstChild("5126297278")
-        if not activeFolder then 
-            ObbyState.Running = false
-            return 
-        end
-        local finishModel = activeFolder:FindFirstChild("Finish")
-        if not finishModel then 
-            ObbyState.Running = false
-            return 
-        end
-        
-        local finishPos = finishModel:GetPivot().Position
-        local flyHeight = math.max(hrp.Position.Y, finishPos.Y) + 50
-        
-        while hrp and hrp.Position.Y < flyHeight do
-            hrp.CFrame = hrp.CFrame + Vector3.new(0, 20, 0)
-            hrp.Velocity = Vector3.zero
-            task.wait(0.05)
-            hrp = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        end
-        task.wait(0.5)
-        
-        local startP = hrp.Position
-        local totalDist = (finishPos - startP).Magnitude
-        local steps = math.ceil(totalDist / 40)
-        local dir = (finishPos - startP).Unit
-        
-        for i = 1, steps do
+
+        -- Terbang ke atas dulu
+        local flyHeight = math.max(hrp.Position.Y, finishPos.Y) + 60
+        local startY = hrp.Position.Y
+        local upSteps = math.ceil((flyHeight - startY) / 20)
+        for i = 1, upSteps do
             local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
             if not r then break end
-            local dist = math.min(40 * i, totalDist)
-            local newPos = Vector3.new(startP.X + dir.X * dist, flyHeight, startP.Z + dir.Z * dist)
-            r.CFrame = CFrame.new(newPos)
+            r.CFrame = r.CFrame + Vector3.new(0, 20, 0)
             r.Velocity = Vector3.zero
             r.AssemblyLinearVelocity = Vector3.zero
-            task.wait(0.05)
+            task.wait(0.04)
         end
-        task.wait(0.5)
-        
+        task.wait(0.3)
+
+        -- Glide horizontal ke finish
         local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-        local currentY = r.Position.Y
-        while currentY > finishPos.Y + 5 do
-            currentY = currentY - 10
-            if currentY < finishPos.Y + 5 then currentY = finishPos.Y + 5 end
-            r.CFrame = CFrame.new(r.Position.X, currentY, r.Position.Z)
-            r.Velocity = Vector3.zero
-            task.wait(0.05)
-            r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if not r then
+            ObbyState.Running = false
+            return
         end
-        
+
+        local startP = r.Position
+        local targetP = Vector3.new(finishPos.X, flyHeight, finishPos.Z)
+        local totalDist = (targetP - startP).Magnitude
+        local steps = math.max(1, math.ceil(totalDist / 40))
+        local dir = (targetP - startP)
+        if dir.Magnitude > 1 then dir = dir.Unit else dir = Vector3.zero end
+
+        for i = 1, steps do
+            local rr = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if not rr then break end
+            local dist = math.min(40 * i, totalDist)
+            local newPos = Vector3.new(
+                startP.X + dir.X * dist,
+                flyHeight,
+                startP.Z + dir.Z * dist
+            )
+            rr.CFrame = CFrame.new(newPos)
+            rr.Velocity = Vector3.zero
+            rr.AssemblyLinearVelocity = Vector3.zero
+            task.wait(0.04)
+        end
+
+        -- Turun perlahan ke finish
+        r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+        if not r then
+            ObbyState.Running = false
+            return
+        end
+
+        local currentY = r.Position.Y
+        local targetY = finishPos.Y + 5
+        while currentY > targetY do
+            currentY = math.max(targetY, currentY - 15)
+            local rr = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if not rr then break end
+            rr.CFrame = CFrame.new(rr.Position.X, currentY, rr.Position.Z)
+            rr.Velocity = Vector3.zero
+            rr.AssemblyLinearVelocity = Vector3.zero
+            task.wait(0.04)
+        end
+
+        -- Aktifin collision lagi
         for _, part in ipairs(char:GetDescendants()) do
             if part:IsA("BasePart") then part.CanCollide = true end
         end
-        
-        -- ═══ 5. VERIFIKASI FINISH + TRIGGER DELIVERY ═══
-print("[AUTO OBBY] Verifikasi finish...")
 
--- 5a. Cek player beneran deket Finish model
-local function isNearFinish()
-    local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if not r then return false end
-    if not finishModel or not finishModel.Parent then return false end
-    local finishPos2 = finishModel:GetPivot().Position
-    local dist = (r.Position - finishPos2).Magnitude
-    return dist <= 25  -- toleransi 25 studs
-end
+        if Shared.Notify then Shared.Notify("✅ Sampai di Finish", "success") end
+        print("[AUTO OBBY] ✅ Sampai di Finish")
 
--- 5b. Cari ProximityPrompt / TouchPart di Finish & trigger manual
-local function triggerFinishDelivery()
-    if not finishModel or not finishModel.Parent then return false end
+        -- ═══ STEP 4: VERIFIKASI FINISH ═══
+        local verified = false
+        local verifyStart = tick()
+        while tick() - verifyStart < 15 do
+            if not ObbyState.Running then break end
 
-    -- Cari prompt di dalam finish
-    local prompt = finishModel:FindFirstChildWhichIsA("ProximityPrompt", true)
-    if prompt then
-        prompt.HoldDuration = 0
-        prompt.MaxActivationDistance = math.huge
-        prompt.RequiresLineOfSight = false
-        if typeof(fireproximityprompt) == "function" then
-            pcall(fireproximityprompt, prompt)
-            task.wait(0.3)
-            pcall(fireproximityprompt, prompt)
+            local obbyF = workspace:FindFirstChild("HalloweenObbyRuns")
+            if not obbyF then verified = true break end
+            local rf = obbyF:FindFirstChild(tostring(player.UserId))
+            if not rf then verified = true break end
+            local fm = rf:FindFirstChild("Finish")
+            if not fm then verified = true break end
+
+            task.wait(0.5)
         end
-        return true
-    end
 
-    -- Fallback: cari RemoteEvent delivery
-    local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
-    local gameR = remotes and remotes:FindFirstChild("Game")
-    if gameR then
-        for _, name in ipairs({"ObbyFinish", "FinishObby", "CompleteObby", "ObbyComplete", "DeliveryComplete"}) do
-            local r = gameR:FindFirstChild(name)
-            if r and (r:IsA("RemoteEvent") or r:IsA("RemoteFunction")) then
-                pcall(function() r:FireServer() end)
-                task.wait(0.3)
-                return true
+        if verified then
+            print("[AUTO OBBY] ✅ FINISH VERIFIED!")
+            if writefile then
+                pcall(writefile, "vrilz_obby_time.txt", tostring(os.time()))
+            end
+            if Shared.Notify then
+                Shared.Notify("🏁 Auto Obby Selesai! Cooldown 30 menit.", "success")
+            end
+        else
+            print("[AUTO OBBY] ⚠️ Gak verified — coba lagi.")
+            if Shared.Notify then
+                Shared.Notify("⚠️ Finish gak ke-detect — coba lagi.", "warning")
             end
         end
-    end
 
-    return false
-end
+        -- ═══ STEP 5: TP BALIK KE AREA HALLOWEEN ═══
+        if Shared.Notify then Shared.Notify("🏠 TP balik ke area Halloween...", "info") end
+        print("[AUTO OBBY] 🏠 TP balik ke area Halloween...")
 
--- 5c. Loop verifikasi: TP ulang kalo belum nyampe, trigger delivery, tunggu konfirmasi
-local verified = false
-local startVerify = tick()
+        -- Cari posisi base Halloween
+        local halloweenBase = workspace:FindFirstChild("HalloweenHomeAnchor")
+            or workspace:FindFirstChild("HalloweenDropOffZoneBounds")
 
-while tick() - startVerify < 20 do
-    if not ObbyState.Running then break end
-
-    -- Refresh char/hrp
-    local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    if not r then task.wait(0.5) continue end
-
-    -- TP ulang ke finish kalo masih jauh
-    if not isNearFinish() then
-        local fp = finishModel:GetPivot().Position
-        r.CFrame = CFrame.new(fp + Vector3.new(0, 5, 0))
-        r.Velocity = Vector3.zero
-        r.AssemblyLinearVelocity = Vector3.zero
-        task.wait(0.5)
-        continue
-    end
-
-    -- Udah deket finish → trigger delivery
-    triggerFinishDelivery()
-    task.wait(0.8)
-
-    -- ⭐ Cek konfirmasi: attribute / folder / UI
-    local confirmed = false
-
-    -- (1) Attribute player
-    if LocalPlayer:GetAttribute("ObbyCompleted") == true then confirmed = true end
-    if LocalPlayer:GetAttribute("ObbyFinished") == true then confirmed = true end
-    if LocalPlayer:GetAttribute("DeliveryCompleted") == true then confirmed = true end
-
-    -- (2) Folder HalloweenObbyRuns hilang / Finish dihapus = udah selesai
-    local obbyFolder2 = workspace:FindFirstChild("HalloweenObbyRuns")
-    local activeFolder2 = obbyFolder2 and obbyFolder2:FindFirstChild("5126297278")
-    if not activeFolder2 then
-        -- folder hilang → server udah bersihin = sukses
-        confirmed = true
-    else
-        local finishModel2 = activeFolder2:FindFirstChild("Finish")
-        if not finishModel2 then
-            confirmed = true
-        end
-    end
-
-    -- (3) UI text konfirmasi
-    local pg = LocalPlayer:FindFirstChild("PlayerGui")
-    if pg then
-        for _, gui in ipairs(pg:GetDescendants()) do
-            if gui:IsA("TextLabel") and gui.Text then
-                local t = gui.Text:lower()
-                if t:find("finish") or t:find("complete") or t:find("delivery") then
-                    if t:find("✅") or t:find("success") or t:find("done") then
-                        confirmed = true
-                        break
-                    end
-                end
+        -- Fallback: cari HalloweenArea
+        if not halloweenBase then
+            local hArea = workspace:FindFirstChild("HalloweenArea")
+            if hArea then
+                halloweenBase = hArea:FindFirstChildWhichIsA("BasePart", true)
             end
         end
-    end
 
-    if confirmed then
-        verified = true
-        break
-    end
+        -- Fallback terakhir: cari SpawnLocation di Workspace.Halloween
+        if not halloweenBase then
+            local halloweenF = workspace:FindFirstChild("Halloween")
+            if halloweenF then
+                halloweenBase = halloweenF:FindFirstChildWhichIsA("SpawnLocation", true)
+                    or halloweenF:FindFirstChildWhichIsA("BasePart", true)
+            end
+        end
 
-    task.wait(0.5)
-end
+        if halloweenBase and halloweenBase:IsA("BasePart") then
+            local targetPos = halloweenBase.Position + Vector3.new(0, 5, 0)
+            print("[AUTO OBBY] 🏠 TP ke:", halloweenBase:GetFullName(), "@", targetPos)
 
--- ═══ 6. SIMPAN COOLDOWN — CUMA KALO VERIFIED ═══
-if verified then
-    print("[AUTO OBBY] ✅ FINISH VERIFIED! Menyimpan cooldown 30 menit.")
-    if writefile then
-        pcall(writefile, "vrilz_obby_time.txt", tostring(os.time()))
-    end
-    if Shared.Notify then
-        Shared.Notify("🏁 Auto Obby Selesai! Cooldown 30 menit.", "success")
-    end
-else
-    print("[AUTO OBBY] ❌ Gagal verifikasi finish — cooldown TIDAK disimpan, bisa retry.")
-    if Shared.Notify then
-        Shared.Notify("⚠️ Auto Obby gagal finish — gak kena cooldown, coba lagi.", "warning")
-    end
-end
+            local rBack = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if rBack then
+                rBack.CFrame = CFrame.new(targetPos)
+                rBack.Velocity = Vector3.zero
+                rBack.AssemblyLinearVelocity = Vector3.zero
+                task.wait(0.5)
+            end
 
--- Restore collision (AMAN)
-local restoreChar = player.Character
-if restoreChar then
-    for _, part in ipairs(restoreChar:GetDescendants()) do
-        if part:IsA("BasePart") then part.CanCollide = true end
-    end
-end
+            if Shared.Notify then
+                Shared.Notify("✅ Balik ke Halloween!", "success")
+            end
+        else
+            print("[AUTO OBBY] ⚠️ Halloween base gak ketemu — stay di finish")
+            if Shared.Notify then
+                Shared.Notify("⚠️ Halloween base gak ketemu", "warning")
+            end
+        end
+
+        -- Restore collision (safety)
+        local restoreChar = player.Character
+        if restoreChar then
+            for _, part in ipairs(restoreChar:GetDescendants()) do
+                if part:IsA("BasePart") then part.CanCollide = true end
+            end
+        end
 
         ObbyState.Running = false
     end)
