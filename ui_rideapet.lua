@@ -5846,6 +5846,234 @@ function _G.VRILZ_Presence.Start()
 end
 
 -- ============================================================
+-- ⚠️ CLOSE CONFIRMATION POPUP
+-- ============================================================
+local function showCloseConfirmation(parent, onConfirm, onCancel)
+    -- Dim background blocker
+    local blocker = Instance.new("TextButton")
+    blocker.Name = "CloseConfirmBlocker"
+    blocker.Size = UDim2.fromScale(1, 1)
+    blocker.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    blocker.BackgroundTransparency = 0.4
+    blocker.Text = ""
+    blocker.AutoButtonColor = false
+    blocker.ZIndex = 900
+    blocker.Parent = parent
+
+    -- Popup card
+    local popup = Instance.new("Frame")
+    popup.Name = "CloseConfirmPopup"
+    popup.AnchorPoint = Vector2.new(0.5, 0.5)
+    popup.Position = UDim2.fromScale(0.5, 0.5)
+    popup.Size = UDim2.fromOffset(0, 0)
+    popup.BackgroundColor3 = C.Surface
+    popup.BorderSizePixel = 0
+    popup.ZIndex = 901
+    popup.ClipsDescendants = true
+    popup.Parent = blocker
+
+    local pc = Instance.new("UICorner")
+    pc.CornerRadius = UDim.new(0, 16)
+    pc.Parent = popup
+
+    local pgrad = Instance.new("UIGradient")
+    pgrad.Rotation = 135
+    pgrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 20, 22)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(18, 12, 14)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 5, 6)),
+    })
+    pgrad.Parent = popup
+
+    local pstroke = Instance.new("UIStroke")
+    pstroke.Color = C.Error
+    pstroke.Thickness = 2
+    pstroke.Transparency = 0.2
+    pstroke.Parent = popup
+
+    -- Warning icon
+    local iconFrame = Instance.new("Frame")
+    iconFrame.Size = UDim2.fromOffset(48, 48)
+    iconFrame.Position = UDim2.new(0.5, 0, 0, 18)
+    iconFrame.AnchorPoint = Vector2.new(0.5, 0)
+    iconFrame.BackgroundColor3 = C.Error
+    iconFrame.BackgroundTransparency = 0.85
+    iconFrame.BorderSizePixel = 0
+    iconFrame.ZIndex = 903
+    iconFrame.Parent = popup
+    local ifc = Instance.new("UICorner")
+    ifc.CornerRadius = UDim.new(1, 0)
+    ifc.Parent = iconFrame
+
+    local iconLbl = Instance.new("TextLabel")
+    iconLbl.Size = UDim2.fromScale(1, 1)
+    iconLbl.BackgroundTransparency = 1
+    iconLbl.Text = "⚠"
+    iconLbl.TextColor3 = C.Error
+    iconLbl.Font = Enum.Font.GothamBlack
+    iconLbl.TextSize = 26
+    iconLbl.ZIndex = 904
+    iconLbl.Parent = iconFrame
+
+    -- Title
+    local titleLbl = Instance.new("TextLabel")
+    titleLbl.Size = UDim2.new(1, -32, 0, 24)
+    titleLbl.Position = UDim2.new(0, 16, 0, 76)
+    titleLbl.BackgroundTransparency = 1
+    titleLbl.Text = "Are you sure you want to close?"
+    titleLbl.TextColor3 = C.Text
+    titleLbl.Font = Enum.Font.GothamBlack
+    titleLbl.TextSize = 15
+    titleLbl.ZIndex = 903
+    titleLbl.Parent = popup
+    registerTheme(titleLbl, "Text", "TextColor3")
+
+    -- Description
+    local descLbl = Instance.new("TextLabel")
+    descLbl.Size = UDim2.new(1, -32, 0, 40)
+    descLbl.Position = UDim2.new(0, 16, 0, 102)
+    descLbl.BackgroundTransparency = 1
+    descLbl.Text = "All features will stop working and\nthe script will be fully unloaded."
+    descLbl.TextColor3 = C.Muted
+    descLbl.Font = Enum.Font.GothamSemibold
+    descLbl.TextSize = 11
+    descLbl.TextWrapped = true
+    descLbl.ZIndex = 903
+    descLbl.Parent = popup
+    registerTheme(descLbl, "Muted", "TextColor3")
+
+    -- Button row
+    local btnRow = Instance.new("Frame")
+    btnRow.Size = UDim2.new(1, -32, 0, 38)
+    btnRow.Position = UDim2.new(0, 16, 0, 152)
+    btnRow.BackgroundTransparency = 1
+    btnRow.ZIndex = 903
+    btnRow.Parent = popup
+
+    local btnLayout = Instance.new("UIListLayout")
+    btnLayout.FillDirection = Enum.FillDirection.Horizontal
+    btnLayout.Padding = UDim.new(0, 10)
+    btnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    btnLayout.Parent = btnRow
+
+    -- Go Back (safe)
+    local backBtn = Instance.new("TextButton")
+    backBtn.Size = UDim2.new(0.5, -5, 1, 0)
+    backBtn.BackgroundColor3 = C.Surface3
+    backBtn.Text = "← Go Back"
+    backBtn.TextColor3 = C.Text
+    backBtn.Font = Enum.Font.GothamBold
+    backBtn.TextSize = 12
+    backBtn.BorderSizePixel = 0
+    backBtn.AutoButtonColor = false
+    backBtn.LayoutOrder = 1
+    backBtn.ZIndex = 904
+    backBtn.Parent = btnRow
+    registerTheme(backBtn, "Surface3", "BackgroundColor3")
+
+    local bbCorner = Instance.new("UICorner")
+    bbCorner.CornerRadius = UDim.new(0, 10)
+    bbCorner.Parent = backBtn
+
+    local bbStroke = Instance.new("UIStroke")
+    bbStroke.Color = C.Text
+    bbStroke.Thickness = 1
+    bbStroke.Transparency = 0.7
+    bbStroke.Parent = backBtn
+
+    -- Close (danger)
+    local closeConfirmBtn = Instance.new("TextButton")
+    closeConfirmBtn.Size = UDim2.new(0.5, -5, 1, 0)
+    closeConfirmBtn.BackgroundColor3 = C.Error
+    closeConfirmBtn.Text = "✕ Close Script"
+    closeConfirmBtn.TextColor3 = Color3.new(1, 1, 1)
+    closeConfirmBtn.Font = Enum.Font.GothamBlack
+    closeConfirmBtn.TextSize = 12
+    closeConfirmBtn.BorderSizePixel = 0
+    closeConfirmBtn.AutoButtonColor = false
+    closeConfirmBtn.LayoutOrder = 2
+    closeConfirmBtn.ZIndex = 904
+    closeConfirmBtn.Parent = btnRow
+
+    local cbc = Instance.new("UICorner")
+    cbc.CornerRadius = UDim.new(0, 10)
+    cbc.Parent = closeConfirmBtn
+
+    local cbStroke = Instance.new("UIStroke")
+    cbStroke.Color = Color3.fromRGB(255, 180, 180)
+    cbStroke.Thickness = 1
+    cbStroke.Transparency = 0.5
+    cbStroke.Parent = closeConfirmBtn
+
+    -- Hover
+    backBtn.MouseEnter:Connect(function()
+        TweenService:Create(backBtn, TweenInfo.new(0.15), { BackgroundColor3 = C.Surface2 }):Play()
+    end)
+    backBtn.MouseLeave:Connect(function()
+        TweenService:Create(backBtn, TweenInfo.new(0.15), { BackgroundColor3 = C.Surface3 }):Play()
+    end)
+
+    closeConfirmBtn.MouseEnter:Connect(function()
+        TweenService:Create(closeConfirmBtn, TweenInfo.new(0.15), {
+            BackgroundColor3 = Color3.fromRGB(255, 90, 100)
+        }):Play()
+    end)
+    closeConfirmBtn.MouseLeave:Connect(function()
+        TweenService:Create(closeConfirmBtn, TweenInfo.new(0.15), {
+            BackgroundColor3 = C.Error
+        }):Play()
+    end)
+
+    -- Animate in
+    local targetW = IS_MOBILE and math.min(320, (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.X or 400) - 40) or 340
+    local targetH = 210
+    popup.Size = UDim2.fromOffset(0, 0)
+    TweenService:Create(popup, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+        Size = UDim2.fromOffset(targetW, targetH)
+    }):Play()
+
+    local function destroyPopup(cb)
+        TweenService:Create(popup, TweenInfo.new(0.25, Enum.EasingStyle.Quart, Enum.EasingDirection.In), {
+            Size = UDim2.fromOffset(0, 0)
+        }):Play()
+        TweenService:Create(blocker, TweenInfo.new(0.25), {
+            BackgroundTransparency = 1
+        }):Play()
+        task.wait(0.28)
+        blocker:Destroy()
+        if cb then cb() end
+    end
+
+    backBtn.MouseButton1Click:Connect(function()
+        destroyPopup(function()
+            if onCancel then onCancel() end
+        end)
+    end)
+
+    closeConfirmBtn.MouseButton1Click:Connect(function()
+        destroyPopup(function()
+            if onConfirm then onConfirm() end
+        end)
+    end)
+
+    -- Click outside = cancel (safe default)
+    blocker.MouseButton1Click:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            local pos = input.Position
+            local pPos = popup.AbsolutePosition
+            local pSize = popup.AbsoluteSize
+            if pos.X < pPos.X or pos.X > pPos.X + pSize.X
+                or pos.Y < pPos.Y or pos.Y > pPos.Y + pSize.Y then
+                destroyPopup(function()
+                    if onCancel then onCancel() end
+                end)
+            end
+        end
+    end)
+end
+
+-- ============================================================
 -- BUILD MAIN WINDOW
 -- ============================================================
 local function buildMainWindow(parent)
@@ -6649,15 +6877,50 @@ end)
         end)
     end)
 
-    closeBtn.MouseButton1Click:Connect(function()
+closeBtn.MouseButton1Click:Connect(function()
+    showCloseConfirmation(screenGui, function()
+        -- ── CONFIRMED: user really wants to close ──
+        -- Turn off all active features so nothing keeps running
+        if Shared then
+            for k, v in pairs(Shared) do
+                if type(k) == "string" and k:match("_Enabled$") and v == true then
+                    Shared[k] = false
+                end
+            end
+        end
+
+        -- Stop GPU/Graphics loops
+        if GFX then
+            if GFX.FPSEnabled then pcall(gfx_disableFPS) end
+            if GFX.HDEnabled then pcall(gfx_disableHD) end
+        end
+
+        -- Stop chat polling
+        if _G.VRILZ_ChatClient then
+            _G.VRILZ_ChatClient.polling = false
+        end
+
+        -- Stop presence heartbeat
+        if _G.VRILZ_Presence then
+            _G.VRILZ_Presence.Started = false
+        end
+
+        -- Remove title tag above character
+        if Shared then Shared.ShowTitle = false end
+        if _G.VRILZ_RefreshTitle then pcall(_G.VRILZ_RefreshTitle) end
+
+        -- Shrink & destroy GUI
         TweenService:Create(main, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
             Size = UDim2.fromOffset(0, 0)
         }):Play()
-        task.delay(0.3, function()
-            screenGui:Destroy()
+        task.delay(0.35, function()
+            pcall(function() screenGui:Destroy() end)
         end)
+    end, function()
+        -- ── CANCELED: user clicked "Go Back" ──
+        notify("✓ Cancelled — script still running", "info")
     end)
-
+end)
     -- TAB SYSTEM
     local pages = {}
     local navs = {}
