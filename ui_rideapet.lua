@@ -2553,20 +2553,32 @@ local function buildOnlineWindow(parent)
     ws.Transparency = 0.35
     ws.Parent = win
 
+       -- ═══ LAYOUT UKURAN (simetris) ═══
+    local PAD_LEFT  = IS_MOBILE and 10 or 12
+    local DOT_BOX   = IS_MOBILE and 18 or 20   -- wadah dot
+    local DOT_SZ    = IS_MOBILE and 7 or 8     -- ukuran dot
+    local GAP_DOT   = IS_MOBILE and 6 or 8     -- jarak dot ke angka
+    local NUM_W     = IS_MOBILE and 28 or 32   -- lebar angka (cukup 3 digit)
+    local GAP_NUM   = IS_MOBILE and 5 or 6     -- jarak angka ke label
+    local TEXT_X    = PAD_LEFT + DOT_BOX + GAP_DOT
+    local LABEL_X   = TEXT_X + NUM_W + GAP_NUM
+    local RIGHT_PAD = IS_MOBILE and 8 or 10
+
     -- ═══ DOT STATUS (KIRI) ═══
     local dotHolder = Instance.new("Frame")
-    dotHolder.Size = UDim2.fromOffset(IS_MOBILE and 26 or 30, IS_MOBILE and 26 or 30)
+    dotHolder.Size = UDim2.fromOffset(DOT_BOX, DOT_BOX)
     dotHolder.AnchorPoint = Vector2.new(0, 0.5)
-    dotHolder.Position = UDim2.new(0, IS_MOBILE and 8 or 10, 0.5, 0)
+    dotHolder.Position = UDim2.new(0, PAD_LEFT, 0.5, 0)
     dotHolder.BackgroundTransparency = 1
+    dotHolder.ClipsDescendants = false
     dotHolder.ZIndex = 56
     dotHolder.Parent = win
 
-    -- Ring pulse (melebar + fade, loop)
+    -- Ring 1 (di dalam dotHolder, gak bocor)
     local ring = Instance.new("Frame")
     ring.AnchorPoint = Vector2.new(0.5, 0.5)
     ring.Position = UDim2.fromScale(0.5, 0.5)
-    ring.Size = UDim2.fromScale(0.5, 0.5)
+    ring.Size = UDim2.fromOffset(DOT_SZ, DOT_SZ)
     ring.BackgroundTransparency = 1
     ring.ZIndex = 55
     ring.Parent = dotHolder
@@ -2575,15 +2587,15 @@ local function buildOnlineWindow(parent)
     rc.Parent = ring
     local rs = Instance.new("UIStroke")
     rs.Color = COLOR_ONLINE
-    rs.Thickness = 1.8
-    rs.Transparency = 0.4
+    rs.Thickness = 1.2
+    rs.Transparency = 0.5
     rs.Parent = ring
 
-    -- Ring ke-2 (delay, biar kayak radar)
+    -- Ring 2 (delay)
     local ring2 = Instance.new("Frame")
     ring2.AnchorPoint = Vector2.new(0.5, 0.5)
     ring2.Position = UDim2.fromScale(0.5, 0.5)
-    ring2.Size = UDim2.fromScale(0.5, 0.5)
+    ring2.Size = UDim2.fromOffset(DOT_SZ, DOT_SZ)
     ring2.BackgroundTransparency = 1
     ring2.ZIndex = 55
     ring2.Parent = dotHolder
@@ -2592,15 +2604,15 @@ local function buildOnlineWindow(parent)
     rc2.Parent = ring2
     local rs2 = Instance.new("UIStroke")
     rs2.Color = COLOR_ONLINE
-    rs2.Thickness = 1.8
-    rs2.Transparency = 0.4
+    rs2.Thickness = 1.2
+    rs2.Transparency = 0.5
     rs2.Parent = ring2
 
-    -- Dot utama (yang kedip)
+    -- Dot (kecil)
     local dot = Instance.new("Frame")
     dot.AnchorPoint = Vector2.new(0.5, 0.5)
     dot.Position = UDim2.fromScale(0.5, 0.5)
-    dot.Size = UDim2.fromScale(0.55, 0.55)
+    dot.Size = UDim2.fromOffset(DOT_SZ, DOT_SZ)
     dot.BackgroundColor3 = COLOR_ONLINE
     dot.BorderSizePixel = 0
     dot.ZIndex = 57
@@ -2609,13 +2621,13 @@ local function buildOnlineWindow(parent)
     dc.CornerRadius = UDim.new(1, 0)
     dc.Parent = dot
 
-    -- Glow di belakang dot
+    -- Glow (subtle, di belakang dot)
     local dotGlow = Instance.new("Frame")
     dotGlow.AnchorPoint = Vector2.new(0.5, 0.5)
     dotGlow.Position = UDim2.fromScale(0.5, 0.5)
-    dotGlow.Size = UDim2.fromScale(1, 1)
+    dotGlow.Size = UDim2.fromOffset(DOT_SZ + 4, DOT_SZ + 4)
     dotGlow.BackgroundColor3 = COLOR_ONLINE
-    dotGlow.BackgroundTransparency = 0.6
+    dotGlow.BackgroundTransparency = 0.7
     dotGlow.BorderSizePixel = 0
     dotGlow.ZIndex = 56
     dotGlow.Parent = dotHolder
@@ -2623,38 +2635,33 @@ local function buildOnlineWindow(parent)
     dgc.CornerRadius = UDim.new(1, 0)
     dgc.Parent = dotGlow
 
-     -- ═══ TEXT HORIZONTAL: [62] [PLAYER ONLINE] sejajar ═══
-    local textX = IS_MOBILE and 42 or 48
-
-    -- Angka (kiri, lebih tebal & besar)
+    -- ═══ ANGKA (tengah vertikal) ═══
     local countLbl = Instance.new("TextLabel")
-    countLbl.Size = UDim2.fromOffset(IS_MOBILE and 38 or 44, IS_MOBILE and 22 or 24)
-    countLbl.Position = UDim2.fromOffset(textX, 0)
-    countLbl.AnchorPoint = Vector2.new(0, 0.5)
+    countLbl.Size = UDim2.fromOffset(NUM_W, H)
+    countLbl.Position = UDim2.fromOffset(TEXT_X, 0)
     countLbl.BackgroundTransparency = 1
     countLbl.Text = "..."
     countLbl.TextColor3 = C.Text
     countLbl.Font = Enum.Font.GothamBlack
     countLbl.TextSize = IS_MOBILE and 15 or 17
-    countLbl.TextXAlignment = Enum.TextXAlignment.Left
+    countLbl.TextXAlignment = Enum.TextXAlignment.Center   -- ⭐ center biar simetris
     countLbl.TextYAlignment = Enum.TextYAlignment.Center
     countLbl.ZIndex = 57
     countLbl.Parent = win
-    countLbl.Position = UDim2.new(0, textX, 0.5, 0)
     registerTheme(countLbl, "Text", "TextColor3")
 
-    -- Label "PLAYER ONLINE" (kanan angka, kecil & muted)
+    -- ═══ LABEL "PLAYER ONLINE" (fill sisa) ═══
     local labelLbl = Instance.new("TextLabel")
-    labelLbl.Size = UDim2.new(1, -(textX + (IS_MOBILE and 42 or 50) + 8), 0, 14)
-    labelLbl.Position = UDim2.new(0, textX + (IS_MOBILE and 42 or 50), 0.5, 0)
-    labelLbl.AnchorPoint = Vector2.new(0, 0.5)
+    labelLbl.Size = UDim2.new(1, -(LABEL_X + RIGHT_PAD), H, 0)
+    labelLbl.Position = UDim2.fromOffset(LABEL_X, 0)
     labelLbl.BackgroundTransparency = 1
-    labelLbl.Text = "PLAYER ONLINE"
+    labelLbl.Text = IS_MOBILE and "PLAYER ONLINE" or "PLAYER ONLINE"
     labelLbl.TextColor3 = C.Muted
-    labelLbl.Font = Enum.Font.GothamBold
+    labelLbl.Font = Enum.Font.GothamSemibold
     labelLbl.TextSize = IS_MOBILE and 8 or 9
     labelLbl.TextXAlignment = Enum.TextXAlignment.Left
     labelLbl.TextYAlignment = Enum.TextYAlignment.Center
+    labelLbl.TextTruncate = Enum.TextTruncate.AtEnd   -- ⭐ jaga-jaga
     labelLbl.ZIndex = 57
     labelLbl.Parent = win
     registerTheme(labelLbl, "Muted", "TextColor3")
@@ -2737,41 +2744,41 @@ local function buildOnlineWindow(parent)
     miniCount.Parent = mini
     registerTheme(miniCount, "Text", "TextColor3")
 
-    -- ═══ DOT KEDIP LOOP (pulse ping-pong) ═══
+        -- ═══ DOT KEDIP (pulse halus) ═══
     local dotPulseRunning = true
     task.spawn(function()
         while dotPulseRunning and dot.Parent do
-            -- Naikin glow + ukuran
-            TweenService:Create(dotGlow, TweenInfo.new(0.5, Enum.EasingStyle.Sine), {
-                BackgroundTransparency = 0.15,
-                Size = UDim2.fromScale(1.4, 1.4),
+            -- Fade out + sedikit membesar
+            TweenService:Create(dot, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {
+                BackgroundTransparency = 0.65,
+                Size = UDim2.fromOffset(DOT_SZ + 2, DOT_SZ + 2),
             }):Play()
-            TweenService:Create(dot, TweenInfo.new(0.5, Enum.EasingStyle.Sine), {
-                Size = UDim2.fromScale(0.75, 0.75),
+            TweenService:Create(dotGlow, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {
+                BackgroundTransparency = 0.4,
             }):Play()
-            task.wait(0.5)
+            task.wait(0.6)
             if not dot.Parent then break end
-            -- Turunin balik
-            TweenService:Create(dotGlow, TweenInfo.new(0.5, Enum.EasingStyle.Sine), {
-                BackgroundTransparency = 0.6,
-                Size = UDim2.fromScale(1, 1),
+            -- Balik
+            TweenService:Create(dot, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {
+                BackgroundTransparency = 0,
+                Size = UDim2.fromOffset(DOT_SZ, DOT_SZ),
             }):Play()
-            TweenService:Create(dot, TweenInfo.new(0.5, Enum.EasingStyle.Sine), {
-                Size = UDim2.fromScale(0.55, 0.55),
+            TweenService:Create(dotGlow, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {
+                BackgroundTransparency = 0.7,
             }):Play()
-            task.wait(0.5)
+            task.wait(0.6)
         end
     end)
 
-    -- ═══ RING RADAR LOOP (2 ring, delay) ═══
+       -- ═══ RING RADAR (2 ring, keluar dari dot kecil) ═══
     local radarRunning = true
     task.spawn(function()
         while radarRunning and ring.Parent do
             -- Ring 1
-            ring.Size = UDim2.fromScale(0.5, 0.5)
-            rs.Transparency = 0.4
+            ring.Size = UDim2.fromOffset(DOT_SZ, DOT_SZ)
+            rs.Transparency = 0.5
             TweenService:Create(ring, TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                Size = UDim2.fromScale(1.3, 1.3),
+                Size = UDim2.fromOffset(DOT_SZ + 12, DOT_SZ + 12),
             }):Play()
             TweenService:Create(rs, TweenInfo.new(1.2, Enum.EasingStyle.Quad), {
                 Transparency = 1,
@@ -2780,10 +2787,10 @@ local function buildOnlineWindow(parent)
             -- Ring 2 (delay 0.6s)
             task.delay(0.6, function()
                 if not ring2.Parent then return end
-                ring2.Size = UDim2.fromScale(0.5, 0.5)
-                rs2.Transparency = 0.4
+                ring2.Size = UDim2.fromOffset(DOT_SZ, DOT_SZ)
+                rs2.Transparency = 0.5
                 TweenService:Create(ring2, TweenInfo.new(1.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
-                    Size = UDim2.fromScale(1.3, 1.3),
+                    Size = UDim2.fromOffset(DOT_SZ + 12, DOT_SZ + 12),
                 }):Play()
                 TweenService:Create(rs2, TweenInfo.new(1.2, Enum.EasingStyle.Quad), {
                     Transparency = 1,
@@ -2797,8 +2804,8 @@ local function buildOnlineWindow(parent)
     -- ═══ FUNGSI: SET WARNA STATUS ═══
     local statusFlashThread = nil
 
-    local function applyStatusColor(color, isTemporary)
-        -- Update semua widget warna
+        local function applyStatusColor(color, isTemporary)
+        -- Stroke + dot + ring
         ws.Color = color
         rs.Color = color
         rs2.Color = color
@@ -2806,6 +2813,26 @@ local function buildOnlineWindow(parent)
         dotGlow.BackgroundColor3 = color
         miniS.Color = color
         miniDot.BackgroundColor3 = color
+
+        -- Gradient body (subtle, biar body ikut berubah)
+        local isDown = (color == COLOR_DOWN)
+        local isUp   = (color == COLOR_UP)
+        if isDown then
+            wGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(40, 20, 22)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 8, 10)),
+            })
+        elseif isUp then
+            wGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(20, 30, 42)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 16, 22)),
+            })
+        else
+            wGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(24, 30, 28)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 14, 12)),
+            })
+        end
 
         if isTemporary then
             if statusFlashThread then
@@ -2887,9 +2914,32 @@ local function buildOnlineWindow(parent)
     minBtn.MouseButton1Click:Connect(toggle)
     mini.MouseButton1Click:Connect(toggle)
 
-    -- ═══ DRAG ═══
-    local function makeDraggable(obj, isMiniMode)
+       -- ═══ DRAG + CLAMP (gak bisa keluar Roblox) ═══
+    local function getViewport()
+        local cam = workspace.CurrentCamera
+        if cam then return cam.ViewportSize end
+        return Vector2.new(1280, 720)
+    end
+
+    -- Paksa posisi awal ke Offset murni biar clamp gampang
+    win.Position = UDim2.fromOffset(win.Position.X.Offset, win.Position.Y.Offset)
+    mini.Position = UDim2.fromOffset(mini.Position.X.Offset, mini.Position.Y.Offset)
+
+    local function makeDraggable(obj, objW, objH)
         local dragging, dragStart, startPos, dragInput
+
+        local function clampPos(pos)
+            local vp = getViewport()
+            local maxX = math.max(0, vp.X - objW)
+            local maxY = math.max(0, vp.Y - objH)
+            local x = math.clamp(pos.X.Offset, 0, maxX)
+            local y = math.clamp(pos.Y.Offset, 0, maxY)
+            return UDim2.fromOffset(x, y)
+        end
+
+        -- Clamp awal
+        obj.Position = clampPos(obj.Position)
+
         obj.InputBegan:Connect(function(i)
             if i.UserInputType == Enum.UserInputType.MouseButton1
                 or i.UserInputType == Enum.UserInputType.Touch then
@@ -2899,27 +2949,39 @@ local function buildOnlineWindow(parent)
                 dragInput = i
             end
         end)
+
         UserInputService.InputChanged:Connect(function(i)
             if not dragging or i ~= dragInput then return end
             if i.UserInputType == Enum.UserInputType.MouseMovement
                 or i.UserInputType == Enum.UserInputType.Touch then
                 local d = i.Position - dragStart
-                obj.Position = UDim2.new(
-                    startPos.X.Scale, startPos.X.Offset + d.X,
-                    startPos.Y.Scale, startPos.Y.Offset + d.Y
+                local newPos = UDim2.fromOffset(
+                    startPos.X.Offset + d.X,
+                    startPos.Y.Offset + d.Y
                 )
+                obj.Position = clampPos(newPos)
             end
         end)
+
         UserInputService.InputEnded:Connect(function(i)
             if i == dragInput then
                 dragging = false
                 dragInput = nil
+                startPos = nil
             end
         end)
+
+        -- Re-clamp kalau viewport berubah (rotate HP / resize)
+        local cam = workspace.CurrentCamera
+        if cam then
+            cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+                obj.Position = clampPos(obj.Position)
+            end)
+        end
     end
 
-    makeDraggable(win)
-    makeDraggable(mini)
+    makeDraggable(win, W, H)
+    makeDraggable(mini, MINI, MINI)
 
     -- Cleanup flag pas window destroyed
     win.Destroying:Connect(function()
