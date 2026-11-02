@@ -84,6 +84,12 @@ local UI_CONFIG = {
 -- ====== KEY SYSTEM URL (dipindah ke atas biar ChatClient bisa akses) ======
 local KEY_SYSTEM_URL = "https://key-system.vrilzwops.workers.dev"
 
+-- ============================================================
+-- 🌐 PRESENCE CONFIG — jsonbin.io
+-- ============================================================
+local JSONBIN_ID  = "6ae883c0ac6210605a65b777"
+local JSONBIN_KEY = "$2a$10$91ForV6oQEOZDxOiokdjRu/lrrb26tyJns1XdLwDXEUFc/Mhkyj6C"
+
 local CFG = IS_MOBILE and UI_CONFIG.MOBILE or UI_CONFIG.PC
 
 -- ====== EGG NAMES (WAJIB SAMA DENGAN NAMA DI GAME) ======
@@ -5194,6 +5200,87 @@ end)
                     mini.Visible = true
                 end
             end
+        end
+    end)
+end
+
+-- ============================================================
+-- 🌐 PLAYER ONLINE PRESENCE — via jsonbin.io
+-- ============================================================
+_G.VRILZ_Presence = _G.VRILZ_Presence or {
+    OnlineCount = 0,
+    Started = false,
+}
+
+local function presenceReq(method, body)
+    local HttpService = game:GetService("HttpService")
+    local req = (syn and syn.request) or (http and http.request) or http_request or request
+    if not req then return nil end
+
+    local url = "https://api.jsonbin.io/v3/b/" .. JSONBIN_ID
+    local opts = {
+        Url = url,
+        Method = method,
+        Headers = {
+            ["Content-Type"] = "application/json",
+            ["X-Master-Key"] = JSONBIN_KEY,
+            ["X-Bin-Meta"] = "false",
+        },
+    }
+    if body then opts.Body = HttpService:JSONEncode(body) end
+
+    local ok, res = pcall(req, opts)
+    if not ok or not res then return nil end
+    local bodyStr = res.Body or res.body or ""
+    local okDec, data = pcall(function() return HttpService:JSONDecode(bodyStr) end)
+    if not okDec then return nil end
+    return data
+end
+
+function _G.VRILZ_Presence.Start()
+    if _G.VRILZ_Presence.Started then return end
+    _G.VRILZ_Presence.Started = true
+
+    local myId = tostring(LocalPlayer.UserId)
+    local TIMEOUT = 60 -- detik
+
+    -- Heartbeat tiap 25 detik
+    task.spawn(function()
+        while true do
+            pcall(function()
+                local data = presenceReq("GET") or {}
+                if type(data) ~= "table" then data = {} end
+                
+                -- Hapus yang expired
+                local now = os.time()
+                for uid, ts in pairs(data) do
+                    if type(ts) ~= "number" or (now - ts) > TIMEOUT then
+                        data[uid] = nil
+                    end
+                end
+                data[myId] = now
+
+                presenceReq("PUT", data)
+            end)
+            task.wait(25)
+        end
+    end)
+
+    -- Poll count tiap 10 detik
+    task.spawn(function()
+        while true do
+            local data = presenceReq("GET")
+            if type(data) == "table" then
+                local now = os.time()
+                local n = 0
+                for uid, ts in pairs(data) do
+                    if type(ts) == "number" and (now - ts) <= TIMEOUT then
+                        n = n + 1
+                    end
+                end
+                _G.VRILZ_Presence.OnlineCount = n
+            end
+            task.wait(10)
         end
     end)
 end
@@ -12034,6 +12121,12 @@ function UI.Init(sharedState)
 
         setupNotifHolder(ScreenGui)
     setupDropdownLayer(ScreenGui)
+
+    -- ⭐ Start presence tracking
+    task.spawn(function()
+        task.wait(2)
+        pcall(function() _G.VRILZ_Presence.Start() end)
+    end)
 
     -- Auto-start chat polling (biar selalu nyambung)
     task.spawn(function()
