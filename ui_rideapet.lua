@@ -2503,6 +2503,256 @@ local function buildLightningEffectLayer(mainFrame)
     return layer
 end
 
+-- ============================================================
+-- 🌐 PLAYER ONLINE WINDOW (terpisah, compact, fake + real)
+-- ============================================================
+local function buildOnlineWindow(parent)
+    local FAKE_BASE = 58
+    local REFRESH = 0.5
+
+    local W = IS_MOBILE and 110 or 130
+    local H = IS_MOBILE and 42 or 46
+    local MINI = IS_MOBILE and 40 or 44
+
+    -- ═══ MAIN WINDOW ═══
+    local win = Instance.new("Frame")
+    win.Name = "OnlineWindow"
+    win.Size = UDim2.fromOffset(W, H)
+    win.Position = UDim2.fromOffset(20, 160)
+    win.BackgroundColor3 = C.Surface
+    win.BackgroundTransparency = 0.1
+    win.BorderSizePixel = 0
+    win.Active = true
+    win.ZIndex = 55
+    win.Parent = parent
+    registerTheme(win, "Surface", "BackgroundColor3")
+
+    local wc = Instance.new("UICorner")
+    wc.CornerRadius = UDim.new(1, 0)
+    wc.Parent = win
+
+    local ws = Instance.new("UIStroke")
+    ws.Color = C.Success
+    ws.Thickness = 1.5
+    ws.Transparency = 0.35
+    ws.Parent = win
+    registerTheme(ws, "Success", "Color")
+
+    local dot = Instance.new("Frame")
+    dot.Size = UDim2.fromOffset(8, 8)
+    dot.AnchorPoint = Vector2.new(0, 0.5)
+    dot.Position = UDim2.new(0, IS_MOBILE and 10 or 12, 0.5, 0)
+    dot.BackgroundColor3 = C.Success
+    dot.BorderSizePixel = 0
+    dot.ZIndex = 56
+    dot.Parent = win
+    registerTheme(dot, "Success", "BackgroundColor3")
+
+    local dc = Instance.new("UICorner")
+    dc.CornerRadius = UDim.new(1, 0)
+    dc.Parent = dot
+
+    local ring = Instance.new("Frame")
+    ring.Size = UDim2.fromOffset(8, 8)
+    ring.AnchorPoint = Vector2.new(0, 0.5)
+    ring.Position = dot.Position
+    ring.BackgroundTransparency = 1
+    ring.ZIndex = 55
+    ring.Parent = win
+
+    local rc = Instance.new("UICorner")
+    rc.CornerRadius = UDim.new(1, 0)
+    rc.Parent = ring
+
+    local rs = Instance.new("UIStroke")
+    rs.Color = C.Success
+    rs.Thickness = 1.5
+    rs.Transparency = 0.5
+    rs.Parent = ring
+    registerTheme(rs, "Success", "Color")
+
+    task.spawn(function()
+        while ring.Parent do
+            task.wait(0.4)
+            ring.Size = UDim2.fromOffset(8, 8)
+            ring.Position = dot.Position
+            TweenService:Create(ring, TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                Size = UDim2.fromOffset(22, 22),
+                Position = UDim2.new(0, dot.Position.X.Offset - 7, 0.5, -11),
+            }):Play()
+            TweenService:Create(rs, TweenInfo.new(0.8), { Transparency = 1 }):Play()
+            task.wait(0.4)
+            rs.Transparency = 0.5
+        end
+    end)
+
+    local countLbl = Instance.new("TextLabel")
+    countLbl.Size = UDim2.new(1, -(IS_MOBILE and 48 or 54), 1, 0)
+    countLbl.Position = UDim2.fromOffset(IS_MOBILE and 24 or 28, 0)
+    countLbl.BackgroundTransparency = 1
+    countLbl.Text = "..."
+    countLbl.TextColor3 = C.Text
+    countLbl.Font = Enum.Font.GothamBold
+    countLbl.TextSize = IS_MOBILE and 13 or 15
+    countLbl.TextXAlignment = Enum.TextXAlignment.Left
+    countLbl.ZIndex = 56
+    countLbl.Parent = win
+    registerTheme(countLbl, "Text", "TextColor3")
+
+    local minBtn = Instance.new("TextButton")
+    minBtn.Size = UDim2.fromOffset(IS_MOBILE and 16 or 18, IS_MOBILE and 16 or 18)
+    minBtn.AnchorPoint = Vector2.new(1, 0.5)
+    minBtn.Position = UDim2.new(1, -(IS_MOBILE and 8 or 10), 0.5, 0)
+    minBtn.BackgroundTransparency = 1
+    minBtn.Text = "−"
+    minBtn.TextColor3 = C.Muted
+    minBtn.Font = Enum.Font.GothamBold
+    minBtn.TextSize = IS_MOBILE and 14 or 16
+    minBtn.AutoButtonColor = false
+    minBtn.ZIndex = 57
+    minBtn.Parent = win
+    registerTheme(minBtn, "Muted", "TextColor3")
+
+    -- ═══ MINI CHIP ═══
+    local mini = Instance.new("TextButton")
+    mini.Name = "OnlineMini"
+    mini.Size = UDim2.fromOffset(MINI, MINI)
+    mini.Position = win.Position
+    mini.BackgroundColor3 = C.Surface
+    mini.BackgroundTransparency = 0.1
+    mini.Text = ""
+    mini.AutoButtonColor = false
+    mini.Visible = false
+    mini.BorderSizePixel = 0
+    mini.ZIndex = 55
+    mini.Parent = parent
+    registerTheme(mini, "Surface", "BackgroundColor3")
+
+    local mc = Instance.new("UICorner")
+    mc.CornerRadius = UDim.new(1, 0)
+    mc.Parent = mini
+
+    local ms = Instance.new("UIStroke")
+    ms.Color = C.Success
+    ms.Thickness = 1.5
+    ms.Transparency = 0.35
+    ms.Parent = mini
+    registerTheme(ms, "Success", "Color")
+
+    local miniDot = Instance.new("Frame")
+    miniDot.Size = UDim2.fromOffset(6, 6)
+    miniDot.AnchorPoint = Vector2.new(0.5, 0)
+    miniDot.Position = UDim2.new(0.5, 0, 0, 6)
+    miniDot.BackgroundColor3 = C.Success
+    miniDot.BorderSizePixel = 0
+    miniDot.ZIndex = 56
+    miniDot.Parent = mini
+    registerTheme(miniDot, "Success", "BackgroundColor3")
+
+    local mdc = Instance.new("UICorner")
+    mdc.CornerRadius = UDim.new(1, 0)
+    mdc.Parent = miniDot
+
+    local miniCount = Instance.new("TextLabel")
+    miniCount.Size = UDim2.new(1, 0, 1, -12)
+    miniCount.Position = UDim2.new(0, 0, 0, 12)
+    miniCount.BackgroundTransparency = 1
+    miniCount.Text = "..."
+    miniCount.TextColor3 = C.Text
+    miniCount.Font = Enum.Font.GothamBold
+    miniCount.TextSize = IS_MOBILE and 11 or 12
+    miniCount.ZIndex = 56
+    miniCount.Parent = mini
+    registerTheme(miniCount, "Text", "TextColor3")
+
+    -- ═══ LIVE UPDATE ═══
+    local lastVal = -1
+    task.spawn(function()
+        while win.Parent do
+            task.wait(REFRESH)
+
+            local presence = (_G.VRILZ_Presence and _G.VRILZ_Presence.OnlineCount) or 0
+            local server = #Players:GetPlayers()
+            local total = FAKE_BASE + math.max(presence, server)
+
+            if total ~= lastVal then
+                countLbl.Text = tostring(total)
+                miniCount.Text = tostring(total)
+
+                if total >= 80 then
+                    countLbl.TextColor3 = C.Success
+                elseif total >= 65 then
+                    countLbl.TextColor3 = C.Accent2
+                else
+                    countLbl.TextColor3 = C.Text
+                end
+
+                local orig = countLbl.TextSize
+                countLbl.TextSize = orig + 3
+                TweenService:Create(countLbl, TweenInfo.new(0.25, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+                    TextSize = orig
+                }):Play()
+
+                lastVal = total
+            end
+        end
+    end)
+
+    -- ═══ MINIMIZE TOGGLE ═══
+    local isMini = false
+    local function toggle()
+        isMini = not isMini
+        if isMini then
+            win.Visible = false
+            mini.Position = win.Position
+            mini.Visible = true
+        else
+            mini.Visible = false
+            win.Position = mini.Position
+            win.Visible = true
+        end
+    end
+
+    minBtn.MouseButton1Click:Connect(toggle)
+    mini.MouseButton1Click:Connect(toggle)
+
+    -- ═══ DRAG ═══
+    local function makeDraggable(obj)
+        local dragging, dragStart, startPos, dragInput
+        obj.InputBegan:Connect(function(i)
+            if i.UserInputType == Enum.UserInputType.MouseButton1
+                or i.UserInputType == Enum.UserInputType.Touch then
+                dragging = true
+                dragStart = i.Position
+                startPos = obj.Position
+                dragInput = i
+            end
+        end)
+        UserInputService.InputChanged:Connect(function(i)
+            if not dragging or i ~= dragInput then return end
+            if i.UserInputType == Enum.UserInputType.MouseMovement
+                or i.UserInputType == Enum.UserInputType.Touch then
+                local d = i.Position - dragStart
+                obj.Position = UDim2.new(
+                    startPos.X.Scale, startPos.X.Offset + d.X,
+                    startPos.Y.Scale, startPos.Y.Offset + d.Y
+                )
+            end
+        end)
+        UserInputService.InputEnded:Connect(function(i)
+            if i == dragInput then
+                dragging = false
+                dragInput = nil
+            end
+        end)
+    end
+
+    makeDraggable(win)
+    makeDraggable(mini)
+
+    return win, mini
+end
+
 -- ====== FPS WINDOW ======
 local function buildFPSWindow(parent)
     local fpsWin = Instance.new("Frame")
@@ -5605,92 +5855,6 @@ end)
     subtitle.ZIndex = 11
     subtitle.Parent = header
     registerTheme(subtitle, "Muted", "TextColor3")
-
-    -- ═══════════════════════════════════════════
-    -- 🌐 ONLINE PLAYER BADGE (kecil, simetris)
-    -- ═══════════════════════════════════════════
-    local onlineBadgeW = IS_MOBILE and 74 or 92
-    local onlineBadgeH = IS_MOBILE and 22 or 26
-
-    local onlineBadge = Instance.new("Frame")
-    onlineBadge.Name = "OnlineBadge"
-    onlineBadge.Size = UDim2.fromOffset(onlineBadgeW, onlineBadgeH)
-    onlineBadge.AnchorPoint = Vector2.new(1, 0.5)
-    -- Geser 1 slot ke kiri dari profile chip
-    onlineBadge.Position = UDim2.new(1, -(IS_MOBILE and 260 or 310), 0.5, 0)
-    onlineBadge.BackgroundColor3 = C.Surface2
-    onlineBadge.BackgroundTransparency = 0.15
-    onlineBadge.BorderSizePixel = 0
-    onlineBadge.ZIndex = 12
-    onlineBadge.Parent = header
-    registerTheme(onlineBadge, "Surface2", "BackgroundColor3")
-
-    local obCorner = Instance.new("UICorner")
-    obCorner.CornerRadius = UDim.new(1, 0)
-    obCorner.Parent = onlineBadge
-
-    local obStroke = Instance.new("UIStroke")
-    obStroke.Color = C.Success
-    obStroke.Thickness = 1
-    obStroke.Transparency = 0.55
-    obStroke.Parent = onlineBadge
-    registerTheme(obStroke, "Success", "Color")
-
-    -- Dot hijau (pulse)
-    local obDot = Instance.new("Frame")
-    obDot.Size = UDim2.fromOffset(6, 6)
-    obDot.AnchorPoint = Vector2.new(0, 0.5)
-    obDot.Position = UDim2.new(0, IS_MOBILE and 7 or 9, 0.5, 0)
-    obDot.BackgroundColor3 = C.Success
-    obDot.BorderSizePixel = 0
-    obDot.ZIndex = 13
-    obDot.Parent = onlineBadge
-    registerTheme(obDot, "Success", "BackgroundColor3")
-
-    local obDotCorner = Instance.new("UICorner")
-    obDotCorner.CornerRadius = UDim.new(1, 0)
-    obDotCorner.Parent = obDot
-
-    -- Pulse animasi dot
-    task.spawn(function()
-        while obDot.Parent do
-            task.wait(1)
-            TweenService:Create(obDot, TweenInfo.new(0.6), {BackgroundTransparency = 0.75}):Play()
-            task.wait(0.6)
-            TweenService:Create(obDot, TweenInfo.new(0.6), {BackgroundTransparency = 0}):Play()
-        end
-    end)
-
-    -- Text angka
-    local obText = Instance.new("TextLabel")
-    obText.Size = UDim2.new(1, -(IS_MOBILE and 18 or 22), 1, 0)
-    obText.Position = UDim2.fromOffset(IS_MOBILE and 17 or 21, 0)
-    obText.BackgroundTransparency = 1
-    obText.Text = "0 online"
-    obText.TextColor3 = C.Text
-    obText.Font = Enum.Font.GothamBold
-    obText.TextSize = IS_MOBILE and 9 or 10
-    obText.TextXAlignment = Enum.TextXAlignment.Left
-    obText.ZIndex = 13
-    obText.Parent = onlineBadge
-    registerTheme(obText, "Text", "TextColor3")
-
-    -- Live update (baca dari _G.VRILZ_Presence)
-    task.spawn(function()
-        while obText.Parent do
-            task.wait(0.5)
-            local n = (_G.VRILZ_Presence and _G.VRILZ_Presence.OnlineCount) or 0
-            obText.Text = n .. (IS_MOBILE and " on" or " online")
-            -- Warna adaptif
-            if n >= 10 then
-                obText.TextColor3 = C.Success
-            elseif n >= 3 then
-                obText.TextColor3 = C.Accent2
-            else
-                obText.TextColor3 = C.Text
-            end
-        end
-    end)
 
     -- PLAYER PROFILE CHIP
     local profile = Instance.new("Frame")
@@ -9138,6 +9302,9 @@ end
 
 -- ⭐ PANGGIL EGG EXECUTOR DI SINI
     buildEggExecutorGUI(screenGui)
+
+    -- ⭐ PLAYER ONLINE WINDOW (fake 58 + real, window terpisah)
+    buildOnlineWindow(screenGui)
 
     return main
 end
