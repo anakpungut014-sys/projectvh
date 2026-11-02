@@ -5519,6 +5519,92 @@ end)
     subtitle.Parent = header
     registerTheme(subtitle, "Muted", "TextColor3")
 
+    -- ═══════════════════════════════════════════
+    -- 🌐 ONLINE PLAYER BADGE (kecil, simetris)
+    -- ═══════════════════════════════════════════
+    local onlineBadgeW = IS_MOBILE and 74 or 92
+    local onlineBadgeH = IS_MOBILE and 22 or 26
+
+    local onlineBadge = Instance.new("Frame")
+    onlineBadge.Name = "OnlineBadge"
+    onlineBadge.Size = UDim2.fromOffset(onlineBadgeW, onlineBadgeH)
+    onlineBadge.AnchorPoint = Vector2.new(1, 0.5)
+    -- Geser 1 slot ke kiri dari profile chip
+    onlineBadge.Position = UDim2.new(1, -(IS_MOBILE and 152 or 204), 0.5, 0)
+    onlineBadge.BackgroundColor3 = C.Surface2
+    onlineBadge.BackgroundTransparency = 0.15
+    onlineBadge.BorderSizePixel = 0
+    onlineBadge.ZIndex = 12
+    onlineBadge.Parent = header
+    registerTheme(onlineBadge, "Surface2", "BackgroundColor3")
+
+    local obCorner = Instance.new("UICorner")
+    obCorner.CornerRadius = UDim.new(1, 0)
+    obCorner.Parent = onlineBadge
+
+    local obStroke = Instance.new("UIStroke")
+    obStroke.Color = C.Success
+    obStroke.Thickness = 1
+    obStroke.Transparency = 0.55
+    obStroke.Parent = onlineBadge
+    registerTheme(obStroke, "Success", "Color")
+
+    -- Dot hijau (pulse)
+    local obDot = Instance.new("Frame")
+    obDot.Size = UDim2.fromOffset(6, 6)
+    obDot.AnchorPoint = Vector2.new(0, 0.5)
+    obDot.Position = UDim2.new(0, IS_MOBILE and 7 or 9, 0.5, 0)
+    obDot.BackgroundColor3 = C.Success
+    obDot.BorderSizePixel = 0
+    obDot.ZIndex = 13
+    obDot.Parent = onlineBadge
+    registerTheme(obDot, "Success", "BackgroundColor3")
+
+    local obDotCorner = Instance.new("UICorner")
+    obDotCorner.CornerRadius = UDim.new(1, 0)
+    obDotCorner.Parent = obDot
+
+    -- Pulse animasi dot
+    task.spawn(function()
+        while obDot.Parent do
+            task.wait(1)
+            TweenService:Create(obDot, TweenInfo.new(0.6), {BackgroundTransparency = 0.75}):Play()
+            task.wait(0.6)
+            TweenService:Create(obDot, TweenInfo.new(0.6), {BackgroundTransparency = 0}):Play()
+        end
+    end)
+
+    -- Text angka
+    local obText = Instance.new("TextLabel")
+    obText.Size = UDim2.new(1, -(IS_MOBILE and 18 or 22), 1, 0)
+    obText.Position = UDim2.fromOffset(IS_MOBILE and 17 or 21, 0)
+    obText.BackgroundTransparency = 1
+    obText.Text = "0 online"
+    obText.TextColor3 = C.Text
+    obText.Font = Enum.Font.GothamBold
+    obText.TextSize = IS_MOBILE and 9 or 10
+    obText.TextXAlignment = Enum.TextXAlignment.Left
+    obText.ZIndex = 13
+    obText.Parent = onlineBadge
+    registerTheme(obText, "Text", "TextColor3")
+
+    -- Live update (baca dari _G.VRILZ_Presence)
+    task.spawn(function()
+        while obText.Parent do
+            task.wait(0.5)
+            local n = (_G.VRILZ_Presence and _G.VRILZ_Presence.OnlineCount) or 0
+            obText.Text = n .. (IS_MOBILE and " on" or " online")
+            -- Warna adaptif
+            if n >= 10 then
+                obText.TextColor3 = C.Success
+            elseif n >= 3 then
+                obText.TextColor3 = C.Accent2
+            else
+                obText.TextColor3 = C.Text
+            end
+        end
+    end)
+
     -- PLAYER PROFILE CHIP
     local profile = Instance.new("Frame")
     profile.Name = "PlayerProfile"
