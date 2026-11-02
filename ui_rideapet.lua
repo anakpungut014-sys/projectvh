@@ -2504,14 +2504,14 @@ local function buildLightningEffectLayer(mainFrame)
 end
 
 -- ============================================================
--- 🌐 PLAYER ONLINE WINDOW v3 — FIXED (text visible + draggable)
+-- 🌐 PLAYER ONLINE WINDOW v4 — FIXED
 -- ============================================================
 local function buildOnlineWindow(parent)
     local FAKE_BASE = 58
     local REFRESH = 0.5
 
-    -- ═══ UKURAN (dilebarin biar text muat) ═══
-    local W = IS_MOBILE and 170 or 200   -- ⬅️ dari 150/175 → 170/200
+    -- ═══ UKURAN ═══
+    local W = IS_MOBILE and 170 or 200
     local H = IS_MOBILE and 52 or 58
     local MINI = IS_MOBILE and 52 or 56
 
@@ -2550,25 +2550,36 @@ local function buildOnlineWindow(parent)
     ws.Transparency = 0.35
     ws.Parent = win
 
-    -- ═══ LAYOUT UKURAN (diperbaiki) ═══
-    local PAD_LEFT  = IS_MOBILE and 8 or 10
-    local DOT_BOX   = IS_MOBILE and 16 or 18
-    local DOT_SZ    = IS_MOBILE and 7 or 8
-    local GAP_DOT   = IS_MOBILE and 4 or 6
-    local NUM_W     = IS_MOBILE and 26 or 30
-    local GAP_NUM   = IS_MOBILE and 4 or 6
-    local TEXT_X    = PAD_LEFT + DOT_BOX + GAP_DOT
-    local LABEL_X   = TEXT_X + NUM_W + GAP_NUM
-    local RIGHT_PAD = IS_MOBILE and 8 or 10
+    -- ═══════════════════════════════════════════════════════════
+    -- ⭐ FIX #1: LAYOUT BARU — pakai UIListLayout HORIZONTAL
+    --     biar gak ada yang kepotong, otomatis rapi
+    -- ═══════════════════════════════════════════════════════════
+    local contentRow = Instance.new("Frame")
+    contentRow.Name = "ContentRow"
+    contentRow.Size = UDim2.new(1, -16, 1, 0)   -- padding 8 kiri kanan
+    contentRow.Position = UDim2.fromOffset(8, 0)
+    contentRow.BackgroundTransparency = 1
+    contentRow.ZIndex = 56
+    contentRow.Parent = win
 
-    -- ═══ DOT STATUS (KIRI) ═══
+    local rowLayout = Instance.new("UIListLayout")
+    rowLayout.FillDirection = Enum.FillDirection.Horizontal
+    rowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    rowLayout.Padding = UDim.new(0, 6)
+    rowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    rowLayout.Parent = contentRow
+
+    -- ═══ 1) DOT STATUS ═══
+    local DOT_BOX = IS_MOBILE and 16 or 18
+    local DOT_SZ  = IS_MOBILE and 7 or 8
+
     local dotHolder = Instance.new("Frame")
     dotHolder.Size = UDim2.fromOffset(DOT_BOX, DOT_BOX)
-    dotHolder.AnchorPoint = Vector2.new(0, 0.5)
-    dotHolder.Position = UDim2.new(0, PAD_LEFT, 0.5, 0)
     dotHolder.BackgroundTransparency = 1
+    dotHolder.LayoutOrder = 1
     dotHolder.ZIndex = 56
-    dotHolder.Parent = win
+    dotHolder.Parent = contentRow
 
     local ring = Instance.new("Frame")
     ring.AnchorPoint = Vector2.new(0.5, 0.5)
@@ -2627,39 +2638,38 @@ local function buildOnlineWindow(parent)
     dgc.CornerRadius = UDim.new(1, 0)
     dgc.Parent = dotGlow
 
-    -- ═══ ANGKA ═══
+    -- ═══ 2) ANGKA ═══
     local countLbl = Instance.new("TextLabel")
-    countLbl.Size = UDim2.fromOffset(NUM_W, H)
-    countLbl.Position = UDim2.fromOffset(TEXT_X, 0)
+    countLbl.Size = UDim2.fromOffset(IS_MOBILE and 30 or 34, H)
     countLbl.BackgroundTransparency = 1
     countLbl.Text = "..."
     countLbl.TextColor3 = C.Text
     countLbl.Font = Enum.Font.GothamBlack
     countLbl.TextSize = IS_MOBILE and 14 or 16
-    countLbl.TextXAlignment = Enum.TextXAlignment.Center
+    countLbl.TextXAlignment = Enum.TextXAlignment.Left   -- ⬅️ rata kiri biar nempel dot
     countLbl.TextYAlignment = Enum.TextYAlignment.Center
+    countLbl.LayoutOrder = 2
     countLbl.ZIndex = 57
-    countLbl.Parent = win
+    countLbl.Parent = contentRow
     registerTheme(countLbl, "Text", "TextColor3")
 
-    -- ═══ LABEL "PLAYER ONLINE" (FIX: kasih ruang kanan lebih + turunin ZIndex tombol) ═══
+    -- ═══ 3) LABEL "PLAYER ONLINE" ═══
     local labelLbl = Instance.new("TextLabel")
-    -- ⬇️ FIX: kurangi RIGHT_PAD tambahan 20px (ruang buat tombol minimize)
-    labelLbl.Size = UDim2.new(1, -(LABEL_X + RIGHT_PAD + 20), H, 0)
-    labelLbl.Position = UDim2.fromOffset(LABEL_X, 0)
+    labelLbl.Size = UDim2.new(1, -20, 1, 0)   -- ⬅️ isi sisa (autofill)
     labelLbl.BackgroundTransparency = 1
-    labelLbl.Text = "PLAYER ONLINE"
+    labelLbl.Text = IS_MOBILE and "ONLINE" or "PLAYER ONLINE"
     labelLbl.TextColor3 = C.Muted
     labelLbl.Font = Enum.Font.GothamSemibold
-    labelLbl.TextSize = IS_MOBILE and 8 or 9
+    labelLbl.TextSize = IS_MOBILE and 9 or 10
     labelLbl.TextXAlignment = Enum.TextXAlignment.Left
     labelLbl.TextYAlignment = Enum.TextYAlignment.Center
-    labelLbl.TextTruncate = Enum.TextTruncate.None  -- ⬅️ FIX: jangan truncate
+    labelLbl.TextTruncate = Enum.TextTruncate.None
+    labelLbl.LayoutOrder = 3
     labelLbl.ZIndex = 57
-    labelLbl.Parent = win
+    labelLbl.Parent = contentRow
     registerTheme(labelLbl, "Muted", "TextColor3")
 
-    -- ═══ Tombol minimize (FIX: ZIndex lebih rendah dari label) ═══
+    -- ═══ Tombol minimize — taruh di luar contentRow, pojok kanan atas ═══
     local minBtn = Instance.new("TextButton")
     minBtn.Size = UDim2.fromOffset(IS_MOBILE and 18 or 20, IS_MOBILE and 18 or 20)
     minBtn.AnchorPoint = Vector2.new(1, 0)
@@ -2671,7 +2681,7 @@ local function buildOnlineWindow(parent)
     minBtn.Font = Enum.Font.GothamBold
     minBtn.TextSize = IS_MOBILE and 14 or 16
     minBtn.BorderSizePixel = 0
-    minBtn.ZIndex = 56   -- ⬅️ FIX: dari 58 → 56 (biar gak nutupin label)
+    minBtn.ZIndex = 56
     minBtn.Parent = win
     registerTheme(minBtn, "Surface3", "BackgroundColor3")
     registerTheme(minBtn, "Muted", "TextColor3")
@@ -2679,7 +2689,9 @@ local function buildOnlineWindow(parent)
     mc.CornerRadius = UDim.new(1, 0)
     mc.Parent = minBtn
 
-    -- ═══ MINI CHIP ═══
+    -- ═══════════════════════════════════════════════════════════
+    -- ⭐ FIX #2: MINI CHIP — pakai CONSTRAIN biar BENER-BENER BULAT
+    -- ═══════════════════════════════════════════════════════════
     local mini = Instance.new("TextButton")
     mini.Name = "OnlineMini"
     mini.Size = UDim2.fromOffset(MINI, MINI)
@@ -2695,8 +2707,15 @@ local function buildOnlineWindow(parent)
     mini.Parent = parent
     registerTheme(mini, "Surface", "BackgroundColor3")
 
+    -- ⭐ Constraint 1:1 biar selalu persegi (bulat sempurna)
+    local miniRatio = Instance.new("UIAspectRatioConstraint")
+    miniRatio.AspectRatio = 1
+    miniRatio.AspectType = Enum.AspectType.FitWithinMaxSize
+    miniRatio.DominantAxis = Enum.DominantAxis.Width
+    miniRatio.Parent = mini
+
     local miniC = Instance.new("UICorner")
-    miniC.CornerRadius = UDim.new(1, 0)
+    miniC.CornerRadius = UDim.new(1, 0)   -- 1,0 = full round
     miniC.Parent = mini
 
     local miniGrad = Instance.new("UIGradient")
@@ -2713,28 +2732,65 @@ local function buildOnlineWindow(parent)
     miniS.Transparency = 0.35
     miniS.Parent = mini
 
+    -- ⭐ Isi mini pakai vertical layout (dot atas, angka bawah) — center sempurna
+    local miniContent = Instance.new("Frame")
+    miniContent.Size = UDim2.fromScale(1, 1)
+    miniContent.BackgroundTransparency = 1
+    miniContent.ZIndex = 56
+    miniContent.Parent = mini
+
+    local miniVLay = Instance.new("UIListLayout")
+    miniVLay.FillDirection = Enum.FillDirection.Vertical
+    miniVLay.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    miniVLay.VerticalAlignment = Enum.VerticalAlignment.Center
+    miniVLay.Padding = UDim.new(0, 2)
+    miniVLay.SortOrder = Enum.SortOrder.LayoutOrder
+    miniVLay.Parent = miniContent
+
+    local miniDotHolder = Instance.new("Frame")
+    miniDotHolder.Size = UDim2.fromOffset(12, 12)
+    miniDotHolder.BackgroundTransparency = 1
+    miniDotHolder.LayoutOrder = 1
+    miniDotHolder.ZIndex = 57
+    miniDotHolder.Parent = miniContent
+
     local miniDot = Instance.new("Frame")
-    miniDot.AnchorPoint = Vector2.new(0.5, 0)
-    miniDot.Position = UDim2.new(0.5, 0, 0, 6)
+    miniDot.AnchorPoint = Vector2.new(0.5, 0.5)
+    miniDot.Position = UDim2.fromScale(0.5, 0.5)
     miniDot.Size = UDim2.fromOffset(8, 8)
     miniDot.BackgroundColor3 = COLOR_ONLINE
     miniDot.BorderSizePixel = 0
     miniDot.ZIndex = 57
-    miniDot.Parent = mini
+    miniDot.Parent = miniDotHolder
     local mdc = Instance.new("UICorner")
     mdc.CornerRadius = UDim.new(1, 0)
-    mdc.Parent = mini
+    mdc.Parent = miniDot
+
+    local miniDotGlow = Instance.new("Frame")
+    miniDotGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+    miniDotGlow.Position = UDim2.fromScale(0.5, 0.5)
+    miniDotGlow.Size = UDim2.fromOffset(12, 12)
+    miniDotGlow.BackgroundColor3 = COLOR_ONLINE
+    miniDotGlow.BackgroundTransparency = 0.7
+    miniDotGlow.BorderSizePixel = 0
+    miniDotGlow.ZIndex = 56
+    miniDotGlow.Parent = miniDotHolder
+    local mdgc = Instance.new("UICorner")
+    mdgc.CornerRadius = UDim.new(1, 0)
+    mdgc.Parent = miniDotGlow
 
     local miniCount = Instance.new("TextLabel")
-    miniCount.Size = UDim2.new(1, 0, 1, -14)
-    miniCount.Position = UDim2.new(0, 0, 0, 14)
+    miniCount.Size = UDim2.fromOffset(40, 16)
     miniCount.BackgroundTransparency = 1
     miniCount.Text = "..."
     miniCount.TextColor3 = C.Text
     miniCount.Font = Enum.Font.GothamBlack
-    miniCount.TextSize = IS_MOBILE and 12 or 13
+    miniCount.TextSize = IS_MOBILE and 11 or 12
+    miniCount.TextXAlignment = Enum.TextXAlignment.Center
+    miniCount.TextYAlignment = Enum.TextYAlignment.Center
+    miniCount.LayoutOrder = 2
     miniCount.ZIndex = 57
-    miniCount.Parent = mini
+    miniCount.Parent = miniContent
     registerTheme(miniCount, "Text", "TextColor3")
 
     -- ═══ DOT KEDIP ═══
@@ -2755,6 +2811,27 @@ local function buildOnlineWindow(parent)
                 Size = UDim2.fromOffset(DOT_SZ, DOT_SZ),
             }):Play()
             TweenService:Create(dotGlow, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {
+                BackgroundTransparency = 0.7,
+            }):Play()
+            task.wait(0.6)
+        end
+    end)
+
+    -- Mini dot pulse (mirror)
+    task.spawn(function()
+        while miniDot.Parent do
+            TweenService:Create(miniDot, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {
+                BackgroundTransparency = 0.65,
+            }):Play()
+            TweenService:Create(miniDotGlow, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {
+                BackgroundTransparency = 0.4,
+            }):Play()
+            task.wait(0.6)
+            if not miniDot.Parent then break end
+            TweenService:Create(miniDot, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {
+                BackgroundTransparency = 0,
+            }):Play()
+            TweenService:Create(miniDotGlow, TweenInfo.new(0.6, Enum.EasingStyle.Sine), {
                 BackgroundTransparency = 0.7,
             }):Play()
             task.wait(0.6)
@@ -2801,6 +2878,7 @@ local function buildOnlineWindow(parent)
         dotGlow.BackgroundColor3 = color
         miniS.Color = color
         miniDot.BackgroundColor3 = color
+        miniDotGlow.BackgroundColor3 = color
 
         local isDown = (color == COLOR_DOWN)
         local isUp   = (color == COLOR_UP)
@@ -2883,7 +2961,11 @@ local function buildOnlineWindow(parent)
         isMini = not isMini
         if isMini then
             win.Visible = false
-            mini.Position = win.Position
+            -- Posisi mini disamain dengan pojok kiri-atas win
+            mini.Position = UDim2.fromOffset(
+                win.AbsolutePosition.X,
+                win.AbsolutePosition.Y
+            )
             mini.Visible = true
         else
             mini.Visible = false
@@ -2895,7 +2977,7 @@ local function buildOnlineWindow(parent)
     minBtn.MouseButton1Click:Connect(toggle)
     mini.MouseButton1Click:Connect(toggle)
 
-    -- ═══ FIXED DRAG (pakai InputObject comparison yang bener) ═══
+    -- ═══ FIXED DRAG ═══
     local function getViewport()
         local cam = workspace.CurrentCamera
         if cam then return cam.ViewportSize end
@@ -2906,7 +2988,7 @@ local function buildOnlineWindow(parent)
     mini.Position = UDim2.fromOffset(mini.Position.X.Offset, mini.Position.Y.Offset)
 
     local function makeDraggable(obj, objW, objH, isMiniObj)
-        local dragging, dragStart, startPos, dragInput
+        local dragging, dragStart, startPos
 
         local function clampPos(pos)
             local vp = getViewport()
@@ -2919,32 +3001,25 @@ local function buildOnlineWindow(parent)
 
         obj.Position = clampPos(obj.Position)
 
-        -- ⭐ FIX #1: pakai InputBegan di obj + cegah kalau klik tombol
         obj.InputBegan:Connect(function(i)
-            if i.UserInputType == Enum.UserInputType.MouseButton1
-                or i.UserInputType == Enum.UserInputType.Touch then
-                -- Kalau klik area tombol minimize/mini, jangan drag
-                if not isMiniObj then
-                    local objPos = obj.AbsolutePosition
-                    local objSize = obj.AbsoluteSize
-                    local relX = i.Position.X - objPos.X
-                    local relY = i.Position.Y - objPos.Y
-                    -- Area tombol minimize: 20x20 di pojok kanan atas
-                    if relX > (objSize.X - 28) and relY < 28 then
-                        return
-                    end
-                end
-                if dragging then return end
-                dragging = true
-                dragStart = i.Position
-                startPos = obj.Position
-                dragInput = i
+            if i.UserInputType ~= Enum.UserInputType.MouseButton1
+                and i.UserInputType ~= Enum.UserInputType.Touch then
+                return
             end
+            -- Skip kalau klik tombol minimize
+            if not isMiniObj then
+                local relX = i.Position.X - obj.AbsolutePosition.X
+                local relY = i.Position.Y - obj.AbsolutePosition.Y
+                if relX > (obj.AbsoluteSize.X - 28) and relY < 28 then
+                    return
+                end
+            end
+            if dragging then return end
+            dragging = true
+            dragStart = i.Position
+            startPos = obj.Position
         end)
 
-        -- ⭐ FIX #2: pakai InputChanged yang bandingin "InputObject" identity,
-        -- TAPI jangan return kalau i ~= dragInput (Roblox bikin object baru tiap frame)
-        -- Cukup cek UserInputType.
         UserInputService.InputChanged:Connect(function(i)
             if not dragging then return end
             if i.UserInputType ~= Enum.UserInputType.MouseMovement
@@ -2954,25 +3029,21 @@ local function buildOnlineWindow(parent)
             if not dragStart or not startPos then return end
 
             local d = i.Position - dragStart
-            local newPos = UDim2.fromOffset(
+            obj.Position = clampPos(UDim2.fromOffset(
                 startPos.X.Offset + d.X,
                 startPos.Y.Offset + d.Y
-            )
-            obj.Position = clampPos(newPos)
+            ))
         end)
 
-        -- ⭐ FIX #3: reset pakai global InputEnded (gak peduli object identity)
         UserInputService.InputEnded:Connect(function(i)
             if i.UserInputType == Enum.UserInputType.MouseButton1
                 or i.UserInputType == Enum.UserInputType.Touch then
                 dragging = false
-                dragInput = nil
                 dragStart = nil
                 startPos = nil
             end
         end)
 
-        -- Re-clamp kalau viewport berubah
         local cam = workspace.CurrentCamera
         if cam then
             cam:GetPropertyChangedSignal("ViewportSize"):Connect(function()
