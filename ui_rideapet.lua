@@ -5617,7 +5617,7 @@ end)
     onlineBadge.Size = UDim2.fromOffset(onlineBadgeW, onlineBadgeH)
     onlineBadge.AnchorPoint = Vector2.new(1, 0.5)
     -- Geser 1 slot ke kiri dari profile chip
-    onlineBadge.Position = UDim2.new(1, -(IS_MOBILE and 152 or 204), 0.5, 0)
+    onlineBadge.Position = UDim2.new(1, -(IS_MOBILE and 260 or 310), 0.5, 0)
     onlineBadge.BackgroundColor3 = C.Surface2
     onlineBadge.BackgroundTransparency = 0.15
     onlineBadge.BorderSizePixel = 0
