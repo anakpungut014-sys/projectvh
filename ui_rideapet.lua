@@ -3309,78 +3309,140 @@ local function gfx_cleanup()
     GFX.Created = {}
 end
 
--- ===== FPS BOOST v4 — HIDE ALL VISUAL EFFECTS + REALISTIC COLOR =====
+-- ===== FPS BOOST v5 — HIDE ALL VISUAL EFFECTS + HD REALISTIC (NO PATAH-PATAH) =====
+-- ⭐ SEMUA VISUAL EFFECT DI-HIDE, LIGHTING NATURAL HD, 100% NO LAG
 local function gfx_enableFPS()
     if GFX.FPSEnabled then return end
     GFX.FPSEnabled = true
 
-    -- ═══════════════════════════════════════════════════════════
-    -- 1. LIGHTING: MATIIN SHADOW (BIAR RINGAN)
-    -- ═══════════════════════════════════════════════════════════
-    pcall(function() Lighting.GlobalShadows = false end)
-    pcall(function() Lighting.ShadowSoftness = 0 end)
-    pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level01 end)
+    -- Reset tracking dulu (biar gak numpuk kalau enable berkali-kali)
+    GFX.HiddenParts = {}
+    GFX.Connections = {}
 
     -- ═══════════════════════════════════════════════════════════
-    -- 2. HIDE SEMUA EFFECT OBJECTS (PARTICLE, BEAM, TRAIL, DLL)
+    -- 1. SAVE LIGHTING STATE (buat restore nanti)
     -- ═══════════════════════════════════════════════════════════
-    local hidden = {}
+    gfx_save(Lighting, "GlobalShadows")
+    gfx_save(Lighting, "ShadowSoftness")
+    gfx_save(Lighting, "Ambient")
+    gfx_save(Lighting, "OutdoorAmbient")
+    gfx_save(Lighting, "Brightness")
+    gfx_save(Lighting, "ExposureCompensation")
+    gfx_save(Lighting, "EnvironmentDiffuseScale")
+    gfx_save(Lighting, "EnvironmentSpecularScale")
+    gfx_save(Lighting, "ColorShift_Top")
+    gfx_save(Lighting, "ColorShift_Bottom")
+    gfx_save(Lighting, "ClockTime")
+    gfx_save(Lighting, "GeographicLatitude")
+    gfx_save(Lighting, "FogEnd")
+    gfx_save(Lighting, "FogStart")
 
+    -- ═══════════════════════════════════════════════════════════
+    -- 2. APPLY HD REALISTIC LIGHTING (natural, gak overbright)
+    -- ═══════════════════════════════════════════════════════════
+    pcall(function()
+        Lighting.GlobalShadows = false         -- shadows off = FPS naik drastis
+        Lighting.ShadowSoftness = 0
+        Lighting.Ambient = Color3.fromRGB(80, 82, 90)      -- natural gray
+        Lighting.OutdoorAmbient = Color3.fromRGB(105, 110, 120) -- outdoor natural
+        Lighting.Brightness = 1.4              -- natural (bukan 2.5)
+        Lighting.ExposureCompensation = 0
+        Lighting.EnvironmentDiffuseScale = 0.5
+        Lighting.EnvironmentSpecularScale = 0.5
+        Lighting.ColorShift_Top = Color3.fromRGB(0, 0, 0)
+        Lighting.ColorShift_Bottom = Color3.fromRGB(0, 0, 0)
+        Lighting.ClockTime = 14.5              -- siang natural
+        Lighting.GeographicLatitude = 0
+        Lighting.FogEnd = 100000
+        Lighting.FogStart = 0
+    end)
+
+    -- Set graphics quality rendah (FPS boost utama)
+    pcall(function()
+        local userGameSettings = UserSettings and UserSettings():GetService("UserGameSettings")
+        if userGameSettings then
+            -- Save dulu
+            GFX._origQuality = userGameSettings.SavedQualityLevel
+            userGameSettings.SavedQualityLevel = Enum.SavedQualitySetting.QualityLevel3
+        end
+    end)
+    pcall(function()
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level03
+    end)
+
+    -- ═══════════════════════════════════════════════════════════
+    -- 3. HIDE SEMUA VISUAL EFFECT (PARTICLE, BEAM, TRAIL, DLL)
+    -- ═══════════════════════════════════════════════════════════
     local function hideEffect(obj)
         if not obj or not obj.Parent then return end
-        pcall(function()
-            -- Simpan original state
-            table.insert(GFX.HiddenParts, {
-                obj = obj,
-                enabled = obj.Enabled,
-                transparency = obj.Transparency,
-                visible = obj.Visible,
-            })
-        end)
+        if GFX.HiddenParts[obj] then return end  -- ⭐ biar gak double save
+
+        -- Simpan original state
+        local backup = { obj = obj }
+        pcall(function() backup.enabled = obj.Enabled end)
+        pcall(function() backup.rate = obj.Rate end)
+        pcall(function() backup.transparency = obj.Transparency end)
+        pcall(function() backup.visible = obj.Visible end)
+        pcall(function() backup.brightness = obj.Brightness end)
+        pcall(function() backup.density = obj.Density end)
+        pcall(function() backup.haze = obj.Haze end)
+        GFX.HiddenParts[obj] = backup
+
+        -- Hide semua property
         pcall(function() obj.Enabled = false end)
         pcall(function() obj.Transparency = 1 end)
         pcall(function() obj.Visible = false end)
         pcall(function() obj.Rate = 0 end)
         pcall(function() obj.Brightness = 0 end)
         pcall(function() obj.LightEmission = 0 end)
+        pcall(function() obj.Density = 0 end)
+        pcall(function() obj.Haze = 0 end)
+        pcall(function() obj.Glare = 0 end)
+    end
+
+    -- ═══ KATEGORI EFFECT YANG DI-HIDE ═══
+    local EFFECT_CLASSES = {
+        "ParticleEmitter",
+        "Beam",
+        "Trail",
+        "Smoke",
+        "Fire",
+        "Sparkles",
+        "PointLight",
+        "SpotLight",
+        "SurfaceLight",
+        "Explosion",
+    }
+
+    -- Skip VRILZ objects (ESP/Highlight jangan di-hide)
+    local function isVrilzObject(obj)
+        local p = obj
+        local depth = 0
+        while p and depth < 5 do
+            if p.Name and tostring(p.Name):find("VRILZ_", 1, true) then
+                return true
+            end
+            p = p.Parent
+            depth = depth + 1
+        end
+        return false
     end
 
     -- ═══ SCAN SEMUA EFFECT DI WORKSPACE ═══
     task.spawn(function()
         local function scanEffects()
             for _, obj in ipairs(Workspace:GetDescendants()) do
-                -- Particle emitter
-                if obj:IsA("ParticleEmitter") then
-                    hideEffect(obj)
-                -- Beam
-                elseif obj:IsA("Beam") then
-                    hideEffect(obj)
-                -- Trail
-                elseif obj:IsA("Trail") then
-                    hideEffect(obj)
-                -- Smoke
-                elseif obj:IsA("Smoke") then
-                    hideEffect(obj)
-                -- Fire
-                elseif obj:IsA("Fire") then
-                    hideEffect(obj)
-                -- Sparkles
-                elseif obj:IsA("Sparkles") then
-                    hideEffect(obj)
-                -- Explosion (rare, tapi ada)
-                elseif obj:IsA("Explosion") then
-                    hideEffect(obj)
-                -- Lightning
-                elseif obj:IsA("Lightning") then
-                    hideEffect(obj)
-                -- PointLight
-                elseif obj:IsA("PointLight") then
-                    hideEffect(obj)
-                -- SpotLight
-                elseif obj:IsA("SpotLight") then
-                    hideEffect(obj)
-                -- SurfaceLight
-                elseif obj:IsA("SurfaceLight") then
+                if not GFX.FPSEnabled then break end
+
+                local isEffect = false
+                for _, class in ipairs(EFFECT_CLASSES) do
+                    if obj:IsA(class) then
+                        isEffect = true
+                        break
+                    end
+                end
+
+                if isEffect and not isVrilzObject(obj) then
                     hideEffect(obj)
                 end
             end
@@ -3391,85 +3453,53 @@ local function gfx_enableFPS()
         -- ═══ WATCH EFFECT BARU (muncul belakangan) ═══
         local conn = Workspace.DescendantAdded:Connect(function(obj)
             if not GFX.FPSEnabled then return end
-            task.wait(0.05) -- delay biar object udah fully init
-            if obj:IsA("ParticleEmitter") or obj:IsA("Beam") or obj:IsA("Trail")
-                or obj:IsA("Smoke") or obj:IsA("Fire") or obj:IsA("Sparkles")
-                or obj:IsA("PointLight") or obj:IsA("SpotLight") or obj:IsA("SurfaceLight") then
-                hideEffect(obj)
-            end
+            task.defer(function()
+                if not obj or not obj.Parent then return end
+
+                local isEffect = false
+                for _, class in ipairs(EFFECT_CLASSES) do
+                    if obj:IsA(class) then
+                        isEffect = true
+                        break
+                    end
+                end
+
+                if isEffect and not isVrilzObject(obj) then
+                    hideEffect(obj)
+                end
+
+                -- ⭐ Cek descendants juga (misal Model baru yang ada particle di dalamnya)
+                pcall(function()
+                    for _, d in ipairs(obj:GetDescendants()) do
+                        if not GFX.FPSEnabled then break end
+                        for _, class in ipairs(EFFECT_CLASSES) do
+                            if d:IsA(class) and not isVrilzObject(d) then
+                                hideEffect(d)
+                                break
+                            end
+                        end
+                    end
+                end)
+            end)
         end)
         table.insert(GFX.Connections, conn)
 
-        -- ═══ HIDE PARTICLE/DEBRIS DI LIGHTING JUGA ═══
+        -- ═══ HIDE EFFECT DI LIGHTING JUGA ═══
         for _, obj in ipairs(Lighting:GetDescendants()) do
-            if obj:IsA("ParticleEmitter") or obj:IsA("Beam") or obj:IsA("Trail") then
-                hideEffect(obj)
+            for _, class in ipairs(EFFECT_CLASSES) do
+                if obj:IsA(class) then
+                    hideEffect(obj)
+                    break
+                end
             end
         end
 
-        notify("✨ Effect hidden: " .. #GFX.HiddenParts, "info")
+        notify("✨ FPS Boost ON — " .. tostring(#Workspace:GetDescendants()) .. " objects scanned", "success")
     end)
 
     -- ═══════════════════════════════════════════════════════════
-    -- 3. HIDE DECALS / TEXTURES BERAT (opsional, biar makin ringan)
+    -- 4. HIDE POST-PROCESSING EFFECT BERAT (Atmosphere, DOF, SunRays, Bloom)
     -- ═══════════════════════════════════════════════════════════
-    -- (skip, karena lu gak mau sentuh part penting)
-
-    -- ═══════════════════════════════════════════════════════════
-    -- 4. REALISTIC COLOR CORRECTION (GANTI ATMOSPHERE KERAS)
-    -- ═══════════════════════════════════════════════════════════
-    -- Simpan state asli
-    gfx_save(Lighting, "Ambient")
-    gfx_save(Lighting, "OutdoorAmbient")
-    gfx_save(Lighting, "Brightness")
-    gfx_save(Lighting, "ExposureCompensation")
-    gfx_save(Lighting, "ColorShift_Top")
-    gfx_save(Lighting, "ColorShift_Bottom")
-    gfx_save(Lighting, "EnvironmentDiffuseScale")
-    gfx_save(Lighting, "EnvironmentSpecularScale")
-    gfx_save(Lighting, "ClockTime")
-    gfx_save(Lighting, "GeographicLatitude")
-
-    pcall(function()
-        -- Warna natural, gak overbright, gak terlalu gelap
-        Lighting.Ambient = Color3.fromRGB(70, 72, 78)           -- abu-abu natural
-        Lighting.OutdoorAmbient = Color3.fromRGB(95, 100, 108)   -- outdoor lebih terang
-        Lighting.Brightness = 1.35                              -- natural (bukan 2.5)
-        Lighting.ExposureCompensation = 0                       -- netral
-        Lighting.EnvironmentDiffuseScale = 0.5
-        Lighting.EnvironmentSpecularScale = 0.5
-        Lighting.ColorShift_Top = Color3.fromRGB(0, 0, 0)        -- no weird tint
-        Lighting.ColorShift_Bottom = Color3.fromRGB(0, 0, 0)
-        Lighting.ClockTime = 14.5                               -- siang natural
-        Lighting.GeographicLatitude = 0
-    end)
-
-    -- ═══ COLOR CORRECTION EFFECT (REALISTIS) ═══
-    local oldCC = Lighting:FindFirstChild("VRILZ_FPS_CC")
-    if oldCC then oldCC:Destroy() end
-
-    local cc = Instance.new("ColorCorrectionEffect")
-    cc.Name = "VRILZ_FPS_CC"
-    cc.Brightness = 0          -- netral
-    cc.Contrast = 0.06         -- sedikit kontras biar gak flat
-    cc.Saturation = 0.05       -- sedikit saturasi biar warna hidup
-    cc.TintColor = Color3.fromRGB(255, 255, 255)  -- NO tint
-    cc.Parent = Lighting
-    gfx_add(cc)
-
-    -- ═══ BLOOM TIPIS (biar gak flat banget) ═══
-    local oldBloom = Lighting:FindFirstChild("VRILZ_FPS_Bloom")
-    if oldBloom then oldBloom:Destroy() end
-
-    local bloom = Instance.new("BloomEffect")
-    bloom.Name = "VRILZ_FPS_Bloom"
-    bloom.Intensity = 0.15     -- tipis (bukan 0.5)
-    bloom.Size = 16
-    bloom.Threshold = 1.2      -- cuma highlight yg glow
-    bloom.Parent = Lighting
-    gfx_add(bloom)
-
-    -- ═══ HAPUS ATMOSPHERE YANG BERAT (fog, haze) ═══
     for _, obj in ipairs(Lighting:GetChildren()) do
         if obj:IsA("Atmosphere") then
             gfx_save(obj, "Density")
@@ -3478,36 +3508,75 @@ local function gfx_enableFPS()
                 obj.Density = 0
                 obj.Haze = 0
             end)
-        end
-    end
-
-    -- ═══ HAPUS SUN RAYS / DOF (berat) ═══
-    for _, obj in ipairs(Lighting:GetChildren()) do
-        if obj:IsA("SunRaysEffect") or obj:IsA("DepthOfFieldEffect") then
+        elseif obj:IsA("SunRaysEffect") or obj:IsA("DepthOfFieldEffect") or obj:IsA("BloomEffect") or obj:IsA("BlurEffect") then
             gfx_save(obj, "Enabled")
-            pcall(function() obj.Enabled = false end)
+            gfx_save(obj, "Intensity")
+            pcall(function()
+                obj.Enabled = false
+                obj.Intensity = 0
+            end)
+        elseif obj:IsA("ColorCorrectionEffect") then
+            gfx_save(obj, "Brightness")
+            gfx_save(obj, "Contrast")
+            gfx_save(obj, "Saturation")
+            pcall(function()
+                obj.Brightness = 0
+                obj.Contrast = 0
+                obj.Saturation = 0
+            end)
         end
     end
 
     -- ═══════════════════════════════════════════════════════════
-    -- 5. RE-APPLY LOOP (effect baru kadang muncul lagi)
+    -- 5. COLOR CORRECTION RINGAN (HD realistic, gak flat)
+    -- ═══════════════════════════════════════════════════════════
+    local oldCC = Lighting:FindFirstChild("VRILZ_FPS_CC")
+    if oldCC then oldCC:Destroy() end
+
+    local cc = Instance.new("ColorCorrectionEffect")
+    cc.Name = "VRILZ_FPS_CC"
+    cc.Brightness = 0.02       -- tipis, biar gak gelap
+    cc.Contrast = 0.05         -- sedikit kontras
+    cc.Saturation = 0.06       -- warna tetap hidup
+    cc.TintColor = Color3.fromRGB(255, 255, 255)
+    cc.Parent = Lighting
+    gfx_add(cc)
+
+    -- ═══════════════════════════════════════════════════════════
+    -- 6. RE-APPLY LOOP (effect baru kadang muncul lagi / respawn)
     -- ═══════════════════════════════════════════════════════════
     if not GFX.LoopThread then
         GFX.LoopThread = task.spawn(function()
             while GFX.FPSEnabled do
-                task.wait(3)
-                -- Re-apply color
+                task.wait(2)  -- ⭐ 2s, hemat CPU
+                if not GFX.FPSEnabled then break end
+
+                -- Re-apply graphics quality
                 pcall(function()
-                    Lighting.GlobalShadows = false
-                    Lighting.Brightness = 1.35
-                    Lighting.ExposureCompensation = 0
+                    settings().Rendering.QualityLevel = Enum.QualityLevel.Level03
                 end)
-                -- Re-hide effect yang muncul lagi
+
+                -- Re-hide effect yang muncul lagi (batched)
+                local count = 0
                 for _, obj in ipairs(Workspace:GetDescendants()) do
-                    if obj:IsA("ParticleEmitter") or obj:IsA("Beam") or obj:IsA("Trail")
-                        or obj:IsA("Smoke") or obj:IsA("Fire") then
-                        if obj.Enabled ~= false then
+                    if count >= 100 then break end  -- ⭐ batasi per pass
+                    if not GFX.FPSEnabled then break end
+
+                    local isEffect = false
+                    for _, class in ipairs(EFFECT_CLASSES) do
+                        if obj:IsA(class) then
+                            isEffect = true
+                            break
+                        end
+                    end
+
+                    if isEffect and not isVrilzObject(obj) then
+                        if not GFX.HiddenParts[obj] then
+                            hideEffect(obj)
+                            count = count + 1
+                        elseif obj.Enabled ~= false then
                             pcall(function() obj.Enabled = false end)
+                            count = count + 1
                         end
                     end
                 end
@@ -3515,7 +3584,7 @@ local function gfx_enableFPS()
         end)
     end
 
-    notify("FPS Boost enabled ✅", "success")
+    notify("FPS Boost ON ✅", "success")
 end
 
 local function gfx_disableFPS()
@@ -3523,38 +3592,48 @@ local function gfx_disableFPS()
     GFX.FPSEnabled = false
     GFX.LoopThread = nil
 
-    -- ═══ RESTORE LIGHTING ═══
-    pcall(function() Lighting.GlobalShadows = true end)
-    pcall(function() settings().Rendering.QualityLevel = Enum.QualityLevel.Level10 end)
-
-    -- ═══ RESTORE SEMUA EFFECT YANG DISEMBUNYIKAN ═══
-    for _, item in ipairs(GFX.HiddenParts) do
-        if item.obj and item.obj.Parent then
-            pcall(function()
-                if item.enabled ~= nil then item.obj.Enabled = item.enabled end
-                if item.transparency ~= nil and item.obj:IsA("BasePart") then
-                    item.obj.Transparency = item.transparency
-                end
-                if item.visible ~= nil then item.obj.Visible = item.visible end
-            end)
-        end
-    end
-    GFX.HiddenParts = {}
-
     -- ═══ DISCONNECT WATCHER ═══
     for _, conn in ipairs(GFX.Connections) do
         pcall(function() conn:Disconnect() end)
     end
     GFX.Connections = {}
 
+    -- ═══ RESTORE SEMUA EFFECT YANG DISEMBUNYIKAN ═══
+    for obj, backup in pairs(GFX.HiddenParts) do
+        if obj and obj.Parent then
+            pcall(function()
+                if backup.enabled ~= nil then obj.Enabled = backup.enabled end
+                if backup.rate ~= nil then obj.Rate = backup.rate end
+                if backup.transparency ~= nil then obj.Transparency = backup.transparency end
+                if backup.visible ~= nil then obj.Visible = backup.visible end
+                if backup.brightness ~= nil then obj.Brightness = backup.brightness end
+                if backup.density ~= nil then obj.Density = backup.density end
+                if backup.haze ~= nil then obj.Haze = backup.haze end
+            end)
+        end
+    end
+    GFX.HiddenParts = {}
+
+    -- ═══ RESTORE GRAPHICS QUALITY ═══
+    if GFX._origQuality then
+        pcall(function()
+            local userGameSettings = UserSettings and UserSettings():GetService("UserGameSettings")
+            if userGameSettings then
+                userGameSettings.SavedQualityLevel = GFX._origQuality
+            end
+        end)
+        GFX._origQuality = nil
+    end
+    pcall(function()
+        settings().Rendering.QualityLevel = Enum.QualityLevel.Level10
+    end)
+
     -- ═══ RESTORE LIGHTING STATE ═══
     gfx_restore()
 
-    -- ═══ HAPUS EFFECT TAMBAHAN ═══
-    for _, name in ipairs({"VRILZ_FPS_CC", "VRILZ_FPS_Bloom"}) do
-        local old = Lighting:FindFirstChild(name)
-        if old then old:Destroy() end
-    end
+    -- ═══ HAPUS COLOR CORRECTION TAMBAHAN ═══
+    local cc = Lighting:FindFirstChild("VRILZ_FPS_CC")
+    if cc then cc:Destroy() end
 
     notify("FPS Boost disabled", "info")
 end
