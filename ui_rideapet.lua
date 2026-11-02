@@ -2623,34 +2623,41 @@ local function buildOnlineWindow(parent)
     dgc.CornerRadius = UDim.new(1, 0)
     dgc.Parent = dotGlow
 
-    -- ═══ TEXT STACK (KANAN DOT) ═══
-    local textX = IS_MOBILE and 40 or 46
+     -- ═══ TEXT HORIZONTAL: [62] [PLAYER ONLINE] sejajar ═══
+    local textX = IS_MOBILE and 42 or 48
 
+    -- Angka (kiri, lebih tebal & besar)
+    local countLbl = Instance.new("TextLabel")
+    countLbl.Size = UDim2.fromOffset(IS_MOBILE and 38 or 44, IS_MOBILE and 22 or 24)
+    countLbl.Position = UDim2.fromOffset(textX, 0)
+    countLbl.AnchorPoint = Vector2.new(0, 0.5)
+    countLbl.BackgroundTransparency = 1
+    countLbl.Text = "..."
+    countLbl.TextColor3 = C.Text
+    countLbl.Font = Enum.Font.GothamBlack
+    countLbl.TextSize = IS_MOBILE and 15 or 17
+    countLbl.TextXAlignment = Enum.TextXAlignment.Left
+    countLbl.TextYAlignment = Enum.TextYAlignment.Center
+    countLbl.ZIndex = 57
+    countLbl.Parent = win
+    countLbl.Position = UDim2.new(0, textX, 0.5, 0)
+    registerTheme(countLbl, "Text", "TextColor3")
+
+    -- Label "PLAYER ONLINE" (kanan angka, kecil & muted)
     local labelLbl = Instance.new("TextLabel")
-    labelLbl.Size = UDim2.new(1, -(textX + 8), 0, 14)
-    labelLbl.Position = UDim2.fromOffset(textX, IS_MOBILE and 8 or 10)
+    labelLbl.Size = UDim2.new(1, -(textX + (IS_MOBILE and 42 or 50) + 8), 0, 14)
+    labelLbl.Position = UDim2.new(0, textX + (IS_MOBILE and 42 or 50), 0.5, 0)
+    labelLbl.AnchorPoint = Vector2.new(0, 0.5)
     labelLbl.BackgroundTransparency = 1
     labelLbl.Text = "PLAYER ONLINE"
     labelLbl.TextColor3 = C.Muted
     labelLbl.Font = Enum.Font.GothamBold
     labelLbl.TextSize = IS_MOBILE and 8 or 9
     labelLbl.TextXAlignment = Enum.TextXAlignment.Left
+    labelLbl.TextYAlignment = Enum.TextYAlignment.Center
     labelLbl.ZIndex = 57
     labelLbl.Parent = win
     registerTheme(labelLbl, "Muted", "TextColor3")
-
-    local countLbl = Instance.new("TextLabel")
-    countLbl.Size = UDim2.new(1, -(textX + 8), 0, 22)
-    countLbl.Position = UDim2.fromOffset(textX, IS_MOBILE and 22 or 24)
-    countLbl.BackgroundTransparency = 1
-    countLbl.Text = "..."
-    countLbl.TextColor3 = C.Text
-    countLbl.Font = Enum.Font.GothamBlack
-    countLbl.TextSize = IS_MOBILE and 16 or 18
-    countLbl.TextXAlignment = Enum.TextXAlignment.Left
-    countLbl.ZIndex = 57
-    countLbl.Parent = win
-    registerTheme(countLbl, "Text", "TextColor3")
 
     -- Tombol minimize (kanan)
     local minBtn = Instance.new("TextButton")
