@@ -7078,11 +7078,11 @@ do
     local updateCard, updateContent = makeCard(infoLeft, "📢 UPDATE INFORMATION", 2)
 
     local infoLines = {
-        "Version        : 2.5",
-        "Last Update    : 24 Okt 2026",
+        "Version        : 2.8",
+        "Last Update    : 02 Nov 2026",
         "Status         : Online ✅",
         "Changelog      : Fly Chard, Webhook, Auto Crash",
-        "                  Auto Event, Auto Yin, Config",
+        "                  Auto Event, Auto Yin, Auto Seraph",
     }
     for i, line in ipairs(infoLines) do
         local lbl = Instance.new("TextLabel")
