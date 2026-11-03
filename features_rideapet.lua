@@ -6339,46 +6339,15 @@ function Features.startAutoObby()
             return true
         end
 
-        -- ═══ HELPER: CARI START DI MANA AJA ═══
-        local function findStartPos()
-            local obbyFolder = workspace:FindFirstChild("HalloweenObbyRuns")
+        -- ═══ HELPER: CARI START — PAKAI KOORDINAT LANGSUNG ═══
+-- Dari scan: Start=28476.0, 40411.9, 29065.9
+local OBBY_START_FIXED = Vector3.new(28476.0, 40411.9, 29065.9)
 
-            if obbyFolder then
-                -- 1) Run folder lu
-                local rf = obbyFolder:FindFirstChild(tostring(player.UserId))
-                local sm = rf and rf:FindFirstChild("Start")
-                if sm then
-                    local ok, p = pcall(function() return sm:GetPivot().Position end)
-                    if ok then print("[AUTO OBBY] Start dari Run folder lu"); return p end
-                end
-                -- 2) Run folder lain
-                for _, rf2 in ipairs(obbyFolder:GetChildren()) do
-                    local sm2 = rf2:FindFirstChild("Start")
-                    if sm2 then
-                        local ok, p = pcall(function() return sm2:GetPivot().Position end)
-                        if ok then print("[AUTO OBBY] Start dari Run folder lain:", rf2.Name); return p end
-                    end
-                end
-                -- 3) Descendant bernama "Start"
-                for _, d in ipairs(obbyFolder:GetDescendants()) do
-                    if d.Name == "Start" and (d:IsA("Model") or d:IsA("BasePart")) then
-                        local ok, p = pcall(function() return d:GetPivot().Position end)
-                        if ok then print("[AUTO OBBY] Start dari descendant:", d:GetFullName()); return p end
-                    end
-                end
-            end
-
-            -- 4) Part statis di workspace
-            for _, name in ipairs({"HalloweenObbyStart","ObbyStart","StartObby","HalloweenObbyStartPart","ObbyStartPart"}) do
-                local p = workspace:FindFirstChild(name, true)
-                if p and p:IsA("BasePart") then
-                    print("[AUTO OBBY] Start dari part statis:", name)
-                    return p.Position
-                end
-            end
-            return nil
-        end
-
+local function findStartPos()
+    -- Langsung return koordinat — gak nyari folder lagi
+    print("[AUTO OBBY] 📍 Start pakai koordinat fixed:", tostring(OBBY_START_FIXED))
+    return OBBY_START_FIXED
+end
         -- ═══ HELPER: CARI FINISH DI MANA AJA ═══
         local function findFinishPos()
             local obbyFolder = workspace:FindFirstChild("HalloweenObbyRuns")
