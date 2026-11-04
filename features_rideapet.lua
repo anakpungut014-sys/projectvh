@@ -3411,6 +3411,7 @@ end
 
             if volcanicEgg and volcanicEgg.Parent then
                 Shared.MutationSteal_Active = true
+                camLock_start()   -- 🎥 KAMERA LOCK KE BASE
 
                 local eggPart = volcanicEgg:FindFirstChildWhichIsA("BasePart", true)
                 if not eggPart then
@@ -3523,6 +3524,7 @@ end
 task.wait(0.4)
 doReturnToPlot()
 
+                camLock_stop()   -- 🎥 KAMERA BALIK NORMAL (udah di plot)
                 Shared.MutationSteal_Active = false
                 task.wait(3)
                 continue  -- ⭐ Lanjut loop, cek volcanic lagi
@@ -3562,6 +3564,7 @@ doReturnToPlot()
             end
 
             Shared.MutationSteal_Active = true
+            camLock_start()   -- 🎥 KAMERA LOCK KE BASE
 
             local egg = targetEgg
             local eggPart = egg:FindFirstChildWhichIsA("BasePart", true)
@@ -3666,6 +3669,7 @@ doReturnToPlot()
 task.wait(0.4)
 doReturnToPlot()
 
+            camLock_stop()   -- 🎥 KAMERA BALIK NORMAL (udah di plot)
             Shared.MutationSteal_Active = false
             task.wait(3)
         end
@@ -5818,6 +5822,81 @@ LocalPlayer.CharacterAdded:Connect(function()
         ghostRemoveDecoy()
     end
 end)
+
+-- ═══════════════════════════════════════════════════════════
+-- 🎥 CAM LOCK BASE — Kamera diam di base selama Mutation Steal
+-- Karakter stealth ke egg, kamera tetap di plot
+-- Balik normal pas karakter udah di plot
+-- ═══════════════════════════════════════════════════════════
+local CamLock = {
+    Active = false,
+    LockPart = nil,
+    OriginalSubject = nil,
+}
+
+local function camLock_start()
+    if CamLock.Active then return true end
+    if GhostMode.Active then return false end -- rebutan CameraSubject, skip
+
+    local cam = workspace.CurrentCamera
+    if not cam then return false end
+
+    local spawnPart = getMyPlotSpawn()
+    if not spawnPart then return false end
+
+    -- Bikin part anchor invisible di atas base
+    local part = Instance.new("Part")
+    part.Name = "VRILZ_CamLockBase"
+    part.Anchored = true
+    part.CanCollide = false
+    part.CanQuery = false
+    part.CanTouch = false
+    part.Transparency = 1
+    part.Size = Vector3.new(1, 1, 1)
+    part.CFrame = spawnPart.CFrame + Vector3.new(0, 5, 0)
+    part.Parent = workspace
+
+    CamLock.OriginalSubject = cam.CameraSubject
+    cam.CameraSubject = part
+
+    CamLock.LockPart = part
+    CamLock.Active = true
+    return true
+end
+
+local function camLock_stop()
+    if not CamLock.Active then return end
+
+    local cam = workspace.CurrentCamera
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+    if cam and hum then
+        cam.CameraSubject = hum
+    elseif cam and CamLock.OriginalSubject then
+        pcall(function() cam.CameraSubject = CamLock.OriginalSubject end)
+    end
+
+    if CamLock.LockPart then
+        pcall(function() CamLock.LockPart:Destroy() end)
+    end
+
+    CamLock.LockPart = nil
+    CamLock.Active = false
+end
+
+-- Auto cleanup pas respawn
+LocalPlayer.CharacterAdded:Connect(function()
+    if CamLock.Active then
+        task.wait(0.5)
+        camLock_stop()
+    end
+end)
+
+-- Expose buat debug (optional)
+function Features.isCamLockActive()
+    return CamLock.Active
+end
 
 -- ============================================================
 -- STEAL EXECUTOR — LOGIC ONLY (dipanggil dari UI)
