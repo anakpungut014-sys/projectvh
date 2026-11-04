@@ -5688,12 +5688,61 @@ end
 -- ============================================================
 -- 👻 GHOST CLONE — Khusus Egg Mutation Steal
 -- Kamera nempel clone di base, karakter asli stealth
+-- ⭐ CAMERA LOCK v2: kamera di base selama steal, balik ke karakter setelah return
 -- ============================================================
 local GhostMode = {
     Active = false,
     Decoy = nil,
     OriginalVisibility = {},
+    CameraLocked = false,          -- ⭐ BARU: tanda kamera sedang dikunci ke base
+    _cameraConn = nil,             -- ⭐ BARU: connection biar kamera tetap di base
 }
+
+-- ⭐ Fungsi: pasang kamera ke clone (base plot)
+local function ghostLockCameraToBase()
+    local cam = workspace.CurrentCamera
+    if not cam then return end
+
+    local cloneHum = GhostMode.Decoy and (
+        GhostMode.Decoy:FindFirstChildOfClass("Humanoid")
+        or GhostMode.Decoy:FindFirstChild("HumanoidRootPart")
+    )
+    if not cloneHum then return end
+
+    cam.CameraSubject = cloneHum
+    GhostMode.CameraLocked = true
+
+    -- ⭐ Guard: kalau game / script lain ubah CameraSubject, paksa balik ke clone
+    if GhostMode._cameraConn then
+        pcall(function() GhostMode._cameraConn:Disconnect() end)
+    end
+    GhostMode._cameraConn = cam:GetPropertyChangedSignal("CameraSubject"):Connect(function()
+        if not GhostMode.CameraLocked then return end
+        local decoyHum = GhostMode.Decoy and (
+            GhostMode.Decoy:FindFirstChildOfClass("Humanoid")
+            or GhostMode.Decoy:FindFirstChild("HumanoidRootPart")
+        )
+        if decoyHum and cam.CameraSubject ~= decoyHum then
+            cam.CameraSubject = decoyHum
+        end
+    end)
+end
+
+-- ⭐ Fungsi: balikin kamera ke karakter asli
+local function ghostUnlockCamera()
+    GhostMode.CameraLocked = false
+    if GhostMode._cameraConn then
+        pcall(function() GhostMode._cameraConn:Disconnect() end)
+        GhostMode._cameraConn = nil
+    end
+
+    local cam = workspace.CurrentCamera
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if cam and hum then
+        cam.CameraSubject = hum
+    end
+end
 
 local function ghostSpawnDecoy()
     local char = LocalPlayer.Character
@@ -5702,10 +5751,8 @@ local function ghostSpawnDecoy()
         return false
     end
 
-    -- Coba dapet base dari plot
     local base = getMyPlotSpawn()
-    
-    -- ⭐ FALLBACK: kalau plot gak ketemu, pake posisi sekarang (clone nempel di tempat lu berdiri)
+
     if not base then
         local hrp = char:FindFirstChild("HumanoidRootPart")
         if not hrp then
@@ -5716,16 +5763,13 @@ local function ghostSpawnDecoy()
         base = hrp
     end
 
-    -- Pastiin char Archivable
     local oldArchivable = char.Archivable
     char.Archivable = true
 
-    -- Bersihin clone lama
     if GhostMode.Decoy and GhostMode.Decoy.Parent then
         GhostMode.Decoy:Destroy()
     end
 
-    -- Clone
     local okClone, clone = pcall(char.Clone, char)
     char.Archivable = oldArchivable
 
@@ -5737,12 +5781,10 @@ local function ghostSpawnDecoy()
     clone.Name = "VRILZ_Ghost_" .. LocalPlayer.Name
     clone.Parent = workspace
 
-    -- Pindah ke base
     pcall(function()
         clone:PivotTo(base.CFrame + Vector3.new(0, 3, 0))
     end)
 
-    -- Freeze part + hapus script
     for _, d in ipairs(clone:GetDescendants()) do
         if d:IsA("BasePart") then
             d.Anchored = true
@@ -5754,7 +5796,6 @@ local function ghostSpawnDecoy()
         end
     end
 
-    -- Cari subject buat kamera
     local cloneHum = clone:FindFirstChildOfClass("Humanoid")
         or clone:FindFirstChild("HumanoidRootPart")
 
@@ -5766,11 +5807,8 @@ local function ghostSpawnDecoy()
 
     GhostMode.Decoy = clone
 
-    -- Kamera ke clone
-    local cam = workspace.CurrentCamera
-    if cam then
-        cam.CameraSubject = cloneHum
-    end
+    -- ⭐ KAMERA: kunci ke base (clone), bukan ke karakter asli
+    ghostLockCameraToBase()
 
     -- Sembunyiin karakter asli
     GhostMode.OriginalVisibility = {}
@@ -5782,7 +5820,7 @@ local function ghostSpawnDecoy()
     end
 
     GhostMode.Active = true
-    print("[Ghost] ✅ Clone spawned at", base.Position, "| camera set to clone")
+    print("[Ghost] ✅ Clone spawned at", base.Position, "| camera LOCKED to base")
     return true
 end
 
@@ -5792,12 +5830,8 @@ local function ghostRemoveDecoy()
     end
     GhostMode.Decoy = nil
 
-    local cam = workspace.CurrentCamera
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if cam and hum then
-        cam.CameraSubject = hum
-    end
+    -- ⭐ KAMERA: balikin ke karakter asli
+    ghostUnlockCamera()
 
     for d, v in pairs(GhostMode.OriginalVisibility) do
         if d and d.Parent and d:IsA("BasePart") then
