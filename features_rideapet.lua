@@ -5739,19 +5739,18 @@ local function cameraLockToBase()
     if CameraLock.Active then return true end
 
     local cam = workspace.CurrentCamera
-    if not cam then return false end
+    if not cam then
+        warn("[CameraLock] ❌ Camera gak ada")
+        return false
+    end
 
     local base = getMyPlotSpawn()
     if not base then
-        warn("[CameraLock] ❌ Plot spawn gak ketemu — kamera gak dikunci")
+        warn("[CameraLock] ❌ Plot spawn gak ketemu")
         return false
     end
     if not base:IsA("BasePart") then
         warn("[CameraLock] ❌ Base bukan BasePart")
-        return false
-    end
-    if base.Size.Magnitude < 5 then
-        warn("[CameraLock] ❌ Plot spawn terlalu kecil — skip lock")
         return false
     end
 
@@ -5764,7 +5763,9 @@ local function cameraLockToBase()
     cam.CameraType = Enum.CameraType.Scriptable
     CameraLock.Active = true
 
-    -- ⭐ Render step: orbit kamera di sekitar base
+    warn("[CameraLock] ✅ Lock ke base:", base.Position)
+
+    -- Render step
     RunService:BindToRenderStep("VrilzCameraLock", Enum.RenderPriority.Camera.Value + 1, function()
         if not CameraLock.Active then return end
         local c = workspace.CurrentCamera
@@ -5776,85 +5777,21 @@ local function cameraLockToBase()
         local basePos = CameraLock._basePos
         if not basePos then return end
 
-        -- ⭐ Hitung posisi kamera dari yaw/pitch/distance
         local yaw = CameraLock._yaw
         local pitch = CameraLock._pitch
         local dist = CameraLock._distance
 
         local lookTarget = basePos + Vector3.new(0, 5, 0)
-
         local offset = Vector3.new(
             math.sin(yaw) * math.cos(pitch) * dist,
             -math.sin(pitch) * dist + 8,
             math.cos(yaw) * math.cos(pitch) * dist
         )
-
-        local camPos = lookTarget + offset
-        c.CFrame = CFrame.lookAt(camPos, lookTarget)
+        c.CFrame = CFrame.lookAt(lookTarget + offset, lookTarget)
     end)
 
-        -- ⭐ Input: Klik KIRI tahan + geser → rotate (arah natural)
+    -- ═══ DISCONNECT YANG LAMA DULU ═══
     local UserInputService = game:GetService("UserInputService")
-
-    if CameraLock._inputConn then
-        pcall(function() CameraLock._inputConn:Disconnect() end)
-    end
-    if CameraLock._scrollConn then
-        pcall(function() CameraLock._scrollConn:Disconnect() end)
-    end
-    if CameraLock._inputEndConn then
-        pcall(function() CameraLock._inputEndConn:Disconnect() end)
-    end
-
-    -- ⭐ Klik KIRI tahan → mulai rotate
-    CameraLock._inputConn = UserInputService.InputBegan:Connect(function(input, gp)
-        if not CameraLock.Active then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            CameraLock._mouseDown = true
-        end
-    end)
-
-    -- Klik KIRI lepas → stop rotate
-    CameraLock._inputEndConn = UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            CameraLock._mouseDown = false
-        end
-    end)
-
-    -- Mouse move / scroll
-    CameraLock._scrollConn = UserInputService.InputChanged:Connect(function(input, gp)
-        if not CameraLock.Active then return end
-
-        -- ⭐ Drag rotate — geser KANAN = kamera ke KANAN, geser KIRI = ke KIRI
-        if input.UserInputType == Enum.UserInputType.MouseMovement then
-            if CameraLock._mouseDown then
-                local delta = input.Delta
-                CameraLock._yaw = CameraLock._yaw + delta.X * 0.01
-                CameraLock._pitch = math.clamp(
-                    CameraLock._pitch - delta.Y * 0.01,
-                    -1.2,
-                    1.2
-                )
-            end
-        -- ⭐ Scroll → zoom
-        elseif input.UserInputType == Enum.UserInputType.MouseWheel then
-            CameraLock._distance = math.clamp(
-                CameraLock._distance - input.Position.Z * 8,
-                CameraLock._minDist,
-                CameraLock._maxDist
-            )
-        end
-    end)
-
-    return true
-end
-
-local function cameraUnlockToCharacter()
-    CameraLock.Active = false
-
-    pcall(function() RunService:UnbindFromRenderStep("VrilzCameraLock") end)
-
-    -- ⭐ Disconnect semua input
     if CameraLock._inputConn then
         pcall(function() CameraLock._inputConn:Disconnect() end)
         CameraLock._inputConn = nil
@@ -5868,7 +5805,68 @@ local function cameraUnlockToCharacter()
         CameraLock._scrollConn = nil
     end
 
-    -- ⭐ Reset orbit state
+    -- ⭐ Klik KIRI → mulai drag
+    CameraLock._inputConn = UserInputService.InputBegan:Connect(function(input, gp)
+        if not CameraLock.Active then return end
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            CameraLock._mouseDown = true
+            warn("[CameraLock] 🖱️ Drag START")
+        end
+    end)
+
+    -- ⭐ Klik KIRI lepas → stop drag
+    CameraLock._inputEndConn = UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
+            CameraLock._mouseDown = false
+            warn("[CameraLock] 🖱️ Drag END")
+        end
+    end)
+
+    -- ⭐ Mouse move → rotate, scroll → zoom
+    CameraLock._scrollConn = UserInputService.InputChanged:Connect(function(input, gp)
+        if not CameraLock.Active then return end
+
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            if CameraLock._mouseDown then
+                local delta = input.Delta
+                CameraLock._yaw = CameraLock._yaw + delta.X * 0.01
+                CameraLock._pitch = math.clamp(
+                    CameraLock._pitch - delta.Y * 0.01,
+                    -1.2,
+                    1.2
+                )
+            end
+        elseif input.UserInputType == Enum.UserInputType.MouseWheel then
+            CameraLock._distance = math.clamp(
+                CameraLock._distance - input.Position.Z * 8,
+                CameraLock._minDist,
+                CameraLock._maxDist
+            )
+        end
+    end)
+
+    return true   -- ⬅️ INI YANG HILANG!
+end
+
+local function cameraUnlockToCharacter()
+    warn("[CameraLock] 🔓 Unlock")
+    CameraLock.Active = false
+
+    pcall(function() RunService:UnbindFromRenderStep("VrilzCameraLock") end)
+
+    if CameraLock._inputConn then
+        pcall(function() CameraLock._inputConn:Disconnect() end)
+        CameraLock._inputConn = nil
+    end
+    if CameraLock._inputEndConn then
+        pcall(function() CameraLock._inputEndConn:Disconnect() end)
+        CameraLock._inputEndConn = nil
+    end
+    if CameraLock._scrollConn then
+        pcall(function() CameraLock._scrollConn:Disconnect() end)
+        CameraLock._scrollConn = nil
+    end
+
     CameraLock._mouseDown = false
     CameraLock._yaw = 0
     CameraLock._pitch = -0.35
