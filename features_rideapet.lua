@@ -5714,25 +5714,22 @@ function Features.setYinRitualEnabled(v)
 end
 
 -- ============================================================
--- 🎥 CAMERA LOCK — FREE ORBIT (bisa geser di sekitar base)
+-- 🎥 CAMERA LOCK — ORBIT STANDAR (klik kiri drag = rotate, scroll = zoom)
 -- ============================================================
 local CameraLock = {
     Active = false,
-    _cameraConn = nil,
     _origCameraType = nil,
     _origCameraSubject = nil,
     _basePos = nil,
-    -- ⭐ BARU: orbit state
-    _yaw = 0,           -- rotasi horizontal (drag kiri-kanan)
-    _pitch = -0.35,     -- rotasi vertikal (drag atas-bawah)
-    _distance = 40,     -- jarak kamera dari base (scroll)
+    _yaw = 0,
+    _pitch = -0.35,
+    _distance = 40,
     _minDist = 15,
     _maxDist = 200,
     _mouseDown = false,
-    _lastMouse = Vector2.new(),
     _inputConn = nil,
-    _scrollConn = nil,
     _inputEndConn = nil,
+    _scrollConn = nil,
 }
 
 local function cameraLockToBase()
@@ -5746,7 +5743,7 @@ local function cameraLockToBase()
 
     local base = getMyPlotSpawn()
     if not base then
-        warn("[CameraLock] ❌ Plot spawn gak ketemu")
+        warn("[CameraLock] ❌ Plot spawn gak ketemu — cek getMyPlot()")
         return false
     end
     if not base:IsA("BasePart") then
@@ -5758,14 +5755,20 @@ local function cameraLockToBase()
     CameraLock._origCameraType = cam.CameraType
     CameraLock._origCameraSubject = cam.CameraSubject
 
+    -- Reset orbit
+    CameraLock._yaw = 0
+    CameraLock._pitch = -0.35
+    CameraLock._distance = 40
+    CameraLock._mouseDown = false
+
     pcall(function() RunService:UnbindFromRenderStep("VrilzCameraLock") end)
 
     cam.CameraType = Enum.CameraType.Scriptable
     CameraLock.Active = true
 
-    warn("[CameraLock] ✅ Lock ke base:", base.Position)
+    warn("[CameraLock] ✅ Lock ke base:", tostring(base.Position))
 
-    -- Render step
+    -- Render loop: orbit kamera keliling base
     RunService:BindToRenderStep("VrilzCameraLock", Enum.RenderPriority.Camera.Value + 1, function()
         if not CameraLock.Active then return end
         local c = workspace.CurrentCamera
@@ -5782,16 +5785,19 @@ local function cameraLockToBase()
         local dist = CameraLock._distance
 
         local lookTarget = basePos + Vector3.new(0, 5, 0)
+
         local offset = Vector3.new(
             math.sin(yaw) * math.cos(pitch) * dist,
             -math.sin(pitch) * dist + 8,
             math.cos(yaw) * math.cos(pitch) * dist
         )
+
         c.CFrame = CFrame.lookAt(lookTarget + offset, lookTarget)
     end)
 
-    -- ═══ DISCONNECT YANG LAMA DULU ═══
+    -- ═══ DISCONNECT INPUT LAMA ═══
     local UserInputService = game:GetService("UserInputService")
+
     if CameraLock._inputConn then
         pcall(function() CameraLock._inputConn:Disconnect() end)
         CameraLock._inputConn = nil
@@ -5805,30 +5811,28 @@ local function cameraLockToBase()
         CameraLock._scrollConn = nil
     end
 
-    -- ⭐ Klik KIRI → mulai drag
+    -- ═══ INPUT: KLIK KIRI DRAG = ROTATE ═══
     CameraLock._inputConn = UserInputService.InputBegan:Connect(function(input, gp)
         if not CameraLock.Active then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             CameraLock._mouseDown = true
-            warn("[CameraLock] 🖱️ Drag START")
         end
     end)
 
-    -- ⭐ Klik KIRI lepas → stop drag
     CameraLock._inputEndConn = UserInputService.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             CameraLock._mouseDown = false
-            warn("[CameraLock] 🖱️ Drag END")
         end
     end)
 
-    -- ⭐ Mouse move → rotate, scroll → zoom
+    -- ═══ INPUT: MOUSE MOVE = ROTATE, SCROLL = ZOOM ═══
     CameraLock._scrollConn = UserInputService.InputChanged:Connect(function(input, gp)
         if not CameraLock.Active then return end
 
         if input.UserInputType == Enum.UserInputType.MouseMovement then
             if CameraLock._mouseDown then
                 local delta = input.Delta
+                -- ⭐ Natural: geser kanan = kamera ke kanan, geser kiri = ke kiri
                 CameraLock._yaw = CameraLock._yaw + delta.X * 0.01
                 CameraLock._pitch = math.clamp(
                     CameraLock._pitch - delta.Y * 0.01,
@@ -5845,7 +5849,7 @@ local function cameraLockToBase()
         end
     end)
 
-    return true   -- ⬅️ INI YANG HILANG!
+    return true
 end
 
 local function cameraUnlockToCharacter()
