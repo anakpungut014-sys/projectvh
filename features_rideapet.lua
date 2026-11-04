@@ -1972,15 +1972,18 @@ local function getEggRarity(eggName)
     -- ⭐ PRIORITY 1: GameData
     local info = EggData[eggName]
     if info and info.Rarity then return info.Rarity end
+    -- Coba variant tanpa "Egg"
+    local clean = eggName:gsub(" Egg$", "")
+    local info2 = EggData[clean] or EggData[clean .. "Egg"]
+    if info2 and info2.Rarity then return info2.Rarity end
 
-    -- ⭐ PRIORITY 2: Attribute di instance egg real (paling akurat kalo GameData kosong)
+    -- ⭐ PRIORITY 2: Attribute di instance egg real
     local rendered = Workspace:FindFirstChild("RenderedEggs")
     if rendered then
         local egg = rendered:FindFirstChild(eggName)
         if egg then
             local r = egg:GetAttribute("Rarity")
             if r then return tostring(r) end
-            -- Coba juga di descendant
             for _, d in ipairs(egg:GetDescendants()) do
                 local ra = d:GetAttribute and d:GetAttribute("Rarity")
                 if ra then return tostring(ra) end
@@ -1988,12 +1991,30 @@ local function getEggRarity(eggName)
         end
     end
 
-    -- ⭐ PRIORITY 3: Fallback
-    return "Common"
+    -- ⭐ PRIORITY 3: Fallback "Unknown" (BUKAN "Common")
+    return "Unknown"
 end
 local function isRaritySelected(eggName)
-    local rarity = getEggRarity(eggName)
+    -- ⭐ Kalau lu gak pilih rarity apapun → skip (gak steal)
     if not Shared.SelectedRarities then return false end
+    local hasAny = false
+    for _, v in pairs(Shared.SelectedRarities) do
+        if v then hasAny = true; break end
+    end
+    if not hasAny then return false end
+
+    local rarity = getEggRarity(eggName)
+
+    -- ⭐ Kalau rarity "Unknown" & lu pilih rarity tinggi → anggap match
+    -- (kemungkinan egg-nya rarity tinggi, tapi GameData kosong)
+    if rarity == "Unknown" then
+        return Shared.SelectedRarities["Legendary"] == true
+            or Shared.SelectedRarities["Mythic"] == true
+            or Shared.SelectedRarities["Divine"] == true
+            or Shared.SelectedRarities["Secret"] == true
+            or Shared.SelectedRarities["Ethereal"] == true
+    end
+
     return Shared.SelectedRarities[rarity] == true
 end
 
