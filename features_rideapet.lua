@@ -5793,7 +5793,7 @@ local function cameraLockToBase()
         c.CFrame = CFrame.lookAt(camPos, lookTarget)
     end)
 
-    -- ⭐ Input: drag mouse buat orbit
+        -- ⭐ Input: Klik KIRI tahan + geser → rotate (arah natural)
     local UserInputService = game:GetService("UserInputService")
 
     if CameraLock._inputConn then
@@ -5806,53 +5806,40 @@ local function cameraLockToBase()
         pcall(function() CameraLock._inputEndConn:Disconnect() end)
     end
 
-    -- Mouse button hold → mulai drag
+    -- ⭐ Klik KIRI tahan → mulai rotate
     CameraLock._inputConn = UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
         if not CameraLock.Active then return end
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-           or input.UserInputType == Enum.UserInputType.MouseButton2 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
             CameraLock._mouseDown = true
-            CameraLock._lastMouse = UserInputService:GetMouseLocation()
         end
     end)
 
-    -- Mouse release → stop drag
+    -- Klik KIRI lepas → stop rotate
     CameraLock._inputEndConn = UserInputService.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1
-           or input.UserInputType == Enum.UserInputType.MouseButton2 then
+        if input.UserInputType == Enum.UserInputType.MouseButton1 then
             CameraLock._mouseDown = false
         end
     end)
 
-    -- Mouse move → orbit
-    task.spawn(function()
-        local UserInputService2 = game:GetService("UserInputService")
-        while CameraLock.Active do
-            if CameraLock._mouseDown then
-                local curMouse = UserInputService2:GetMouseLocation()
-                local delta = curMouse - CameraLock._lastMouse
-
-                CameraLock._yaw = CameraLock._yaw + delta.X * 0.008
-                CameraLock._pitch = math.clamp(
-                    CameraLock._pitch - delta.Y * 0.008,
-                    -1.2,   -- batas atas (liat dari bawah)
-                    1.2     -- batas bawah (liat dari atas)
-                )
-
-                CameraLock._lastMouse = curMouse
-            end
-            task.wait(0.016)
-        end
-    end)
-
-    -- Scroll → zoom in/out
+    -- Mouse move / scroll
     CameraLock._scrollConn = UserInputService.InputChanged:Connect(function(input, gp)
-        if gp then return end
         if not CameraLock.Active then return end
-        if input.UserInputType == Enum.UserInputType.MouseWheel then
+
+        -- ⭐ Drag rotate — geser KANAN = kamera ke KANAN, geser KIRI = ke KIRI
+        if input.UserInputType == Enum.UserInputType.MouseMovement then
+            if CameraLock._mouseDown then
+                local delta = input.Delta
+                CameraLock._yaw = CameraLock._yaw + delta.X * 0.01
+                CameraLock._pitch = math.clamp(
+                    CameraLock._pitch - delta.Y * 0.01,
+                    -1.2,
+                    1.2
+                )
+            end
+        -- ⭐ Scroll → zoom
+        elseif input.UserInputType == Enum.UserInputType.MouseWheel then
             CameraLock._distance = math.clamp(
-                CameraLock._distance - input.Position.Z * 5,
+                CameraLock._distance - input.Position.Z * 8,
                 CameraLock._minDist,
                 CameraLock._maxDist
             )
