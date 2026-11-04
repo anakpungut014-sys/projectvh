@@ -4419,7 +4419,6 @@ while task.wait(HalloweenCfg.LOOP_WAIT) do
     -- ⭐⭐⭐ FIX BARU: SKIP SET FLAG KALAU LEAVING AKTIF ⭐⭐⭐
 if _G.VRILZ_HalloweenLeaving then
     Shared.MutationSteal_Active = false
-    unlockCamIfActive()
     task.wait(0.2)
     continue
 end
@@ -4427,7 +4426,6 @@ end
 -- ⭐ TAMBAH INI
 if LocalPlayer:GetAttribute("InHalloweenZone") == true then
     Shared.MutationSteal_Active = false
-    unlockCamIfActive()
     task.wait(0.5)
     continue
 end
