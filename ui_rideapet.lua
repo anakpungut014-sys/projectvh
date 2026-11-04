@@ -4709,7 +4709,7 @@ animeBg.Parent = main
 registerTheme(animeBg, "Accent", "ImageColor3")
 
 local animeBgCorner = Instance.new("UICorner")
-animeBgCorner.CornerRadius = UDim.new(0, 18)
+animeBgCorner.CornerRadius = UDim.new(0, 0)
 animeBgCorner.Parent = animeBg
 
 -- ⭐ Overlay gelap tipis biar teks kebaca
@@ -4724,7 +4724,7 @@ animeOverlay.Active = false
 animeOverlay.Parent = main
 
 local animeOverlayCorner = Instance.new("UICorner")
-animeOverlayCorner.CornerRadius = UDim.new(0, 18)
+animeOverlayCorner.CornerRadius = UDim.new(0, 0)
 animeOverlayCorner.Parent = animeOverlay
 -- ⭐⭐⭐ END FOTO ANIME ⭐⭐⭐
     -- Soft 3D shadow behind the window (visual only).
@@ -4739,7 +4739,7 @@ animeOverlayCorner.Parent = animeOverlay
     shadow.ZIndex = 0
     shadow.Parent = main
     local shadowCorner = Instance.new("UICorner")
-    shadowCorner.CornerRadius = UDim.new(0, 24)
+    shadowCorner.CornerRadius = UDim.new(0, 0)
     shadowCorner.Parent = shadow
 
     local bevel = Instance.new("Frame")
@@ -4751,7 +4751,7 @@ animeOverlayCorner.Parent = animeOverlay
     bevel.ZIndex = 1
     bevel.Parent = main
     local bevelCorner = Instance.new("UICorner")
-    bevelCorner.CornerRadius = UDim.new(0, 21)
+    bevelCorner.CornerRadius = UDim.new(0, 0)
     bevelCorner.Parent = bevel
     local bevelStroke = Instance.new("UIStroke")
     bevelStroke.Color = Color3.fromRGB(255, 255, 255)
@@ -4760,7 +4760,7 @@ animeOverlayCorner.Parent = animeOverlay
     bevelStroke.Parent = bevel
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 18)
+    corner.CornerRadius = UDim.new(0, 0)
     corner.Parent = main
 
     local gradient = Instance.new("UIGradient")
@@ -4790,7 +4790,7 @@ animeOverlayCorner.Parent = animeOverlay
     header.BackgroundTransparency = 0.35
 
     local headerCorner = Instance.new("UICorner")
-    headerCorner.CornerRadius = UDim.new(0, 18)
+    headerCorner.CornerRadius = UDim.new(0, 0)
     headerCorner.Parent = header
 
     local headerGlow = Instance.new("Frame")
