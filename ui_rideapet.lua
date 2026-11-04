@@ -8129,11 +8129,19 @@ end
         stealToggleHolder.LayoutOrder = 3
         stealToggleHolder.Parent = mutStealContent
 
-        makeToggle(stealToggleHolder, "Auto Steal", false, function(v)
-            Shared.MutationSteal_Enabled = v
-            if v then notify("🎯 Steal: ON", "success")
-            else notify("🎯 Steal: OFF", "info") end
-        end, "MutationSteal_Enabled")
+makeToggle(stealToggleHolder, "Auto Steal", false, function(v)
+    Shared.MutationSteal_Enabled = v
+    if v then
+        notify("🎯 Steal: ON", "success")
+    else
+        notify("🎯 Steal: OFF", "info")
+        -- ⭐ Force kamera balik normal pas toggle OFF di tengah steal
+        local F = getFeatures()
+        if F and F.forceCamUnlock then
+            F.forceCamUnlock()
+        end
+    end
+end, "MutationSteal_Enabled")
 
         local rarityLbl = Instance.new("TextLabel")
         rarityLbl.Size = UDim2.new(1, 0, 0, 16)
