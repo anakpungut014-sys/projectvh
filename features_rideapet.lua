@@ -1147,17 +1147,9 @@ local lastNoEggNotif = 0
 
 function Features.startAutoSteal()
     task.spawn(function()
-while task.wait(0.5) do
-if not Shared.AutoSteal_Enabled then
-    if CameraLock.Active then camLock_release("Auto Steal OFF") end
-    continue
-end
+        while task.wait(0.5) do
+            if not Shared.AutoSteal_Enabled then continue end
 
--- ⭐⭐⭐ FIX: ENGAGE camera lock LANGSUNG pas Auto Steal ON ⭐⭐⭐
--- biar user liat base, bukan karakter yang lagi TP-TP
-if not CameraLock.Active then
-    camLock_engage("Auto Steal")
-end
             -- ⭐⭐⭐ FIX: JANGAN STEAL KALO LAGI PEGANG CANDY ⭐⭐⭐
             if LocalPlayer:GetAttribute("CarriedCandyModel") ~= nil
                or LocalPlayer:GetAttribute("CarryingCandy") == true
@@ -1201,45 +1193,19 @@ end
                 continue
             end
 
--- ✅ FIX: Prioritas RARITY dulu, fallback ke nama spesifik
-local egg = nil
-local eggLabel = "?"
+            local eggName = Shared.SelectedEgg or "Cherub"
+            local egg = findEggByName(eggName)
 
--- 1) Coba cari by RARITY yang dipilih (kayak Auto Farm)
-local best = getBestEggInMap()  -- fungsi ini udah cek Shared.SelectedRarities
-if best and best.egg then
-    egg = best.egg
-    eggLabel = egg.Name .. " [" .. best.rarity .. "]"
-end
-
--- 2) Fallback: kalo gak ada rarity match, coba by nama spesifik
-if not egg and Shared.SelectedEgg and Shared.SelectedEgg ~= "" then
-    egg = findEggByName(Shared.SelectedEgg)
-    if egg then eggLabel = egg.Name .. " [by name]" end
-end
-
--- 3) Masih gak ada? Skip dengan notif
-if not egg then
-    local now = os.clock()
-    if now - lastNoEggNotif > 5 then
-        lastNoEggNotif = now
-        -- ⭐ Kasih tau user: pilih rarity atau egg dulu
-        local hasRarity = false
-        if Shared.SelectedRarities then
-            for _, v in pairs(Shared.SelectedRarities) do
-                if v then hasRarity = true; break end
+            if not egg then
+                local now = os.clock()
+                if now - lastNoEggNotif > 5 then
+                    lastNoEggNotif = now
+                    if Shared.Notify then
+                        Shared.Notify("Egg no spawn: " .. eggName, "warning")
+                    end
+                end
+                continue
             end
-        end
-        local msg
-        if not hasRarity and (not Shared.SelectedEgg or Shared.SelectedEgg == "") then
-            msg = "⚠️ Pilih RARITY atau EGG dulu di UI!"
-        else
-            msg = "Egg target gak spawn: " .. tostring(Shared.SelectedEgg or "?")
-        end
-        if Shared.Notify then Shared.Notify(msg, "warning") end
-    end
-    continue
-end
 
             local eggPart = egg:FindFirstChildWhichIsA("BasePart", true)
             local prompt = egg:FindFirstChild("Pickup", true)
@@ -1248,7 +1214,7 @@ end
             if prompt:IsA("ProximityPrompt") then
                 prompt.HoldDuration = 0
             end
-                
+
             myRoot.CFrame = eggPart.CFrame + Vector3.new(0, 3, 0)
             task.wait(0.1)
 
@@ -1270,8 +1236,6 @@ end
 
             if picked and Shared.AutoReturn_Enabled then
                 returnToMyPlot()
-                -- ⭐ RELEASE camera lock setelah balik base
-                camLock_release("Auto Steal done")
             end
 
             task.wait(0.3)
@@ -1936,23 +1900,7 @@ if GameData then
     local eggsMod = GameData:FindFirstChild("Eggs")
     if eggsMod then
         local ok, data = pcall(require, eggsMod)
-        if ok and type(data) == "table" then
-            EggData = data
-            local count = 0
-            for _ in pairs(EggData) do count = count + 1 end
-            print("[VRILZ] ✅ EggData loaded: " .. count .. " entries")
-            -- ⭐ DEBUG: print 3 sample
-            local n = 0
-            for name, info in pairs(EggData) do
-                print("  - " .. name .. " → " .. tostring(info.Rarity or "?"))
-                n = n + 1
-                if n >= 3 then break end
-            end
-        else
-            warn("[VRILZ] ❌ require(GameData.Eggs) failed: " .. tostring(data))
-        end
-    else
-        warn("[VRILZ] ❌ GameData.Eggs not found")
+        if ok and type(data) == "table" then EggData = data end
     end
     local petsMod = GameData:FindFirstChild("Pets")
     if petsMod then
@@ -1969,57 +1917,4814 @@ local RARITY_ORDER = {
 }
 
 local function getEggRarity(eggName)
-    -- ⭐ PRIORITY 1: GameData
     local info = EggData[eggName]
-    if info and info.Rarity then return info.Rarity end
-    -- Coba variant tanpa "Egg"
-    local clean = eggName:gsub(" Egg$", "")
-    local info2 = EggData[clean] or EggData[clean .. "Egg"]
-    if info2 and info2.Rarity then return info2.Rarity end
+    return info and info.Rarity or "Common"
+end
 
-    -- ⭐ PRIORITY 2: Attribute di instance egg real
+local function isRaritySelected(eggName)
+    local rarity = getEggRarity(eggName)
+    if not Shared.SelectedRarities then return false end
+    return Shared.SelectedRarities[rarity] == true
+end
+
+-- ============================================================
+-- INFINITY JUMP (FIXED v2)
+-- ============================================================
+local InfinityJumpState = {
+    Enabled = false,
+    Height = 50,
+    MinHeight = 10,
+    MaxHeight = 50,
+    InputConn = nil,
+    MobileHooked = false,
+}
+
+-- ⭐ Konversi Height → JumpPower buat max 50 studs
+-- Rumus fisika Roblox: JumpPower = sqrt(2 * gravity * height)
+-- Gravity default = 196.2 studs/s²
+local function heightToPower(h)
+    h = math.clamp(h, 10, 50)          -- ⭐ hard cap 50 studs
+    local gravity = 196.2
+    return math.sqrt(2 * gravity * h)  -- ⭐ fisika bener
+end
+
+local function applyJumpHeight()
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum then return end
+
+    local height = math.clamp(InfinityJumpState.Height, 10, 50)  -- ⭐ cap
+    local power = heightToPower(height)
+
+    pcall(function()
+        hum.UseJumpPower = true
+        hum.JumpPower = power
+        -- Fallback: set JumpHeight juga (kalo game support)
+        pcall(function() hum.JumpHeight = height end)
+    end)
+end
+
+local function doJump()
+    if not InfinityJumpState.Enabled then return end
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not hum or hum.Health <= 0 then return end
+
+    -- ⭐ Pastiin JumpPower udah di-set (idempotent, aman)
+    -- Cuma re-apply kalo beda (biar gak reset terus)
+    local targetPower = heightToPower(InfinityJumpState.Height)
+    if math.abs(hum.JumpPower - targetPower) > 1 then
+        applyJumpHeight()
+    end
+
+    pcall(function()
+        hum.Jump = true
+    end)
+    pcall(function()
+        hum:ChangeState(Enum.HumanoidStateType.Jumping)
+    end)
+end
+
+            function Features.startInfinityJump()
+    local UserInputService = game:GetService("UserInputService")
+
+    -- ⭐ PC: Space trigger — SIMPAN CONN biar gak dobel
+    if InfinityJumpState.InputConn then
+        pcall(function() InfinityJumpState.InputConn:Disconnect() end)
+    end
+    InfinityJumpState.InputConn = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        if input.KeyCode == Enum.KeyCode.Space then
+            doJump()
+        end
+    end)
+
+    -- ⭐ MOBILE: hook jump button (kalo ada)
+    task.spawn(function()
+        if not UserInputService.TouchEnabled then return end
+
+        local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+        if not playerGui then return end
+
+        while task.wait(0.5) do
+            local touchGui = playerGui:FindFirstChild("TouchGui")
+            local touchFrame = touchGui and touchGui:FindFirstChild("TouchControlFrame")
+            local jumpBtn = touchFrame and touchFrame:FindFirstChild("JumpButton")
+            if jumpBtn and jumpBtn:IsA("ImageButton") then
+                if not jumpBtn:GetAttribute("VrilzInfinityHooked") then
+                    jumpBtn:SetAttribute("VrilzInfinityHooked", true)
+                    -- ⭐ PAKE SALAH SATU AJA — MouseButton1Down lebih reliable
+                    jumpBtn.MouseButton1Down:Connect(function()
+                        doJump()
+                    end)
+                end
+            end
+        end
+    end)
+
+    -- ⭐ Re-apply on respawn
+    LocalPlayer.CharacterAdded:Connect(function()
+        task.wait(1)
+        if InfinityJumpState.Enabled then
+            applyJumpHeight()
+        end
+    end)
+end
+                
+function Features.setInfinityJumpEnabled(v)
+    InfinityJumpState.Enabled = v
+    if v then
+        applyJumpHeight()
+    else
+        -- ⭐ Restore default JumpPower
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            pcall(function()
+                hum.UseJumpPower = true
+                hum.JumpPower = 50
+            end)
+        end
+    end
+end
+
+function Features.setInfinityJumpHeight(h)
+    InfinityJumpState.Height = math.clamp(h, InfinityJumpState.MinHeight, InfinityJumpState.MaxHeight)
+    if InfinityJumpState.Enabled then
+        applyJumpHeight()
+    end
+end
+
+function Features.getInfinityJumpState()
+    return InfinityJumpState
+end
+
+-- ============================================================
+-- SPEED
+-- ============================================================
+function Features.setSpeed(v)
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if hum then hum.WalkSpeed = v end
+end
+
+function Features.startSpeed()
+    task.spawn(function()
+        while task.wait(0.3) do
+            if Shared.Speed_Enabled then
+                Features.setSpeed(Shared.Speed_Value or 100)
+            end
+        end
+    end)
+end
+
+-- ============================================================
+-- CHARACTER FLY — Auto Fly + Height/Speed Dropdown
+-- ============================================================
+local FlyState = {
+    Enabled = false,
+    Flying = false,
+    Height = 100,
+    Speed = 300,
+    VerticalSpeed = 150,
+    BaseY = 0,
+    BodyVelocity = nil,
+    BodyGyro = nil,
+    KeyStates = {},
+    InputConn = nil,
+    InputEndConn = nil,
+    UpdateConn = nil,
+}
+
+local FLY_KEYS = {
+    Up   = Enum.KeyCode.Space,
+    Down = Enum.KeyCode.LeftControl,
+}
+
+local function fly_getRoot()
+    local char = LocalPlayer.Character
+    return char and char:FindFirstChild("HumanoidRootPart")
+end
+
+local function fly_getHum()
+    local char = LocalPlayer.Character
+    return char and char:FindFirstChildOfClass("Humanoid")
+end
+
+local function fly_cleanup()
+    if FlyState.BodyVelocity then
+        pcall(function() FlyState.BodyVelocity:Destroy() end)
+        FlyState.BodyVelocity = nil
+    end
+    if FlyState.BodyGyro then
+        pcall(function() FlyState.BodyGyro:Destroy() end)
+        FlyState.BodyGyro = nil
+    end
+
+    local hum = fly_getHum()
+    if hum then
+        pcall(function()
+            hum.PlatformStand = false
+            hum:ChangeState(Enum.HumanoidStateType.Freefall)
+        end)
+    end
+
+    FlyState.KeyStates = {}
+end
+
+local function fly_stop()
+    FlyState.Flying = false
+    if FlyState.UpdateConn then
+        pcall(function() FlyState.UpdateConn:Disconnect() end)
+        FlyState.UpdateConn = nil
+    end
+    fly_cleanup()
+end
+
+local function fly_start()
+    if FlyState.Flying then return end
+    local root = fly_getRoot()
+    local hum = fly_getHum()
+    if not root or not hum then return end
+
+    fly_cleanup()
+
+    FlyState.BaseY = root.Position.Y
+
+    pcall(function()
+        hum.PlatformStand = false
+        hum:ChangeState(Enum.HumanoidStateType.Physics)
+    end)
+
+    local bv = Instance.new("BodyVelocity")
+    bv.Name = "Vrilz_FlyBV"
+    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bv.Velocity = Vector3.zero
+    bv.Parent = root
+    FlyState.BodyVelocity = bv
+
+    local bg = Instance.new("BodyGyro")
+    bg.Name = "Vrilz_FlyBG"
+    bg.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+    bg.P = 5000
+    bg.D = 500
+    bg.CFrame = root.CFrame
+    bg.Parent = root
+    FlyState.BodyGyro = bg
+
+    root.CFrame = CFrame.new(
+        root.Position.X,
+        FlyState.BaseY + FlyState.Height,
+        root.Position.Z
+    )
+
+    FlyState.Flying = true
+
+    if FlyState.UpdateConn then
+        pcall(function() FlyState.UpdateConn:Disconnect() end)
+    end
+    FlyState.UpdateConn = RunService.RenderStepped:Connect(function()
+        if not FlyState.Enabled then return end
+        if not FlyState.Flying then return end
+
+        local root2 = fly_getRoot()
+        if not root2 or not FlyState.BodyVelocity then
+            fly_stop()
+            return
+        end
+
+        local cam = workspace.CurrentCamera
+        if not cam then return end
+
+        local forward = 0
+        local sideways = 0
+
+        if FlyState.KeyStates[Enum.KeyCode.W] then forward = forward + 1 end
+        if FlyState.KeyStates[Enum.KeyCode.S] then forward = forward - 1 end
+        if FlyState.KeyStates[Enum.KeyCode.D] then sideways = sideways + 1 end
+        if FlyState.KeyStates[Enum.KeyCode.A] then sideways = sideways - 1 end
+
+        local camLook = cam.CFrame.LookVector
+        camLook = Vector3.new(camLook.X, 0, camLook.Z)
+        if camLook.Magnitude > 0.01 then camLook = camLook.Unit end
+
+        local camRight = cam.CFrame.RightVector
+        camRight = Vector3.new(camRight.X, 0, camRight.Z)
+        if camRight.Magnitude > 0.01 then camRight = camRight.Unit end
+
+        local horizVel = (camLook * forward + camRight * sideways)
+        if horizVel.Magnitude > 0.01 then
+            horizVel = horizVel.Unit * FlyState.Speed
+        else
+            horizVel = Vector3.zero
+        end
+
+        local vertVel = 0
+        if FlyState.KeyStates[FLY_KEYS.Up] then
+            vertVel = FlyState.VerticalSpeed
+        elseif FlyState.KeyStates[FLY_KEYS.Down] then
+            vertVel = -FlyState.VerticalSpeed
+        end
+
+                FlyState.BodyVelocity.Velocity = Vector3.new(
+            horizVel.X,
+            vertVel,
+            horizVel.Z
+        )
+
+        -- ⭐ BARU: sync BaseY pas manual naik/turun (Space/LeftCtrl)
+        if vertVel ~= 0 then
+            FlyState.BaseY = root2.Position.Y - FlyState.Height
+        end
+
+        if camLook.Magnitude > 0.01 then
+            FlyState.BodyGyro.CFrame = CFrame.lookAt(root2.Position, root2.Position + camLook)
+        end
+    end)
+end
+
+local function fly_setupInput()
+    local UserInputService = game:GetService("UserInputService")
+
+    if FlyState.InputConn then
+        pcall(function() FlyState.InputConn:Disconnect() end)
+    end
+    if FlyState.InputEndConn then
+        pcall(function() FlyState.InputEndConn:Disconnect() end)
+    end
+
+    FlyState.InputConn = UserInputService.InputBegan:Connect(function(input, gp)
+        if gp then return end
+        FlyState.KeyStates[input.KeyCode] = true
+    end)
+
+    FlyState.InputEndConn = UserInputService.InputEnded:Connect(function(input)
+        FlyState.KeyStates[input.KeyCode] = false
+    end)
+end
+
+function Features.setFlyEnabled(v)
+    FlyState.Enabled = v
+    if v then
+        fly_start()
+        fly_setupInput()
+    else
+        fly_stop()
+    end
+end
+
+function Features.setFlyHeight(h)
+    local newH = math.clamp(h, 10, 1000)
+    local oldH = FlyState.Height
+
+    if FlyState.Flying then
+        local root = fly_getRoot()
+        if root then
+            local delta = newH - oldH
+            root.CFrame = CFrame.new(
+                root.Position.X,
+                root.Position.Y + delta,
+                root.Position.Z
+            )
+            root.Velocity = Vector3.zero
+            root.AssemblyLinearVelocity = Vector3.zero
+            FlyState.BaseY = root.Position.Y - newH
+        end
+    end
+
+    FlyState.Height = newH
+end
+
+function Features.setFlySpeed(s)
+    FlyState.Speed = math.clamp(s, 10, 2000)
+    FlyState.VerticalSpeed = math.clamp(s * 0.5, 20, 1000)
+end
+
+function Features.getFlyState()
+    return FlyState
+end
+
+-- Auto-stop fly kalo fitur lain aktif + handle respawn
+task.spawn(function()
+    while task.wait(0.5) do
+        if not FlyState.Enabled then continue end
+
+        -- ⭐ Handle karakter respawn / mati / force hilang
+        local root = fly_getRoot()
+        local hum = fly_getHum()
+        local forceLost = FlyState.Flying and (
+            not root or 
+            not hum or 
+            hum.Health <= 0 or 
+            not FlyState.BodyVelocity or
+            not FlyState.BodyVelocity.Parent
+        )
+
+        if forceLost then
+            fly_stop()
+            task.wait(0.3)
+            if FlyState.Enabled then
+                fly_start()
+            end
+            continue
+        end
+
+        local shouldStop = false
+        if Shared.AutoSteal_Enabled then shouldStop = true end
+        if Shared.AutoFarm_Enabled then shouldStop = true end
+        if Shared.AutoHatch_Enabled then shouldStop = true end
+        if Shared.AutoPlantEgg_Enabled then shouldStop = true end
+        if Shared.MutationSteal_Active then shouldStop = true end
+        if Shared.VolcanicHunt_Enabled then shouldStop = true end
+        if Shared.AutoMutation_Enabled then shouldStop = true end
+        if Shared.YinRitual_Enabled then
+            local ys = Features.getYinRitualState and Features.getYinRitualState()
+            if ys and ys.Active then shouldStop = true end
+        end
+
+        if shouldStop and FlyState.Flying then
+            fly_stop()
+            if Shared.Notify then
+                Shared.Notify("🛸 Fly auto-OFF — fitur lain aktif", "warning")
+            end
+        elseif not shouldStop and FlyState.Enabled and not FlyState.Flying then
+            fly_start()
+        end
+    end
+end)
+
+-- ⭐ Re-fly pas respawn
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(2)
+    if FlyState.Enabled and not FlyState.Flying then
+        fly_start()
+    end
+end)
+
+-- ============================================================
+-- INSTANT PICKUP
+-- ============================================================
+function Features.startInstantPickup()
+    task.spawn(function()
+        while task.wait(0.5) do
+            if not Shared.InstantPickup_Enabled then continue end
+
+            local rendered = Workspace:FindFirstChild("RenderedEggs")
+            if not rendered then continue end
+
+            for _, egg in ipairs(rendered:GetChildren()) do
+                if egg:IsA("Model") then
+                    local prompt = egg:FindFirstChild("Pickup", true)
+                    if prompt and prompt:IsA("ProximityPrompt") then
+                        if prompt.HoldDuration > 0 then
+                            prompt.HoldDuration = 0
+                        end
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ============================================================
+-- AUTO FARM
+-- ============================================================
+local NotifiedEggs = {}
+
+local function getEggKey(egg)
+    local part = egg:FindFirstChildWhichIsA("BasePart", true)
+    if not part then return egg.Name end
+    local p = part.Position
+    return string.format("%s_%.0f_%.0f_%.0f", egg.Name, p.X, p.Y, p.Z)
+end
+
+local function getNotifThreshold()
+    local t = {
+        Common = 1, Uncommon = 2, Rare = 3, Epic = 4,
+        Legendary = 5, Mythic = 6, Divine = 7,
+        Secret = 8,
+        Ethereal = 9,
+    }
+    return t[Shared.RarityNotifThreshold or "Legendary"] or 5
+end
+
+local function getBestEggInMap()
     local rendered = Workspace:FindFirstChild("RenderedEggs")
-    if rendered then
-        local egg = rendered:FindFirstChild(eggName)
-        if egg then
-            local r = egg:GetAttribute("Rarity")
-            if r then return tostring(r) end
-            for _, d in ipairs(egg:GetDescendants()) do
-                if d.GetAttribute then
-                    local ra = d:GetAttribute("Rarity")
-                    if ra then return tostring(ra) end
+    if not rendered then return nil end
+
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
+    local best, bestRank = nil, 0
+    for _, egg in ipairs(rendered:GetChildren()) do
+        if egg:IsA("Model") and isRaritySelected(egg.Name) then
+            local rarity = getEggRarity(egg.Name)
+            local rank = RARITY_ORDER[rarity] or 1
+            local part = egg:FindFirstChildWhichIsA("BasePart", true)
+            if part then
+                local d = (part.Position - myRoot.Position).Magnitude
+                if rank > bestRank or (rank == bestRank and (not best or d < best.dist)) then
+                    best = {egg = egg, dist = d, rarity = rarity, rank = rank}
+                    bestRank = rank
+                end
+            end
+        end
+    end
+    return best
+end
+
+function Features.startAutoFarm()
+    task.spawn(function()
+        while task.wait(0.5) do
+            if not Shared.AutoFarm_Enabled then continue end
+
+            -- ⭐⭐⭐ FIX: JANGAN STEAL KALO LAGI PEGANG CANDY ⭐⭐⭐
+            if LocalPlayer:GetAttribute("CarriedCandyModel") ~= nil
+               or LocalPlayer:GetAttribute("CarryingCandy") == true
+               or LocalPlayer:GetAttribute("HeldCandy") ~= nil
+               or LocalPlayer:GetAttribute("CarriedCandy") ~= nil then
+                task.wait(0.2)
+                continue
+            end
+            do
+                local c = LocalPlayer.Character
+                if c then
+                    local carrying = false
+                    for _, obj in ipairs(c:GetChildren()) do
+                        if (obj:IsA("Model") or obj:IsA("Tool")) and obj.Name:lower():find("candy") then
+                            carrying = true
+                            break
+                        end
+                    end
+                    if carrying then
+                        task.wait(0.2)
+                        continue
+                    end
+                end
+            end
+
+            -- ⭐⭐⭐ FIX: JANGAN FARM KALO DI HALLOWEEN ⭐⭐⭐
+            if _G.VRILZ_HalloweenBusy or _G.VRILZ_HalloweenLeaving then
+                task.wait(0.2)
+                continue
+            end
+if LocalPlayer:GetAttribute("InHalloweenZone") == true then
+    task.wait(0.2)
+    continue
+end
+
+            local char = LocalPlayer.Character
+            local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if not myRoot or not hum or hum.Health <= 0 then
+                task.wait(1)
+                continue
+            end
+
+            local rendered = Workspace:FindFirstChild("RenderedEggs")
+            if rendered then
+                local validKeys = {}
+                for _, egg in ipairs(rendered:GetChildren()) do
+                    if egg:IsA("Model") then
+                        validKeys[getEggKey(egg)] = true
+                    end
+                end
+                for key in pairs(NotifiedEggs) do
+                    if not validKeys[key] then NotifiedEggs[key] = nil end
+                end
+            end
+
+            local best = getBestEggInMap()
+            if not best then continue end
+
+            local egg = best.egg
+            local eggName = egg.Name
+            local eggRarity = best.rarity
+            local eggKey = getEggKey(egg)
+
+                                    if (RARITY_ORDER[eggRarity] or 1) >= getNotifThreshold() then
+                if not NotifiedEggs[eggKey] then
+                    NotifiedEggs[eggKey] = true
+                    if Shared.Notify then
+                        Shared.Notify("🎯 " .. eggName .. " (" .. eggRarity .. ")", "success")
+                    end
+                    -- 🏆 PLATINUM WEBHOOK TRIGGER
+                    if _G.VRILZ_SendWebhook then
+                        local eggInfo = _G.VRILZ_GetEggInfo and _G.VRILZ_GetEggInfo(eggName) or {}
+                        local realtimeLuck = _G.VRILZ_GetRealtimeLuck and _G.VRILZ_GetRealtimeLuck(eggName) or nil
+                        local luckValue = realtimeLuck or eggInfo.luck or "?"
+
+                        _G.VRILZ_SendWebhook("rare_egg", {
+                            title = "RARE EGG DETECTED",
+                            description = "**" .. eggName .. "** telah muncul di server!\n*Auto-steal akan segera dijalankan...*",
+                            details = {
+                                { name = "🥚  **EGG NAME**", value = "```yaml\n" .. eggName .. "\n```", inline = true },
+                                { name = "💎  **RARITY**", value = "```yaml\n" .. eggRarity .. "\n```", inline = true },
+                                { name = "⚖️  **WEIGHT**", value = "```yaml\n" .. (eggInfo.weight or "?") .. "\n```", inline = true },
+                                { name = "🍀  **LUCK**", value = "```yaml\n" .. luckValue .. "\n```", inline = true },
+                                { name = "🎲  **CHANCE**", value = "```yaml\n" .. (eggInfo.chance or "?") .. "\n```", inline = true },
+                                { name = "📏  **DISTANCE**", value = "```yaml\n" .. math.floor(best.dist) .. " studs\n```", inline = true },
+                            },
+                        })
+                    end
+                end
+            end
+                
+            local eggPart = egg:FindFirstChildWhichIsA("BasePart", true)
+            if not eggPart then continue end
+
+            local prompt = egg:FindFirstChild("Pickup", true)
+            if prompt and prompt:IsA("ProximityPrompt") then
+                prompt.HoldDuration = 0
+            end
+
+            local picked = false
+
+                        if Shared.StealMode == "Fly" then
+                picked = doStealFly(egg, prompt, eggPart)
+            elseif Shared.StealMode == "TP GLIDE" then
+                picked = doStealGlide(egg, prompt, eggPart)
+            else
+                myRoot.CFrame = eggPart.CFrame + Vector3.new(0, 5, 0)
+                task.wait(0.1)
+
+                for i = 1, 10 do
+                    if prompt and typeof(fireproximityprompt) == "function" then
+                        pcall(fireproximityprompt, prompt)
+                    end
+                    task.wait(0.3)
+                    if not isEggStillInMap(egg) then
+                        picked = true
+                        break
+                    end
+                    if eggPart and eggPart.Parent then
+                        myRoot.CFrame = eggPart.CFrame + Vector3.new(0, 5, 0)
+                        task.wait(0.1)
+                    end
+                end
+            end
+
+            if picked and Shared.AutoReturn_Enabled then
+                returnToMyPlot()
+                task.wait(0.3)
+            end
+
+            task.wait(0.3)
+        end
+    end)
+end
+
+-- ============================================================
+-- HELPER: CEK HOLDING EGG
+-- ============================================================
+local function isHoldingEggMutation()
+    local char = LocalPlayer.Character
+    if not char then return false end
+    local wooden = char:FindFirstChild("Wooden")
+    if not wooden then return false end
+    local displayEgg = wooden:FindFirstChild("DisplayEgg")
+    if not displayEgg then return false end
+    for _, c in ipairs(displayEgg:GetChildren()) do
+        if c:IsA("MeshPart") and not c.Name:lower():find("circle") then
+            return true, c.Name
+        end
+    end
+    return false
+end
+
+-- ============================================================
+-- VOLCANIC HUNTER
+-- ============================================================
+local VolcanicState = {
+    Enabled = false,
+    Hunting = false,
+}
+
+local VolcanicWaypoints = {
+    Vector3.new(-4902.3, 41396.1, -3751.4),
+    Vector3.new(-4908.1, 41365.0, -3742.9),
+    Vector3.new(-4909.5, 41357.4, -3740.8),
+    Vector3.new(-4923.0, 41299.5, -3719.6),
+    Vector3.new(-4927.1, 41293.3, -3712.6),
+    Vector3.new(-4951.4, 41287.6, -3669.6),
+    Vector3.new(-4973.1, 41283.3, -3643.8),
+    Vector3.new(-4995.2, 41285.0, -3620.6),
+    Vector3.new(-5010.8, 41279.5, -3597.9),
+    Vector3.new(-5020.6, 41275.2, -3582.6),
+    Vector3.new(-5032.2, 41272.9, -3564.8),
+    Vector3.new(-5062.9, 41262.1, -3542.1),
+    Vector3.new(-5070.9, 41262.3, -3537.0),
+    Vector3.new(-5079.4, 41265.2, -3533.3),
+    Vector3.new(-5088.6, 41240.3, -3525.3),
+    Vector3.new(-5096.8, 41228.7, -3520.1),
+    Vector3.new(-5101.5, 41197.4, -3514.3),
+    Vector3.new(-5103.3, 41165.1, -3511.6),
+    Vector3.new(-5112.5, 41164.5, -3551.9),
+    Vector3.new(-5157.0, 41159.7, -3588.1),
+    Vector3.new(-5165.4, 41158.0, -3594.1),
+    Vector3.new(-5211.0, 41150.0, -3569.9),
+    Vector3.new(-5248.0, 41147.5, -3580.6),
+    Vector3.new(-5256.8, 41143.1, -3581.9),
+    Vector3.new(-5260.1, 41122.3, -3580.1),
+    Vector3.new(-5268.7, 41062.3, -3575.5),
+    Vector3.new(-5259.1, 41050.3, -3586.2),
+    Vector3.new(-5269.5, 41047.7, -3640.0),
+    Vector3.new(-5264.0, 41042.3, -3655.1),
+    Vector3.new(-5218.7, 41023.5, -3659.7),
+    Vector3.new(-5188.9, 41037.1, -3635.5),
+    Vector3.new(-5147.5, 41037.4, -3589.8),
+    Vector3.new(-5123.4, 41037.2, -3550.7),
+    Vector3.new(-5123.0, 41033.8, -3503.2),
+    Vector3.new(-5094.9, 41037.6, -3486.6),
+    Vector3.new(-5081.6, 41035.8, -3474.5),
+    Vector3.new(-5040.8, 41048.6, -3433.1),
+    Vector3.new(-4990.3, 41050.6, -3391.9),
+    Vector3.new(-4949.3, 41057.1, -3400.0),
+    Vector3.new(-4908.1, 41036.5, -3439.7),
+    Vector3.new(-4869.4, 41000.1, -3474.8),
+    Vector3.new(-4880.2, 40975.6, -3528.0),
+    Vector3.new(-4930.9, 40973.3, -3563.7),
+    Vector3.new(-4966.2, 40960.4, -3610.8),
+    Vector3.new(-5016.4, 40943.8, -3648.2),
+    Vector3.new(-5072.8, 40929.0, -3667.8),
+    Vector3.new(-5136.3, 40922.9, -3656.4),
+    Vector3.new(-5151.8, 40914.2, -3681.0),
+    Vector3.new(-5209.2, 40907.2, -3677.5),
+    Vector3.new(-5267.7, 40907.3, -3651.2),
+    Vector3.new(-5282.4, 40908.9, -3632.6),
+    Vector3.new(-5270.4, 40907.1, -3619.5),
+}
+
+local function getVolcanicEgg()
+    local rendered = Workspace:FindFirstChild("RenderedEggs")
+    if not rendered then return nil end
+    for _, egg in ipairs(rendered:GetChildren()) do
+        if egg:IsA("Model") and egg.Name:lower():find("volcan", 1, true) then
+            return egg
+        end
+    end
+    return nil
+end
+
+local function getVolcanicSpawn()
+    local spawns = Workspace:FindFirstChild("EggSpawns")
+    if not spawns then return nil end
+    local v = spawns:FindFirstChild("Volcanic")
+    if v and v:IsA("BasePart") then return v end
+    return nil
+end
+
+local function tpWaypoint(wp)
+    local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+    root.CFrame = CFrame.new(wp + Vector3.new(0, 5, 0))
+    root.Velocity = Vector3.zero
+    root.AssemblyLinearVelocity = Vector3.zero
+    task.wait(0.12)
+    return true
+end
+
+local function exitCave()
+    if not isHoldingEggMutation() then return false end
+
+    for i = #VolcanicWaypoints, 1, -1 do
+        -- ⭐ FIX: cek 3 flag — kalo salah satu on, tetep jalan
+        local stillActive = Shared.VolcanicHunt_Enabled
+                          or Shared.MutationSteal_Enabled
+                          or Shared.AutoMutation_Enabled
+        if not stillActive then return false end
+
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        if not hum or hum.Health <= 0 then return false end
+        if not isHoldingEggMutation() then return false end
+
+        tpWaypoint(VolcanicWaypoints[i])
+    end
+
+    task.wait(0.5)
+    return isHoldingEggMutation()
+end
+
+local function volcanicPickupVerified(egg)
+    if isHoldingEggMutation() then return true end
+    if not egg or not egg.Parent then
+        task.wait(0.3)
+        return isHoldingEggMutation()
+    end
+
+    local part = egg:FindFirstChildWhichIsA("BasePart", true)
+    if not part then
+        task.wait(0.2)
+        part = egg:FindFirstChildWhichIsA("BasePart", true)
+        if not part then return isHoldingEggMutation() end
+    end
+
+    local prompt = egg:FindFirstChild("Pickup", true)
+        or egg:FindFirstChild("Collect", true)
+        or egg:FindFirstChildWhichIsA("ProximityPrompt", true)
+
+    if prompt and prompt:IsA("ProximityPrompt") then
+        prompt.HoldDuration = 0
+        prompt.MaxActivationDistance = math.huge
+        prompt.RequiresLineOfSight = false
+    end
+
+   for i = 1, 25 do
+    -- ⭐ FIX: cek 3 flag
+    local stillActive = Shared.VolcanicHunt_Enabled
+                      or Shared.MutationSteal_Enabled
+                      or Shared.AutoMutation_Enabled
+    if not stillActive then return false end
+        if isHoldingEggMutation() then return true end
+
+        if not egg.Parent then
+            task.wait(0.3)
+            return isHoldingEggMutation()
+        end
+
+        local lastPos = part and part.Parent and part.Position or egg:GetPivot().Position
+        local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if curRoot then
+            curRoot.CFrame = CFrame.lookAt(lastPos + Vector3.new(0, 3, 0), lastPos)
+            curRoot.Velocity = Vector3.zero
+            curRoot.AssemblyLinearVelocity = Vector3.zero
+        end
+
+        if prompt and typeof(fireproximityprompt) == "function" then
+            pcall(fireproximityprompt, prompt)
+        end
+        task.wait(0.1)
+        if prompt and typeof(fireproximityprompt) == "function" then
+            pcall(fireproximityprompt, prompt)
+        end
+        task.wait(0.25)
+    end
+
+    return isHoldingEggMutation()
+end
+
+function Features.startVolcanicHunt()
+    task.spawn(function()
+        while task.wait(1) do
+            if not Shared.VolcanicHunt_Enabled then
+                VolcanicState.Hunting = false
+                continue
+            end
+
+            if VolcanicState.Hunting then continue end
+            VolcanicState.Hunting = true
+
+            task.spawn(function()
+                while Shared.VolcanicHunt_Enabled do
+                    local char = LocalPlayer.Character
+                    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+                    local hum = char and char:FindFirstChildOfClass("Humanoid")
+                    if not myRoot or not hum or hum.Health <= 0 then
+                        task.wait(1)
+                        continue
+                    end
+
+                    local egg = getVolcanicEgg()
+                    if not egg then
+                        local spawnPart = getVolcanicSpawn()
+                        if spawnPart then
+                            local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            if curRoot then
+                                local d = (spawnPart.Position - curRoot.Position).Magnitude
+                                if d > 50 then
+                                    curRoot.CFrame = spawnPart.CFrame + Vector3.new(0, 5, 0)
+                                    curRoot.Velocity = Vector3.zero
+                                end
+                            end
+                        end
+                        task.wait(2)
+                        continue
+                    end
+
+                    if Shared.Notify then
+                        Shared.Notify("🌋 Volcanic Egg spawn!", "success")
+                    end
+
+                    local eggPart = egg:FindFirstChildWhichIsA("BasePart", true)
+                    local reachedEgg = false
+                    for i, wp in ipairs(VolcanicWaypoints) do
+                        if not Shared.VolcanicHunt_Enabled then break end
+                        tpWaypoint(wp)
+                        local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if curRoot and eggPart and eggPart.Parent then
+                            local d = (eggPart.Position - curRoot.Position).Magnitude
+                            if d <= 40 then
+                                reachedEgg = true
+                                break
+                            end
+                        end
+                    end
+
+                    if not reachedEgg then
+                        local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if curRoot and eggPart and eggPart.Parent then
+                            curRoot.CFrame = CFrame.lookAt(eggPart.Position + Vector3.new(0, 3, 0), eggPart.Position)
+                            curRoot.Velocity = Vector3.zero
+                            task.wait(0.3)
+                        end
+                    end
+
+                    local picked = false
+                    if egg.Parent then
+                        picked = volcanicPickupVerified(egg)
+                    else
+                        picked = isHoldingEggMutation()
+                    end
+
+                    if not picked or not isHoldingEggMutation() then
+                        task.wait(2)
+                        continue
+                    end
+
+                    local exited = exitCave()
+                    if not exited or not isHoldingEggMutation() then
+                        task.wait(2)
+                        continue
+                    end
+
+                    if Shared.VolcanicMutation_Enabled then
+                        task.wait(0.5)
+                        local safePos = findSafeVolcanoPos()
+                        if safePos then
+                            local rootLava = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            if rootLava then
+                                rootLava.CFrame = CFrame.new(safePos)
+                                rootLava.Velocity = Vector3.zero
+                            end
+                        end
+                        task.wait(1.5)
+
+                        if isHoldingEggMutation() then
+                            local dropWaited = 0
+                            local eggReleased = false
+                            while dropWaited < 15 do
+                                if not Shared.VolcanicHunt_Enabled then break end
+                                fireVolcanoDip()
+                                task.wait(1.5)
+                                dropWaited = dropWaited + 1.5
+                                if not isHoldingEggMutation() then
+                                    eggReleased = true
+                                    break
+                                end
+                            end
+
+                            if eggReleased then
+                                local waitStart = os.clock()
+                                while os.clock() - waitStart < 20 do
+                                    if not Shared.VolcanicHunt_Enabled then break end
+                                    task.wait(1)
+                                    if isHoldingEggMutation() then
+                                    if Shared.Notify then
+                                       Shared.Notify(getWaitNotifText(), "success")  -- ⭐ pake fungsi
+                                       end
+                                     break
+                                    end
+                                end
+                            end
+                        end
+                    end
+
+                    if Shared.VolcanicReturn_Enabled then
+                        task.wait(0.4)
+                        local oldFlag = Shared.AutoReturn_Enabled
+                        Shared.AutoReturn_Enabled = true
+                        returnToMyPlot()
+                        Shared.AutoReturn_Enabled = oldFlag
+                    end
+
+                    task.wait(3)
+                end
+
+                VolcanicState.Hunting = false
+            end)
+        end
+    end)
+end
+
+-- ============================================================
+-- AUTO MUTATION
+-- ============================================================
+local MutationState = {
+    Running = false,
+    StealPaused = false,
+    BasketFull = false,
+    EggLocked = false,
+    LastFire = 0,
+}
+
+local MUT_CONFIG = {
+    DROP_TIMEOUT = 15,
+    RETURN_TIMEOUT = 13,
+    TP_ABOVE_TOP = 200,
+}
+
+local NetModule = nil
+task.spawn(function()
+    local packages = game:GetService("ReplicatedStorage"):FindFirstChild("packages")
+    if packages then
+        local netMod = packages:FindFirstChild("Net")
+        if netMod then
+            local ok, result = pcall(require, netMod)
+            if ok then
+                NetModule = result
+            end
+        end
+    end
+end)
+
+local function getVolcanoDipRemote()
+    if NetModule then
+        local ok, remote = pcall(function() return NetModule:RemoteEvent("VolcanoDip") end)
+        if ok and remote then return remote end
+    end
+    local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
+    local gameR = remotes and remotes:FindFirstChild("Game")
+    if gameR then
+        local vd = gameR:FindFirstChild("VolcanoDip")
+        if vd and vd:IsA("RemoteEvent") then return vd end
+    end
+    return nil
+end
+
+local function findSafeVolcanoPos()
+    local volcano = Workspace:FindFirstChild("Volcano")
+    if not volcano then
+        return Vector3.new(-5102.84, 41700, -3489.11)
+    end
+    local bestTop, bestSize = nil, 0
+    for _, d in ipairs(volcano:GetDescendants()) do
+        if d:IsA("BasePart") then
+            local n = d.Name:lower()
+            if n:find("top") or n == "volcanotop" then
+                local size = d.Size.X * d.Size.Z
+                if size > bestSize then
+                    bestTop = d
+                    bestSize = size
+                end
+            end
+        end
+    end
+    if bestTop then
+        return bestTop.Position + Vector3.new(0, MUT_CONFIG.TP_ABOVE_TOP, 0)
+    end
+    local lavaTop = -math.huge
+    for _, d in ipairs(volcano:GetDescendants()) do
+        if d:IsA("BasePart") then
+            local n = d.Name:lower()
+            if n:find("lava") or n:find("magma") or n:find("volcan") then
+                local top = d.Position.Y + d.Size.Y / 2
+                if top > lavaTop then lavaTop = top end
+            end
+        end
+    end
+    if lavaTop > -math.huge then
+        return Vector3.new(-5102.84, lavaTop + MUT_CONFIG.TP_ABOVE_TOP, -3489.11)
+    end
+    return Vector3.new(-5102.84, 41700, -3489.11)
+end
+
+local function fireVolcanoDip()
+    local remote = getVolcanoDipRemote()
+    if remote then
+        local ok = pcall(function() remote:FireServer() end)
+        if ok then return true end
+    end
+    return false
+end
+
+local function fireBasketDrop()
+    local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
+    local gameR = remotes and remotes:FindFirstChild("Game")
+    if not gameR then return false end
+    local bd = gameR:FindFirstChild("BasketDrop")
+    if not bd then return false end
+    return pcall(function() bd:FireServer() end)
+end
+
+-- ⭐ Notif dinamis: Instant → "Wait 6 seconds!", Step → "Wait 4 seconds!"
+local function getWaitNotifText()
+    if (Shared.ReturnMode or "Step") == "Instant" then
+        return "🔥 Wait 8 seconds!"
+    end
+    return "🔥 Wait 6 seconds!"
+end
+
+-- ⭐⭐⭐ TAMBAHKAN FUNCTION LAMA INI ⭐⭐⭐
+local function tpToSafe(pos)
+    local char = LocalPlayer.Character
+    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+
+    -- ═══ TP #1: ke atas (render) ═══
+    myRoot.CFrame = CFrame.new(pos + Vector3.new(0, 250, 0))
+    myRoot.Velocity = Vector3.zero
+    myRoot.AssemblyLinearVelocity = Vector3.zero
+    task.wait(0.8)
+
+    -- ═══ TP #2: ke pos tujuan + LOOP DIEM di situ 3 detik ═══
+    local startTime = os.clock()
+    while os.clock() - startTime < 3.0 do
+        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not r then break end
+        r.CFrame = CFrame.new(pos)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.05)
+    end
+
+    return true
+end
+
+-- ⭐ MAGMA MODE: GLIDE — TP ke magma per 50 studs (gak cepet)
+local function tpToSafeGlide(pos)
+    local char = LocalPlayer.Character
+    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+
+    local STEP = 125
+    local WAIT = 0.04
+
+    local startPos = myRoot.Position
+    local targetPos = pos + Vector3.new(0, 5, 0)
+    local totalDist = (targetPos - startPos).Magnitude
+
+    -- Naik dulu 100 studs
+    local targetY = math.max(startPos.Y, targetPos.Y) + 100
+    local riseStart = os.clock()
+    while myRoot.Parent and myRoot.Position.Y < targetY and (os.clock() - riseStart) < 3 do
+        myRoot.CFrame = myRoot.CFrame + Vector3.new(0, STEP, 0)
+        myRoot.Velocity = Vector3.zero
+        myRoot.AssemblyLinearVelocity = Vector3.zero
+        task.wait(WAIT * 0.5)
+    end
+
+    -- Glide horizontal per 50 studs
+    local steps = math.ceil(totalDist / STEP)
+    if steps < 1 then steps = 1 end
+    local dir = (targetPos - startPos)
+    dir = Vector3.new(dir.X, 0, dir.Z)
+    if dir.Magnitude > 1 then dir = dir.Unit end
+
+    for i = 1, steps do
+        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not r then return false end
+        local dist = math.min(STEP * i, totalDist)
+        local glidePos = Vector3.new(
+            startPos.X + dir.X * dist,
+            r.Position.Y,
+            startPos.Z + dir.Z * dist
+        )
+        r.CFrame = CFrame.new(glidePos)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+        task.wait(WAIT)
+    end
+
+    -- Turun ke target per 50 studs
+    local r2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not r2 then return false end
+    local dropDist = r2.Position.Y - targetPos.Y
+    if dropDist > 0 then
+        local dropSteps = math.ceil(dropDist / STEP)
+        for i = 1, dropSteps do
+            local r3 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not r3 then return false end
+            local newY = math.max(targetPos.Y, r3.Position.Y - STEP)
+            r3.CFrame = CFrame.new(r3.Position.X, newY, r3.Position.Z)
+            r3.Velocity = Vector3.zero
+            r3.AssemblyLinearVelocity = Vector3.zero
+            task.wait(WAIT)
+        end
+    end
+
+    -- Stick 1 detik
+    local stickStart = os.clock()
+    while os.clock() - stickStart < 1.0 do
+        local r4 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not r4 then break end
+        r4.CFrame = CFrame.new(targetPos)
+        r4.Velocity = Vector3.zero
+        r4.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.1)
+    end
+
+    return true
+end
+
+local function tpToSafeMode(pos)
+    local mode = Shared.MagmaMode or "Teleport"
+    if mode == "Glide" then
+        return tpToSafeGlide(pos)
+    else
+        return tpToSafe(pos)
+    end
+end
+local function runMutationOnce()
+    MutationState.Running = true
+
+    local holding, eggName = isHoldingEggMutation()
+    if not holding then
+        MutationState.Running = false
+        MutationState.EggLocked = false
+        return false
+    end
+
+    MutationState.StealPaused = true
+    task.wait(1.5)
+
+    local safePos = findSafeVolcanoPos()
+    tpToSafeMode(safePos)  -- ⬅️ UBAH
+    task.wait(2)
+
+    local dropWaited = 0
+    local eggReleased = false
+    MutationState.LastFire = 0
+
+    while dropWaited < MUT_CONFIG.DROP_TIMEOUT do
+        if os.clock() - MutationState.LastFire > 2 then
+            local ok = fireVolcanoDip()
+            if not ok then fireBasketDrop() end
+            MutationState.LastFire = os.clock()
+        end
+        task.wait(0.5)
+        dropWaited = dropWaited + 0.5
+        if not isHoldingEggMutation() then
+            eggReleased = true
+            break
+        end
+    end
+
+    if not eggReleased then
+        MutationState.Running = false
+        MutationState.StealPaused = false
+        MutationState.EggLocked = false
+        return false
+    end
+
+           local retWaited = 0
+    while retWaited < MUT_CONFIG.RETURN_TIMEOUT do
+        task.wait(1)
+        retWaited = retWaited + 1
+        if isHoldingEggMutation() then break end
+    end
+
+    -- ⭐ STABILIZE: toleransi flicker 3s
+    local stableStart = os.clock()
+    local missStart = nil
+    local stableOk = false
+    while os.clock() - stableStart < 4.0 do
+        if isHoldingEggMutation() then
+            missStart = nil
+            stableOk = true
+        else
+            if not missStart then
+                missStart = os.clock()
+            elseif os.clock() - missStart > 3.0 then
+                stableOk = false
+                break
+            end
+        end
+        task.wait(0.2)
+    end
+    if not stableOk or not isHoldingEggMutation() then
+        MutationState.Running = false
+        MutationState.StealPaused = false
+        MutationState.EggLocked = false
+        return false
+    end
+
+              -- 🏆 PLATINUM WEBHOOK TRIGGER
+    if _G.VRILZ_SendWebhook then
+        local cleanEggName = normalizeEggName(eggName)
+        local eggInfo = _G.VRILZ_GetEggInfo and _G.VRILZ_GetEggInfo(cleanEggName) or {}
+        
+        _G.VRILZ_SendWebhook("mutation", {
+            title = "MUTATION COMPLETE",
+            description = "Egg berhasil di-mutasi! 🎉\n*Reward telah diklaim*",
+            details = {
+                { name = "🥚  **EGG NAME**", value = "```yaml\n" .. tostring(cleanEggName or "Unknown") .. "\n```", inline = true },
+                { name = "⚖️  **WEIGHT**", value = "```yaml\n" .. (eggInfo.weight or "?") .. "\n```", inline = true },
+                { name = "🍀  **LUCK**", value = "```yaml\n" .. (eggInfo.luck or "?") .. "\n```", inline = true },
+                { name = "🔥  **MUTATION INFO**", value = "```yaml\nSource: Auto Mutation\nStatus: SUCCESS\nMethod: " .. tostring(Shared.StealMode or "TP") .. "\n```", inline = false },
+            },
+        })
+    end
+
+            if Shared.MutationReturn_Enabled then
+        task.wait(0.5)  -- jeda webhook
+        local oldFlag = Shared.AutoReturn_Enabled
+        Shared.AutoReturn_Enabled = true
+        doReturnToPlot()  -- delay 4s udah ada di dalam returnToMyPlot/instantReturnToPlot
+        Shared.AutoReturn_Enabled = oldFlag
+    end
+
+    task.wait(2)
+    MutationState.Running = false
+    MutationState.StealPaused = false
+    MutationState.EggLocked = false
+    return true
+end
+
+function Features.startAutoMutation()
+    task.spawn(function()
+        while task.wait(1) do
+            if not Shared.AutoMutation_Enabled then
+                MutationState.Running = false
+                continue
+            end
+
+            -- ⭐⭐⭐ FIX: JANGAN STEAL KALO LAGI PEGANG CANDY ⭐⭐⭐
+            if LocalPlayer:GetAttribute("CarriedCandyModel") ~= nil
+               or LocalPlayer:GetAttribute("CarryingCandy") == true
+               or LocalPlayer:GetAttribute("HeldCandy") ~= nil
+               or LocalPlayer:GetAttribute("CarriedCandy") ~= nil then
+                task.wait(0.2)
+                continue
+            end
+            do
+                local c = LocalPlayer.Character
+                if c then
+                    local carrying = false
+                    for _, obj in ipairs(c:GetChildren()) do
+                        if (obj:IsA("Model") or obj:IsA("Tool")) and obj.Name:lower():find("candy") then
+                            carrying = true
+                            break
+                        end
+                    end
+                    if carrying then
+                        task.wait(0.2)
+                        continue
+                    end
+                end
+            end
+
+            -- ⭐⭐⭐ FIX: JANGAN MUTASI KALO DI HALLOWEEN ⭐⭐⭐
+if _G.VRILZ_HalloweenBusy or _G.VRILZ_HalloweenLeaving then
+    task.wait(0.2)
+    continue
+end
+if LocalPlayer:GetAttribute("InHalloweenZone") == true then
+    task.wait(0.2)
+    continue
+end
+
+            -- ⭐ FIX: SKIP kalo Mutation Steal lagi aktif
+            if Shared.MutationSteal_Active and Shared.MutationSteal_Enabled then
+                MutationState.Running = false
+                task.wait(1)
+                continue
+            end
+
+            if MutationState.Running then continue end
+
+            local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if not hum or hum.Health <= 0 then
+                task.wait(1)
+                continue
+            end
+
+            -- ⭐ Cek egg di tangan
+            if isHoldingEggMutation() then
+                -- ⭐ Cek tambahan: kalo lagi di dalam cave, JANGAN dip dulu
+                -- Tunggu sampe keluar cave (posisi Y > 41000 = di luar cave)
+                local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if myRoot and myRoot.Position.Y < 41000 then
+                    -- Masih di dalam cave → tunggu
+                    task.wait(1)
+                    continue
+                end
+
+                pcall(runMutationOnce)
+                task.wait(2)
+            end
+        end
+    end)
+end
+
+function Features.getMutationState()
+    return MutationState
+end
+
+function Features.isHoldingEgg()
+    return isHoldingEggMutation()
+end
+
+-- ============================================================
+-- MUTATION STEAL — VOLCANIC PRIORITY + STEAL BIASA
+-- Volcanic Egg spawn → waypoint cave → magma → return
+-- Egg biasa → TP langsung (by Rarity/Name filter)
+-- ============================================================
+function Features.startMutationSteal()
+    task.spawn(function()
+        while task.wait(0.5) do
+            if not Shared.MutationSteal_Enabled then
+                Shared.MutationSteal_Active = false
+                continue
+            end
+
+            -- ⭐⭐⭐ FIX: JANGAN STEAL KALO LAGI PEGANG CANDY ⭐⭐⭐
+            if LocalPlayer:GetAttribute("CarriedCandyModel") ~= nil
+               or LocalPlayer:GetAttribute("CarryingCandy") == true
+               or LocalPlayer:GetAttribute("HeldCandy") ~= nil
+               or LocalPlayer:GetAttribute("CarriedCandy") ~= nil then
+                task.wait(0.2)
+                continue
+            end
+            do
+                local c = LocalPlayer.Character
+                if c then
+                    local carrying = false
+                    for _, obj in ipairs(c:GetChildren()) do
+                        if (obj:IsA("Model") or obj:IsA("Tool")) and obj.Name:lower():find("candy") then
+                            carrying = true
+                            break
+                        end
+                    end
+                    if carrying then
+                        task.wait(0.2)
+                        continue
+                    end
+                end
+            end
+
+-- ⭐⭐⭐ FIX: JANGAN STEAL KALO MASIH DI HALLOWEEN ZONE ⭐⭐⭐
+if _G.VRILZ_HalloweenBusy then
+    Shared.MutationSteal_Active = false
+    task.wait(0.2)
+    continue
+end
+local inHalloween = LocalPlayer:GetAttribute("InHalloweenZone") == true
+if inHalloween then
+    Shared.MutationSteal_Active = false
+    task.wait(0.2)   -- ⬅️ 1 → 0.2
+    continue
+end
+
+if _G.VRILZ_HalloweenLeaving then
+    Shared.MutationSteal_Active = false
+    task.wait(0.2)   -- ⬅️ 0.5 → 0.2
+    continue
+end
+
+            if Features.getMutationState and Features.getMutationState().Running then
+                Shared.MutationSteal_Active = false
+                task.wait(1)
+                continue
+            end
+
+            -- Kalo Auto Volcanic Hunt aktif, skip (biar gak bentrok)
+            if Shared.VolcanicHunt_Enabled then
+                Shared.MutationSteal_Active = false
+                task.wait(1)
+                continue
+            end
+
+            local char = LocalPlayer.Character
+            local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if not myRoot or not hum or hum.Health <= 0 then
+                task.wait(1)
+                continue
+            end
+
+            -- Kalo udah bawa egg, tunggu
+            if Features.isHoldingEgg and Features.isHoldingEgg() then
+                Shared.MutationSteal_Active = false
+                task.wait(0.5)
+                continue
+            end
+
+            local basket = LocalPlayer:FindFirstChild("Basket")
+            if basket and #basket:GetChildren() > 0 then
+                Shared.MutationSteal_Active = false
+                task.wait(0.5)
+                continue
+            end
+
+            -- ⭐ PRIORITY 1: CEK VOLCANIC EGG DULUAN
+            local volcanicEgg = getVolcanicEgg()
+
+            if volcanicEgg and volcanicEgg.Parent then
+                Shared.MutationSteal_Active = true
+
+                local eggPart = volcanicEgg:FindFirstChildWhichIsA("BasePart", true)
+                if not eggPart then
+                    Shared.MutationSteal_Active = false
+                    task.wait(1)
+                    continue
+                end
+
+                -- Step 1: TP ke spawn Volcanic (kalo jauh)
+                local spawnPart = getVolcanicSpawn()
+                if spawnPart then
+                    local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if curRoot then
+                        local d = (spawnPart.Position - curRoot.Position).Magnitude
+                        if d > 50 then
+                            curRoot.CFrame = spawnPart.CFrame + Vector3.new(0, 5, 0)
+                            curRoot.Velocity = Vector3.zero
+                            curRoot.AssemblyLinearVelocity = Vector3.zero
+                            task.wait(0.5)
+                        end
+                    end
+                end
+
+                -- Step 2: Masuk cave pake waypoint
+                local reachedEgg = false
+                for i, wp in ipairs(VolcanicWaypoints) do
+                    if not Shared.MutationSteal_Enabled then break end
+                    tpWaypoint(wp)
+                    local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if curRoot and eggPart and eggPart.Parent then
+                        local d = (eggPart.Position - curRoot.Position).Magnitude
+                        if d <= 40 then
+                            reachedEgg = true
+                            break
+                        end
+                    end
+                end
+
+                -- Step 3: SELALU TP langsung ke egg
+do
+    local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if curRoot and eggPart and eggPart.Parent then
+        curRoot.CFrame = CFrame.lookAt(eggPart.Position + Vector3.new(0, 3, 0), eggPart.Position)
+        curRoot.Velocity = Vector3.zero
+        curRoot.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.3)
+    end
+end
+
+                -- Step 4: Ambil egg (pake volcanicPickupVerified)
+                local picked = false
+                if volcanicEgg.Parent then
+                    picked = volcanicPickupVerified(volcanicEgg)
+                else
+                    picked = isHoldingEggMutation()
+                end
+
+                if not picked or not isHoldingEggMutation() then
+                    Shared.MutationSteal_Active = false
+                    task.wait(2)
+                    continue
+                end
+
+                -- Step 5: Keluar cave (reverse waypoint)
+                local exited = exitCave()
+                if not exited or not isHoldingEggMutation() then
+                    Shared.MutationSteal_Active = false
+                    task.wait(2)
+                    continue
+                end
+
+                                -- Step 6: KE MAGMA (drop)
+                if isHoldingEggMutation() then
+                    task.wait(0.5)
+                    local safePos = findSafeVolcanoPos()
+                    if safePos then
+                        tpToSafeMode(safePos)
+                    end
+                    task.wait(1.5)
+
+                    local dropWaited = 0
+                    local eggReleased = false
+                    while dropWaited < 15 do
+                        if not Shared.MutationSteal_Enabled then break end
+                        fireVolcanoDip()
+                        task.wait(1.5)
+                        dropWaited = dropWaited + 1.5
+                        if not isHoldingEggMutation() then
+                            eggReleased = true
+                            break
+                        end
+                    end
+
+                    if eggReleased then
+                        local waitStart = os.clock()
+                        while os.clock() - waitStart < 20 do
+                            if not Shared.MutationSteal_Enabled then break end
+                            task.wait(1)
+                            if isHoldingEggMutation() then
+    if Shared.Notify then
+        Shared.Notify(getWaitNotifText(), "success")
+    end
+    break
+end
+                        end
+                    end
+                end
+
+                -- Step 7: AUTO RETURN ke plot (Step/Instant)
+task.wait(0.4)
+doReturnToPlot()
+
+                Shared.MutationSteal_Active = false
+                task.wait(3)
+                continue  -- ⭐ Lanjut loop, cek volcanic lagi
+            end
+
+            -- ⭐ PRIORITY 2: KALO GAK ADA VOLCANIC → STEAL EGG BIASA (by Rarity/Name)
+            local stealMode = Shared.MutationStealMode or "Rarity"
+            local targetEgg = nil
+
+            if stealMode == "Name" then
+                local rendered = Workspace:FindFirstChild("RenderedEggs")
+                if rendered then
+                    local myRoot2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    local bestDist = math.huge
+                    for _, egg in ipairs(rendered:GetChildren()) do
+                        if egg:IsA("Model") and Shared.MutationSelectedEggs[egg.Name] then
+                            local part = egg:FindFirstChildWhichIsA("BasePart", true)
+                            if part and myRoot2 then
+                                local d = (part.Position - myRoot2.Position).Magnitude
+                                if d < bestDist then
+                                    bestDist = d
+                                    targetEgg = egg
+                                end
+                            end
+                        end
+                    end
+                end
+            else
+                local best = getBestEggInMap()
+                if best then targetEgg = best.egg end
+            end
+
+            if not targetEgg then
+                Shared.MutationSteal_Active = false
+                task.wait(0.5)
+                continue
+            end
+
+            Shared.MutationSteal_Active = true
+
+            local egg = targetEgg
+            local eggPart = egg:FindFirstChildWhichIsA("BasePart", true)
+            local prompt = egg:FindFirstChild("Pickup", true)
+            if not eggPart or not prompt then
+                Shared.MutationSteal_Active = false
+                task.wait(0.5)
+                continue
+            end
+
+            if prompt:IsA("ProximityPrompt") then
+                prompt.HoldDuration = 0
+            end
+
+                        local picked = false
+
+                        if Shared.StealMode == "Fly" then
+                picked = doStealFly(egg, prompt, eggPart)
+            elseif Shared.StealMode == "TP GLIDE" then
+                picked = doStealGlide(egg, prompt, eggPart)
+            else
+                myRoot.CFrame = eggPart.CFrame + Vector3.new(0, 3, 0)
+                task.wait(0.1)
+
+                for i = 1, 15 do
+                    if typeof(fireproximityprompt) == "function" then
+                        pcall(fireproximityprompt, prompt)
+                    end
+                    task.wait(0.25)
+                    if not isEggStillInMap(egg) then
+                        picked = true
+                        break
+                    end
+                    if eggPart and eggPart.Parent then
+                        myRoot.CFrame = eggPart.CFrame + Vector3.new(0, 3, 0)
+                        task.wait(0.1)
+                    end
+                end
+            end
+
+            -- ⭐ FIX: Kalo gagal pickup, skip
+            if not picked or not isHoldingEggMutation() then
+                Shared.MutationSteal_Active = false
+                task.wait(1)
+                continue
+            end
+
+            -- ⭐ STEP: TP KE LAVA (sama kayak Volcanic Step 6)
+            task.wait(0.5)
+            local safePos = findSafeVolcanoPos()
+            if safePos then
+                tpToSafeMode(safePos)  -- ⬅️ UBAH
+            end
+            task.wait(1.5)
+
+            -- ⭐ STEP: DIP SAMPE EGG RELEASED
+            local dropWaited = 0
+            local eggReleased = false
+            while dropWaited < 15 do
+                if not Shared.MutationSteal_Enabled then break end
+                fireVolcanoDip()
+                task.wait(1.5)
+                dropWaited = dropWaited + 1.5
+                if not isHoldingEggMutation() then
+                    eggReleased = true
+                    break
+                end
+            end
+
+                        -- ⭐ STEP: TUNGGU EGG BALIK (mutation selesai)
+            if eggReleased then
+                local waitStart = os.clock()
+                while os.clock() - waitStart < 20 do
+                    if not Shared.MutationSteal_Enabled then break end
+                    task.wait(1)
+                    if isHoldingEggMutation() then
+    if Shared.Notify then
+        Shared.Notify(getWaitNotifText(), "success")
+    end
+    -- 🏆 PLATINUM WEBHOOK TRIGGER
+                                                if _G.VRILZ_SendWebhook then
+                            local cleanEggName = normalizeEggName(egg.Name)
+                            local eggInfo = _G.VRILZ_GetEggInfo and _G.VRILZ_GetEggInfo(cleanEggName) or {}
+
+                            _G.VRILZ_SendWebhook("mutation", {
+                                title = "MUTATION COMPLETE",
+                                description = "Egg dari steal berhasil di-mutasi! 🔥",
+                                details = {
+                                    { name = "🥚  **EGG NAME**", value = "```yaml\n" .. tostring(cleanEggName or "Unknown") .. "\n```", inline = true },
+                                    { name = "⚖️  **WEIGHT**", value = "```yaml\n" .. (eggInfo.weight or "?") .. "\n```", inline = true },
+                                    { name = "🍀  **LUCK**", value = "```yaml\n" .. (eggInfo.luck or "?") .. "\n```", inline = true },
+                                    { name = "🔥  **MUTATION INFO**", value = "```yaml\nSource: Mutation Steal\nStatus: SUCCESS\n```", inline = false },
+                                },
+                            })
+                        end
+                        break
+                    end
+                end
+            end
+
+            -- ⭐ STEP: RETURN KE PLOT (Step/Instant)
+task.wait(0.4)
+doReturnToPlot()
+
+            Shared.MutationSteal_Active = false
+            task.wait(3)
+        end
+    end)
+end
+
+-- ============================================================
+-- AUTO HATCH LUCK
+-- ============================================================
+local HatchLuckState = {
+    Enabled = false,
+    Mode = "Max",
+    Cooldown = 2.0,
+    LastClick = 0,
+    MaxCount = 0,
+    CicilCount = 0,
+    LastError = nil,
+}
+
+local HatchLuckRS = game:GetService("ReplicatedStorage")
+local HatchLuckRemoteCache = nil
+local HatchLuckLastScan = 0
+
+local function findHatchLuckRemotes()
+    local found = {}
+    for _, d in ipairs(HatchLuckRS:GetDescendants()) do
+        if d:IsA("RemoteEvent") or d:IsA("RemoteFunction") then
+            local n = d.Name:lower()
+            if n:find("upgrade") or n:find("luck") or n:find("hatch") then
+                table.insert(found, d)
+            end
+        end
+    end
+    return found
+end
+
+local function fireHatchLuckUpgrade(mode)
+    if not HatchLuckRemoteCache or #HatchLuckRemoteCache == 0 or (os.clock() - HatchLuckLastScan) > 60 then
+        HatchLuckRemoteCache = findHatchLuckRemotes()
+        HatchLuckLastScan = os.clock()
+    end
+
+    if #HatchLuckRemoteCache == 0 then
+        return false, "no remote found"
+    end
+
+    local payloads
+    if mode == "Max" then
+        payloads = {
+            {"HatchLuck", "Max"},
+            {"HatchLuck", true},
+            {"HatchLuck", 0},
+            {"MaxHatchLuck"},
+            {"HatchLuckMax"},
+            {"Upgrade", "HatchLuck", "Max"},
+            {"Max"},
+            {Action = "Max", Type = "HatchLuck"},
+            {Type = "HatchLuck", Max = true},
+        }
+    else
+        payloads = {
+            {"HatchLuck"},
+            {"HatchLuck", 1},
+            {"Upgrade", "HatchLuck"},
+            {Type = "HatchLuck"},
+            {UpgradeType = "HatchLuck"},
+        }
+    end
+
+    for _, remote in ipairs(HatchLuckRemoteCache) do
+        for i, payload in ipairs(payloads) do
+            pcall(function()
+                if type(payload) == "table" and #payload > 0 then
+                    remote:FireServer(table.unpack(payload))
+                else
+                    remote:FireServer(payload)
+                end
+            end)
+            task.wait(0.05)
+        end
+    end
+
+    return true, "fired"
+end
+
+function Features.startAutoHatchLuck()
+    task.spawn(function()
+        while task.wait(0.3) do
+            if not HatchLuckState.Enabled then continue end
+            if os.clock() - HatchLuckState.LastClick < HatchLuckState.Cooldown then continue end
+            HatchLuckState.LastClick = os.clock()
+
+            local ok, reason = fireHatchLuckUpgrade(HatchLuckState.Mode)
+            if ok then
+                if HatchLuckState.Mode == "Max" then
+                    HatchLuckState.MaxCount = HatchLuckState.MaxCount + 1
+                else
+                    HatchLuckState.CicilCount = HatchLuckState.CicilCount + 1
+                end
+            else
+                HatchLuckState.LastError = reason
+            end
+        end
+    end)
+end
+
+function Features.getHatchLuckState()
+    return HatchLuckState
+end
+
+function Features.setHatchLuckMode(mode)
+    HatchLuckState.Mode = mode
+    HatchLuckState.Cooldown = (mode == "Max") and 2.0 or 1.0
+end
+
+-- ============================================================
+-- AUTO HALLOWEEN — PRIORITY BY RARITY
+-- Legendary (Candy_04) dulu, baru Epic, Rare, Common
+-- TP GLIDE = step 100 (free) | TP FAST = step 150 (premium)
+-- ============================================================
+local HalloweenState = {
+    Enabled = false,
+    Status = "⏸️ Idle",
+    Claimed = 0,
+    RareClaimed = 0,
+    CandyTypes = {},
+    TPMethod = "TP100",   -- "TP100" (free), "TP180" (premium), "VOID" (premium instant)
+}
+
+-- ⭐ RARITY MAPPING
+local CANDY_RARITY = {
+    ["Candy_01"] = 1,       -- Common
+    ["Candy_02"] = 2,       -- Rare
+    ["Candy_03"] = 3,       -- Epic
+    ["Candy_04"] = 4,       -- Legendary
+}
+
+local function getCandyRarity(candyName)
+    return CANDY_RARITY[candyName] or 0
+end
+
+-- ⭐ CEK PREMIUM
+local OWNER_USERID = 5126297278
+local function isPremiumUser()
+    if LocalPlayer.UserId == OWNER_USERID then return true end
+    if Shared and Shared.KeyType then
+        local kt = tostring(Shared.KeyType):upper()
+        if kt == "PREMIUM" or kt == "OWNER" or kt == "VIP" then
+            return true
+        end
+    end
+    return false
+end
+
+local HalloweenCfg = {
+    TP_STEP_FREE = 55,
+    TP_STEP_PREMIUM = 125,
+    TP_HEIGHT = 5,
+    TP_WAIT = 0.08,
+    LOOP_WAIT = 0.3,
+    CLAIM_WAIT = 0.5,
+  RETURN_WAIT = 0.1,
+}
+
+local function getHalloweenBase()
+    local candidates = {
+        "HalloweenHomeAnchor", "HalloweenBase", "HalloweenSpawn",
+        "HalloweenBaseplate", "HalloweenStart",
+    }
+    for _, name in ipairs(candidates) do
+        local part = Workspace:FindFirstChild(name, true)
+        if part and part:IsA("BasePart") then return part end
+    end
+    local halloweenFolder = Workspace:FindFirstChild("Halloween")
+    if halloweenFolder then
+        local spawn = halloweenFolder:FindFirstChildWhichIsA("SpawnLocation", true)
+        if spawn then return spawn end
+        local bp = halloweenFolder:FindFirstChildWhichIsA("BasePart", true)
+        if bp then return bp end
+    end
+    return nil
+end
+
+local function isInHalloweenZone()
+    return LocalPlayer:GetAttribute("InHalloweenZone") == true
+end
+
+local function isCarryingCandy()
+    -- Cek multiple attribute (biar gak salah baca)
+    if LocalPlayer:GetAttribute("CarriedCandyModel") ~= nil then return true end
+    if LocalPlayer:GetAttribute("CarryingCandy") == true then return true end
+    if LocalPlayer:GetAttribute("HeldCandy") ~= nil then return true end
+    if LocalPlayer:GetAttribute("CarriedCandy") ~= nil then return true end
+
+    -- Cek di character (kalo ada model/tool candy)
+    local char = LocalPlayer.Character
+    if char then
+        for _, c in ipairs(char:GetChildren()) do
+            if (c:IsA("Model") or c:IsA("Tool")) and c.Name:lower():find("candy") then
+                return true
+            end
+        end
+    end
+
+    return false
+end
+
+local function getHalloweenRemote(name)
+    local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
+    local gameR = remotes and remotes:FindFirstChild("Game")
+    if not gameR then return nil end
+    return gameR:FindFirstChild(name)
+end
+
+-- ⭐ Filter candy cave/backdoor (Y tinggi)
+-- Spawn biasa (area terbuka): Y 40345-40376
+-- Cave/backdoor: Y 40512-40514
+local CANDY_Y_MAX = 40400
+
+local function getHalloweenCandyList()
+    local f = Workspace:FindFirstChild("HalloweenCandy")
+    if not f then return {} end
+    local list = {}
+    for _, c in ipairs(f:GetChildren()) do
+        if c:IsA("BasePart") and HalloweenState.CandyTypes[c.Name] then
+            -- ✅ Skip candy yang di cave/backdoor (Y tinggi)
+            if c.Position.Y < CANDY_Y_MAX then
+                table.insert(list, c)
+            end
+        end
+    end
+    table.sort(list, function(a, b)
+        local ra = getCandyRarity(a.Name)
+        local rb = getCandyRarity(b.Name)
+        return ra > rb
+    end)
+    return list
+end
+local function halloweenTpTo(pos)
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+    root.CFrame = CFrame.new(pos)
+    root.Velocity = Vector3.zero
+    root.AssemblyLinearVelocity = Vector3.zero
+    return true
+end
+
+-- ⭐ TP STEP (glide, per step 100 / 150)
+local function halloweenTpStep(targetPos, stepSize, waitTime)
+    waitTime = waitTime or HalloweenCfg.TP_WAIT
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+
+    local startPos = root.Position
+    local totalDist = (targetPos - startPos).Magnitude
+    local steps = math.ceil(totalDist / stepSize)
+
+    if steps <= 1 then
+        halloweenTpTo(targetPos + Vector3.new(0, HalloweenCfg.TP_HEIGHT, 0))
+        task.wait(0.15)
+        return true
+    end
+
+    local dir = (targetPos - startPos)
+    dir = Vector3.new(dir.X, 0, dir.Z)
+    if dir.Magnitude > 1 then
+        dir = dir.Unit
+    else
+        local ang = math.random() * math.pi * 2
+        dir = Vector3.new(math.cos(ang), 0, math.sin(ang))
+    end
+
+              for i = 1, steps do
+        local dist = math.min(stepSize * i, totalDist)
+        local pos = startPos + dir * dist + Vector3.new(0, HalloweenCfg.TP_HEIGHT, 0)
+        halloweenTpTo(pos)
+        task.wait(waitTime)   -- ✅ pakai waitTime
+    end
+return true
+end
+
+-- ⭐ TP MAIN FUNCTION — pilih metode
+local function halloweenTpJumpTo(targetPos)
+    local method = HalloweenState.TPMethod or "TP100"
+
+    -- ⭐ TP VOID — INSTANT TP (khusus premium)
+    if method == "VOID" then
+        if not isPremiumUser() then
+            -- Fallback kalau bukan premium → TP100
+            return halloweenTpStep(targetPos, HalloweenCfg.TP_STEP_FREE, 0.08)
+        else
+            -- PREMIUM: TP LANGSUNG tanpa step
+            local char = LocalPlayer.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if root then
+                root.CFrame = CFrame.new(targetPos + Vector3.new(0, HalloweenCfg.TP_HEIGHT, 0))
+                root.Velocity = Vector3.zero
+                root.AssemblyLinearVelocity = Vector3.zero
+                task.wait(0.1)
+                return true
+            end
+            return false
+        end
+    end
+
+    if method == "TP180" then
+        if not isPremiumUser() then
+            -- Fallback kalau bukan premium
+            return halloweenTpStep(targetPos, HalloweenCfg.TP_STEP_FREE, 0.08)
+        else
+            -- PREMIUM: step 180, wait lebih cepat biar beda dari TP100
+            return halloweenTpStep(targetPos, HalloweenCfg.TP_STEP_PREMIUM, 0.13)
+        end
+    end
+
+    -- FREE: TP 100 studs step
+    return halloweenTpStep(targetPos, HalloweenCfg.TP_STEP_FREE, 0.08)
+end
+
+local function halloweenReturnToBase()
+    local base = getHalloweenBase()
+    if not base then return false end
+
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not root then return false end
+
+    local FLY_HEIGHT = 40
+    local FLY_STEP = 75
+    local FLY_WAIT = 0.07
+
+    -- ⭐ Hitung jarak FULL 3D (X/Y/Z) — ≤ 400 studs = INSTANT TP
+    local dx = base.Position.X - root.Position.X
+    local dy = base.Position.Y - root.Position.Y
+    local dz = base.Position.Z - root.Position.Z
+    local fullDist = math.sqrt(dx * dx + dy * dy + dz * dz)
+
+    if fullDist <= 400 then
+        -- ⭐ INSTANT TP — no fly, no step, NO WAIT
+        local finalCF = base.CFrame + Vector3.new(0, HalloweenCfg.TP_HEIGHT, 0)
+
+        -- Kalo naik pet → pet ikut ke-TP bareng
+        if hum and hum.SeatPart then
+            local pet = hum.SeatPart:FindFirstAncestorOfClass("Model")
+            if pet then
+                local seat = hum.SeatPart
+                local offset = root.CFrame:ToObjectSpace(seat.CFrame)
+
+                local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if r then
+                    r.CFrame = finalCF
+                    r.Velocity = Vector3.zero
+                    r.AssemblyLinearVelocity = Vector3.zero
+                end
+
+                local newSeatCF = finalCF * offset
+                local pivotToSeat = pet:GetPivot():ToObjectSpace(seat.CFrame)
+                local targetPivot = newSeatCF * pivotToSeat:Inverse()
+                pcall(function() pet:PivotTo(targetPivot) end)
+
+                return true
+            end
+        end
+
+        -- Gak naik pet → TP langsung, NO WAIT
+        root.CFrame = finalCF
+        root.Velocity = Vector3.zero
+        root.AssemblyLinearVelocity = Vector3.zero
+        return true
+    end
+
+    -- ═══════════════════════════════════════════════════════════
+    -- JARAK > 400 → jalur normal (terbang 40 + step 75)
+    -- ═══════════════════════════════════════════════════════════
+    local startY = root.Position.Y
+    local targetY = startY + FLY_HEIGHT
+
+    while root and root.Parent and root.Position.Y < targetY do
+        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not r then break end
+
+        r.CFrame = r.CFrame + Vector3.new(0, 15, 0)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.02)
+
+        root = r
+    end
+
+    task.wait(0.15)
+
+    -- STEP 2: Kalo naik pet → fly pet bareng
+    char = LocalPlayer.Character
+    root = char and char:FindFirstChild("HumanoidRootPart")
+    hum = char and char:FindFirstChildOfClass("Humanoid")
+    if not root then return false end
+
+    if hum and hum.SeatPart then
+        local pet = hum.SeatPart:FindFirstAncestorOfClass("Model")
+        if pet then
+            local seat = hum.SeatPart
+            local offset = root.CFrame:ToObjectSpace(seat.CFrame)
+
+            local targetPos = base.Position + Vector3.new(0, FLY_HEIGHT, 0)
+            local startPos = root.Position
+            local totalDist = (targetPos - startPos).Magnitude
+            local steps = math.ceil(totalDist / FLY_STEP)
+
+            local dir = (targetPos - startPos)
+            if dir.Magnitude > 1 then dir = dir.Unit
+            else dir = Vector3.new(0, 0, 0) end
+
+            for i = 1, steps do
+                local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if not r then break end
+
+                -- ⭐ SISA ≤ 200 STUD → LANGSUNG TP (pet ikut)
+                local remaining = (base.Position - r.Position).Magnitude
+                if remaining <= 200 then
+                    local finalCF = base.CFrame + Vector3.new(0, HalloweenCfg.TP_HEIGHT, 0)
+                    r.CFrame = finalCF
+                    r.Velocity = Vector3.zero
+                    r.AssemblyLinearVelocity = Vector3.zero
+
+                    local newSeatCF = finalCF * offset
+                    local pivotToSeat = pet:GetPivot():ToObjectSpace(seat.CFrame)
+                    local targetPivot = newSeatCF * pivotToSeat:Inverse()
+                    pcall(function() pet:PivotTo(targetPivot) end)
+
+                    task.wait(HalloweenCfg.RETURN_WAIT)
+                    return true
+                end
+
+                local dist = math.min(FLY_STEP * i, totalDist)
+                local newRootCF = CFrame.new(startPos + dir * dist)
+
+                r.CFrame = newRootCF
+                r.Velocity = Vector3.zero
+                r.AssemblyLinearVelocity = Vector3.zero
+
+                local newSeatCF = newRootCF * offset
+                local pivotToSeat = pet:GetPivot():ToObjectSpace(seat.CFrame)
+                local targetPivot = newSeatCF * pivotToSeat:Inverse()
+                pcall(function() pet:PivotTo(targetPivot) end)
+
+                task.wait(FLY_WAIT)
+            end
+
+            local rFinal = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if rFinal then
+                rFinal.CFrame = base.CFrame + Vector3.new(0, HalloweenCfg.TP_HEIGHT, 0)
+                rFinal.Velocity = Vector3.zero
+                rFinal.AssemblyLinearVelocity = Vector3.zero
+            end
+
+            task.wait(HalloweenCfg.RETURN_WAIT)
+            return true
+        end
+    end
+
+    -- ═══ STEP 3: Gak naik pet → step normal ═══
+    local targetPos = base.Position + Vector3.new(0, FLY_HEIGHT, 0)
+    local startPos = root.Position
+    local totalDist = (targetPos - startPos).Magnitude
+    local steps = math.ceil(totalDist / FLY_STEP)
+
+    local dir = (targetPos - startPos)
+    dir = Vector3.new(dir.X, 0, dir.Z)
+    if dir.Magnitude > 1 then dir = dir.Unit
+    else
+        local ang = math.random() * math.pi * 2
+        dir = Vector3.new(math.cos(ang), 0, math.sin(ang))
+    end
+
+    for i = 1, steps do
+        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not r then break end
+
+        -- ⭐ SISA ≤ 200 STUD → LANGSUNG TP
+        local remaining = (base.Position - r.Position).Magnitude
+        if remaining <= 200 then
+            r.CFrame = base.CFrame + Vector3.new(0, HalloweenCfg.TP_HEIGHT, 0)
+            r.Velocity = Vector3.zero
+            r.AssemblyLinearVelocity = Vector3.zero
+            task.wait(HalloweenCfg.RETURN_WAIT)
+            return true
+        end
+
+        local dist = math.min(FLY_STEP * i, totalDist)
+        local pos = startPos + dir * dist
+        local flyPos = Vector3.new(pos.X, startPos.Y, pos.Z)
+
+        r.CFrame = CFrame.new(flyPos)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+
+        task.wait(FLY_WAIT)
+    end
+
+    local rFinal = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if rFinal then
+        rFinal.CFrame = base.CFrame + Vector3.new(0, HalloweenCfg.TP_HEIGHT, 0)
+        rFinal.Velocity = Vector3.zero
+        rFinal.AssemblyLinearVelocity = Vector3.zero
+    end
+
+    task.wait(HalloweenCfg.RETURN_WAIT)
+    return true
+end
+
+local function halloweenClaimCandy(candy)
+    if not candy or not candy.Parent then return false end
+    local collectRemote = getHalloweenRemote("CollectCandy")
+    local stateRemote = getHalloweenRemote("CandyState")
+    if not collectRemote then return false end
+
+    -- Kalo udah bawa candy, gak bisa collect lagi
+    if isCarryingCandy() then return false end
+    
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+
+    -- Cek jarak — kalo jauh, TP dulu
+    local d = (root.Position - candy.Position).Magnitude
+    if d > 30 then
+        root.CFrame = CFrame.new(candy.Position + Vector3.new(0, 3, 0))
+        task.wait(0.3)
+    end
+
+    local spawnId = candy:GetAttribute("SpawnId") or candy.Name
+
+    -- Fire state remote dulu
+    if stateRemote then
+        pcall(function() stateRemote:FireServer(spawnId) end)
+        task.wait(0.1)
+    end
+
+    -- ⭐ FIRE 4x dengan payload beda (biar salah satu kena)
+    pcall(function() collectRemote:FireServer(spawnId) end)
+    task.wait(0.15)
+    if isCarryingCandy() then return true end
+
+    pcall(function() collectRemote:FireServer(candy) end)
+    task.wait(0.15)
+    if isCarryingCandy() then return true end
+
+    pcall(function() collectRemote:FireServer() end)
+    task.wait(0.15)
+    if isCarryingCandy() then return true end
+
+        pcall(function() collectRemote:FireServer(spawnId, candy) end)
+    task.wait(0.3)
+
+    return isCarryingCandy()
+end
+
+local function halloweenEnterZone()
+    if isInHalloweenZone() then return true end
+    local map = Workspace:FindFirstChild("Map")
+    if map then
+        local portal = map:FindFirstChild("Portal", true)
+        if portal then
+            local part = portal:FindFirstChildWhichIsA("BasePart", true)
+            if part then
+                halloweenTpTo(part.Position + Vector3.new(0, 5, 0))
+                task.wait(0.5)
+                local prompt = portal:FindFirstChild("HalloweenPortalPrompt", true)
+                if prompt and prompt:IsA("ProximityPrompt") then
+                    prompt.HoldDuration = 0
+                    prompt.MaxActivationDistance = math.huge
+                    pcall(function()
+                        if typeof(fireproximityprompt) == "function" then
+                            fireproximityprompt(prompt)
+                        end
+                    end)
+                    task.wait(1.5)
+                end
+            end
+        end
+    end
+    return isInHalloweenZone()
+end
+
+-- ⭐ HELPER: cari egg prioritas di luar Halloween (filter rarity / name)
+local function findPriorityEggOutside()
+    local rendered = Workspace:FindFirstChild("RenderedEggs")
+    if not rendered then return nil end
+
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
+    local selectedRarities = Shared.SelectedRarities
+    local selectedEggs = Shared.MutationSelectedEggs
+
+    local best, bestDist = nil, math.huge
+
+    for _, egg in ipairs(rendered:GetChildren()) do
+        if egg:IsA("Model") then
+            local pass = false
+
+            if selectedRarities then
+                local rarity = getEggRarity(egg.Name)
+                if selectedRarities[rarity] == true then pass = true end
+            end
+
+            if not pass and selectedEggs and selectedEggs[egg.Name] == true then
+                pass = true
+            end
+
+            if pass then
+                local part = egg:FindFirstChildWhichIsA("BasePart", true)
+                if part then
+                    local d = (part.Position - myRoot.Position).Magnitude
+                    if d < bestDist then
+                        best = egg
+                        bestDist = d
+                    end
                 end
             end
         end
     end
 
-    -- ⭐ PRIORITY 3: Fallback "Unknown" (BUKAN "Common")
-    return "Unknown"
+    return best
 end
 
-local function isRaritySelected(eggName)
-    -- ⭐ Kalau lu gak pilih rarity apapun → skip (gak steal)
-    if not Shared.SelectedRarities then return false end
-    local hasAny = false
-    for _, v in pairs(Shared.SelectedRarities) do
-        if v then hasAny = true; break end
+-- ⭐ HELPER: keluar dari Halloween zone (portal di Workspace.HalloweenArea.Portal)
+local function halloweenLeaveZone()
+    if not isInHalloweenZone() then return true end
+
+    _G.VRILZ_HalloweenLeaving = true
+
+    local ok = false
+    local startTime = os.clock()
+
+    while os.clock() - startTime < 8 do
+        if not isInHalloweenZone() then
+            ok = true
+            break
+        end
+
+        local halloweenArea = Workspace:FindFirstChild("HalloweenArea")
+        local portal = halloweenArea and halloweenArea:FindFirstChild("Portal")
+        local part = portal and portal:FindFirstChildWhichIsA("BasePart", true)
+
+        if not part then
+            warn("[HALLOWEEN] ❌ Portal gak ketemu — gak bisa keluar!")
+            _G.VRILZ_HalloweenLeaving = false
+            return false
+        end
+
+        local root = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.CFrame = CFrame.new(part.Position + Vector3.new(0, 5, 0))
+            root.Velocity = Vector3.zero
+            root.AssemblyLinearVelocity = Vector3.zero
+            task.wait(0.3)
+        end
+
+        local prompt = portal:FindFirstChild("HalloweenPortalPrompt", true)
+            or portal:FindFirstChildWhichIsA("ProximityPrompt", true)
+        if prompt then
+            prompt.HoldDuration = 0
+            prompt.MaxActivationDistance = math.huge
+            prompt.RequiresLineOfSight = false
+            if typeof(fireproximityprompt) == "function" then
+                pcall(fireproximityprompt, prompt)
+            end
+        end
+
+        task.wait(0.5)
     end
-    if not hasAny then return false end
 
-    local rarity = getEggRarity(eggName)
-
-    -- ⭐ Kalau rarity "Unknown" & lu pilih rarity tinggi → anggap match
-    -- (kemungkinan egg-nya rarity tinggi, tapi GameData kosong)
-    if rarity == "Unknown" then
-        return Shared.SelectedRarities["Legendary"] == true
-            or Shared.SelectedRarities["Mythic"] == true
-            or Shared.SelectedRarities["Divine"] == true
-            or Shared.SelectedRarities["Secret"] == true
-            or Shared.SelectedRarities["Ethereal"] == true
+    -- ⭐⭐⭐ FIX: Tahan flag Leaving 1.5 detik setelah keluar ⭐⭐⭐
+    -- biar fitur steal lain gak nyamber selama transisi
+    if ok then
+        task.wait(1.5)   -- kasih napas 1.5 detik
     end
 
-    return Shared.SelectedRarities[rarity] == true
+    _G.VRILZ_HalloweenLeaving = false
+    return ok
 end
+
+function Features.startAutoHalloween()
+    task.spawn(function()
+while task.wait(HalloweenCfg.LOOP_WAIT) do
+    if not HalloweenState.Enabled then
+        HalloweenState.Status = "⏸️ Idle"
+        _G.VRILZ_HalloweenBusy = false
+        HalloweenState._yinWaitStart = nil
+        continue
+    end
+
+    -- ⭐⭐⭐ FIX BARU: SKIP SET FLAG KALAU LEAVING AKTIF ⭐⭐⭐
+    if _G.VRILZ_HalloweenLeaving then
+        HalloweenState.Status = "🚪 Leaving Halloween — transisi..."
+        task.wait(0.3)
+        continue
+    end
+
+    -- ⭐⭐⭐ SET FLAG DI AWAL ⭐⭐⭐
+    _G.VRILZ_HalloweenBusy = true
+                        -- ⭐ PRIORITY 1: Auto Mutation — paling utama
+if Shared.AutoMutation_Enabled then
+    local mutState = Features.getMutationState and Features.getMutationState()
+    if mutState and (mutState.Running or mutState.EggLocked or mutState.StealPaused) then
+        HalloweenState.Status = "⏸️ Waiting Auto Mutation..."
+        task.wait(1)
+        continue
+    end
+end
+
+-- ⭐ PRIORITY 2: Auto Yin Ritual — JANGAN stuck, max tunggu 15 detik
+if Shared.YinRitual_Enabled then
+    local yinState = Features.getYinRitualState and Features.getYinRitualState()
+
+    -- ⭐ Inisialisasi timer wait (biar gak stuck selamanya)
+    if not HalloweenState._yinWaitStart then
+        HalloweenState._yinWaitStart = os.clock()
+    end
+
+    -- ⭐ Cek cave cooldown
+    local caveOnCd = false
+    do
+        local hr = Workspace:FindFirstChild("HeadlessRitual")
+        if hr then
+            local phase = hr:GetAttribute("Phase")
+            local cdUntil = hr:GetAttribute("CooldownUntil")
+            if phase == "Cooldown" then
+                caveOnCd = true
+            elseif cdUntil and typeof(cdUntil) == "number" and os.time() < cdUntil then
+                caveOnCd = true
+            end
+        end
+    end
+
+    -- ⭐ Cuma nunggu kalau Yin BENERAN aktif DAN cave GAK cooldown
+    local yinReallyActive = yinState and yinState.Active and not caveOnCd
+
+    -- ⭐ SAFETY: max tunggu 15 detik, abis itu paksa lanjut
+    local waitElapsed = os.clock() - HalloweenState._yinWaitStart
+    if yinReallyActive and waitElapsed < 15 then
+        HalloweenState.Status = string.format("⏸️ Waiting Yin Ritual (%.0fs)...", 15 - waitElapsed)
+        task.wait(1)
+        continue
+    end
+
+    -- ⭐ Reset timer kalau udah selesai / timeout
+    if not yinReallyActive or waitElapsed >= 15 then
+        HalloweenState._yinWaitStart = nil
+        if waitElapsed >= 15 and yinReallyActive then
+            HalloweenState.Status = "⚠️ Yin timeout — Halloween lanjut"
+        end
+    end
+
+    -- ⭐ Cek Runtime cuma kalau cave GAK cooldown DAN gak ada item di tangan player
+    if not caveOnCd then
+        local hr = Workspace:FindFirstChild("HeadlessRitual")
+        local rt = hr and hr:FindFirstChild("Runtime")
+        if rt then
+            local hasItem = false
+            for _, obj in ipairs(rt:GetChildren()) do
+                if obj:IsA("Model") and (obj.Name == "Yin" or obj.Name == "Yang") then
+                    hasItem = true
+                    break
+                end
+            end
+
+            -- ⭐ Cuma nunggu kalau ada item DAN cave GAK cooldown DAN Yin gak idle lama
+            if hasItem and yinState and yinState.Active then
+                -- Timer udah dicek di atas, jadi aman
+            end
+        end
+    end
+end
+                
+-- ⭐ PRIORITY 3: Mutation Steal
+if Shared.MutationSteal_Active and Shared.MutationSteal_Enabled then
+    HalloweenState.Status = "⏳ Waiting for Mutation Steal..."
+    task.wait(1)
+    continue
+end
+
+                        -- ⭐ LEAVE LOGIC: cuma leave kalau ADA fitur steal lain yang nyala
+            local stealFeatureOn = Shared.AutoSteal_Enabled
+                or Shared.AutoFarm_Enabled
+                or Shared.MutationSteal_Enabled
+
+            if stealFeatureOn then
+    local outsideEgg = findPriorityEggOutside()
+    if outsideEgg and outsideEgg.Parent then
+        if isInHalloweenZone() then
+            HalloweenState.Status = "🥚 Egg spawn: " .. outsideEgg.Name .. " — leaving Halloween..."
+            _G.VRILZ_HalloweenBusy = true
+            local left = halloweenLeaveZone()
+
+            if not left then
+                HalloweenState.Status = "⚠️ Gagal keluar Halloween — retry..."
+                _G.VRILZ_HalloweenBusy = true
+                task.wait(1.5)
+                continue
+            end
+
+            -- ⭐ Berhasil keluar → lepas flag
+            _G.VRILZ_HalloweenBusy = false
+            task.wait(1.0)   -- ⬅️ 0.5 → 1.0 (kasih napas)
+        else
+            HalloweenState.Status = "🥚 Egg spawn: " .. outsideEgg.Name .. " — waiting for steal..."
+            task.wait(2)
+        end
+        continue
+    end
+end
+                
+local char = LocalPlayer.Character
+local root = char and char:FindFirstChild("HumanoidRootPart")
+if not root then 
+    _G.VRILZ_HalloweenBusy = false
+    task.wait(1) 
+    continue 
+end
+
+                                    if not isInHalloweenZone() then
+                HalloweenState.Status = "🚪 Entering area..."
+                if not halloweenEnterZone() then
+                    _G.VRILZ_HalloweenBusy = false
+                    task.wait(2)
+                    continue
+                end
+            end
+
+            if isCarryingCandy() then
+                HalloweenState.Status = "🎒 Carrying candy — processing..."
+                _G.VRILZ_HalloweenBusy = false
+                task.wait(1)
+                continue
+            end
+
+            local candies = getHalloweenCandyList()
+            if #candies == 0 then
+                HalloweenState.Status = "⏳ Waiting for candy spawn... (" .. HalloweenState.Claimed .. " claimed)"
+                _G.VRILZ_HalloweenBusy = false
+                task.wait(2)
+                continue
+            end
+
+            local highestRarity = getCandyRarity(candies[1].Name)
+            local topRarityCandies = {}
+            for _, c in ipairs(candies) do
+                local r = getCandyRarity(c.Name)
+                if r == highestRarity then
+                    table.insert(topRarityCandies, c)
+                end
+            end
+
+            if #topRarityCandies == 0 then
+                task.wait(0.5)
+                continue
+            end
+
+            local rarityName = ({
+                [1] = "Common",
+                [2] = "Rare",
+                [3] = "Epic",
+                [4] = "Legendary",
+            })[highestRarity] or ("Tier " .. highestRarity)
+
+            local methodLabel = "TP GLIDE"
+if HalloweenState.TPMethod == "TP180" then
+    methodLabel = "TP FAST"
+elseif HalloweenState.TPMethod == "VOID" then
+    methodLabel = "TP VOID"
+end
+
+            HalloweenState.Status = string.format(
+                "🎯 %s [%s] — %d candy",
+                rarityName,
+                methodLabel,
+                #topRarityCandies
+            )
+
+                        -- ⭐ RETRY 3x per candy
+            local collectedThisRound = 0
+
+            for idx, candy in ipairs(topRarityCandies) do
+                if not HalloweenState.Enabled then break end
+                if not candy or not candy.Parent then continue end
+                if isCarryingCandy() then break end
+
+                HalloweenState.Status = string.format(
+                    "🍬 %s (%d/%d) — %s [%s]",
+                    candy.Name,
+                    idx,
+                    #topRarityCandies,
+                    rarityName,
+                    methodLabel
+                )
+
+                -- TP ke candy
+                halloweenTpJumpTo(candy.Position)
+                task.wait(0.4)
+
+                -- ⭐ COBA COLLECT SAMPE 3x
+                local ok = false
+                for attempt = 1, 3 do
+                    if not HalloweenState.Enabled then break end
+                    if isCarryingCandy() then break end
+                    if not candy.Parent then break end
+
+                    ok = halloweenClaimCandy(candy)
+                    if ok then break end
+
+                    -- Re-TP kalo gagal
+                    halloweenTpJumpTo(candy.Position)
+                    task.wait(0.5)
+                end
+
+                                if ok then
+                    HalloweenState.Claimed = HalloweenState.Claimed + 1
+                    collectedThisRound = collectedThisRound + 1
+                    if highestRarity >= 3 then
+                        HalloweenState.RareClaimed = HalloweenState.RareClaimed + 1
+                    end
+
+                    -- ⭐ FIX: snap ke posisi candy terakhir (biar return cek jarak dari titik ini)
+                    if candy and candy.Parent then
+                        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if r then
+                            r.CFrame = CFrame.new(candy.Position + Vector3.new(0, HalloweenCfg.TP_HEIGHT, 0))
+                            r.Velocity = Vector3.zero
+                            r.AssemblyLinearVelocity = Vector3.zero
+                            task.wait(0.1)
+                        end
+                    end
+
+                    if isCarryingCandy() then break end
+                end
+
+                task.wait(HalloweenCfg.CLAIM_WAIT)
+            end
+
+                        -- ⭐ KALO GAK COLLECT APAPUN, JANGAN BALIK BASE — LOOP LAGI
+            if collectedThisRound == 0 and not isCarryingCandy() then
+                HalloweenState.Status = "⚠️ Failed to collect — retrying..."
+                task.wait(1.5)
+                continue
+            end
+
+                                                HalloweenState.Status = "🏠 Returning to Halloween base..."
+halloweenReturnToBase()
+-- ⬅️ HAPUS task.wait(HalloweenCfg.RETURN_WAIT)
+
+_G.VRILZ_HalloweenBusy = false   -- ⭐ RESET FLAG
+        end
+    end)
+end
+
+function Features.getHalloweenState()
+    return HalloweenState
+end
+
+-- ⭐ Expose premium check ke UI
+function Features.isPremiumUser()
+    return isPremiumUser()
+end
+
+-- ============================================================
+-- AUTO YIN RITUAL — FIXED v3 (step 80 + verifikasi)
+-- Prioritas: cek reward dulu → baru collect Yin/Yang
+-- ============================================================
+local YinRitualState = {
+    Enabled = false,
+    Status = "⏸️ Idle",
+    YinCount = 0,
+    YangCount = 0,
+    RitualCount = 0,
+    RewardCount = 0,
+    Active = false,
+    _lastRewardTime = 0,
+    _rewardTaken = false,
+    _collectingReward = false,
+    _forcedHolding = {}, -- ⭐ Paksa inget state
+}
+
+local YinRitualCfg = {
+    SCAN_INTERVAL = 0.4,
+    TP_HEIGHT = 3,
+    COLLECT_TIMEOUT = 8,
+    PLACE_TIMEOUT = 8,
+    REWARD_WAIT = 2,
+    TP_STEP = 80,
+}
+
+-- ⭐ CEK CAVE COOLDOWN
+local function isCaveOnCooldown()
+    local hr = Workspace:FindFirstChild("HeadlessRitual")
+    if not hr then return false, 0 end
+    local phase = hr:GetAttribute("Phase")
+    local cdUntil = hr:GetAttribute("CooldownUntil")
+    if phase == "Cooldown" then
+        local sisa = 0
+        if cdUntil and typeof(cdUntil) == "number" then
+            sisa = math.max(0, math.floor(cdUntil - os.time()))
+        end
+        return true, sisa
+    end
+    if cdUntil and typeof(cdUntil) == "number" and os.time() < cdUntil then
+        return true, math.max(0, math.floor(cdUntil - os.time()))
+    end
+    return false, 0
+end
+
+-- ⭐ CARI ITEM (Yin/Yang) DI RUNTIME
+local function findRitualItem(itemName)
+    local hr = Workspace:FindFirstChild("HeadlessRitual")
+    if not hr then return nil end
+    local rt = hr:FindFirstChild("Runtime")
+    if not rt then return nil end
+    for _, obj in ipairs(rt:GetChildren()) do
+        if obj:IsA("Model") and obj.Name:lower() == itemName:lower() then
+            return obj
+        end
+    end
+    return nil
+end
+
+local _cachedRewardPrompt = nil
+
+local function findRewardPrompt()
+    if _cachedRewardPrompt and _cachedRewardPrompt.Parent then
+        return _cachedRewardPrompt
+    end
+    _cachedRewardPrompt = nil
+
+    local hr = Workspace:FindFirstChild("HeadlessRitual")
+    if not hr then return nil end
+
+    -- ⭐ STRICT: cuma prompt yang ActionText/ObjectText-nya JELAS reward
+    -- ActionText: "Collect", "Pick Up", "Take", "Claim"
+    -- ObjectText: "Reward", "Candy", "Prize"
+    local function isRewardPrompt(d)
+        if not d:IsA("ProximityPrompt") then return false end
+        local at = (d.ActionText or ""):lower()
+        local ot = (d.ObjectText or ""):lower()
+
+        -- ⭐ BLACKLIST: kalau ada "place", "yin", "yang" → BUKAN reward
+        if at:find("place", 1, true) then return false end
+        if ot:find("yin", 1, true) then return false end
+        if ot:find("yang", 1, true) then return false end
+        if at:find("place yin", 1, true) then return false end
+        if at:find("place yang", 1, true) then return false end
+
+        -- ⭐ WHITELIST: harus ada kata reward-specific
+        local actionOk = at:find("collect", 1, true)
+                      or at:find("pick up", 1, true)
+                      or at:find("pickup", 1, true)
+                      or at:find("take", 1, true)
+                      or at:find("claim", 1, true)
+                      or at:find("open", 1, true)
+
+        local objectOk = ot:find("reward", 1, true)
+                      or ot:find("candy", 1, true)
+                      or ot:find("prize", 1, true)
+                      or ot:find("pot", 1, true)
+
+        return (actionOk or objectOk)
+    end
+
+    -- ⭐ Scan folder Reward_* dulu (paling reliable)
+    local rt = hr:FindFirstChild("Runtime")
+    if rt then
+        for _, folder in ipairs(rt:GetChildren()) do
+            if folder:IsA("Folder") and folder.Name:lower():find("reward", 1, true) then
+                for _, d in ipairs(folder:GetDescendants()) do
+                    if isRewardPrompt(d) then
+                        _cachedRewardPrompt = d
+                        return d
+                    end
+                end
+            end
+        end
+    end
+
+    -- ⭐ Scan RewardPoints
+    local rp = hr:FindFirstChild("RewardPoints")
+    if rp then
+        for _, d in ipairs(rp:GetDescendants()) do
+            if isRewardPrompt(d) then
+                _cachedRewardPrompt = d
+                return d
+            end
+        end
+    end
+
+    -- ⭐ Scan semua prompt di HR TAPI pake filter ketat
+    for _, d in ipairs(hr:GetDescendants()) do
+        if isRewardPrompt(d) then
+            _cachedRewardPrompt = d
+            return d
+        end
+    end
+
+    return nil
+end
+
+-- ═══════════════════════════════════════════════════════════
+-- CACHE SCAN UI — biar gak freeze (max 1x/detik)
+-- ═══════════════════════════════════════════════════════════
+local _yinUICache = { t = 0, yin = false, yang = false, yinP = false, yangP = false }
+
+local function _refreshYinUICache()
+    if os.clock() - _yinUICache.t < 1.0 then return end
+    _yinUICache.t = os.clock()
+    _yinUICache.yin, _yinUICache.yang, _yinUICache.yinP, _yinUICache.yangP = false, false, false, false
+
+    local playerGui = LocalPlayer:FindFirstChild("PlayerGui")
+    if not playerGui then return end
+
+    for _, gui in ipairs(playerGui:GetChildren()) do
+        if gui:IsA("ScreenGui") then
+            for _, d in ipairs(gui:GetDescendants()) do
+                if d:IsA("TextLabel") and d.Text then
+                    local txt = d.Text:lower()
+                    if txt:find("already have") then
+                        if txt:find("yin") then _yinUICache.yin = true end
+                        if txt:find("yang") then _yinUICache.yang = true end
+                    end
+                    if txt:find("already placed") then
+                        if txt:find("yin") then _yinUICache.yinP = true end
+                        if txt:find("yang") then _yinUICache.yangP = true end
+                    end
+                end
+            end
+        end
+    end
+end
+
+local function isHoldingRitualItem(itemName)
+    -- ⭐ 1. Attribute player (PALING AKURAT)
+    if itemName == "Yin" and LocalPlayer:GetAttribute("RitualYin") == true then return true end
+    if itemName == "Yang" and LocalPlayer:GetAttribute("RitualYang") == true then return true end
+
+    -- ⭐ 2. Cek UI Game (cached)
+    _refreshYinUICache()
+    if itemName == "Yin" and _yinUICache.yin then return true end
+    if itemName == "Yang" and _yinUICache.yang then return true end
+
+    -- ⭐ 3. Cek character & backpack
+    local lowerName = itemName:lower()
+    local char = LocalPlayer.Character
+    local backpack = LocalPlayer:FindFirstChild("Backpack")
+
+    if char then
+        for _, obj in ipairs(char:GetChildren()) do
+            if (obj:IsA("Model") or obj:IsA("Tool")) and obj.Name:lower():find(lowerName, 1, true) then
+                return true
+            end
+        end
+    end
+
+    if backpack then
+        for _, obj in ipairs(backpack:GetChildren()) do
+            if (obj:IsA("Tool") or obj:IsA("Model")) and obj.Name:lower():find(lowerName, 1, true) then
+                return true
+            end
+        end
+    end
+
+    -- ⭐ 4. FALLBACK: cek item ada di dunia (di deket player) — artinya udah di-collect
+    local hr = Workspace:FindFirstChild("HeadlessRitual")
+    if hr then
+        local rt = hr:FindFirstChild("Runtime")
+        -- Kalo Runtime HILANG item (gak ada di runtime) DAN ada di sekitar player → holding
+        -- (sebenarnya ini ambigu, skip aja biar gak false positive)
+    end
+
+    return false
+end
+
+-- ⭐ FIX TOTAL: placed harus berdasarkan UI + ALTAR, bukan Runtime kosong
+local function isYinPlaced()
+    _refreshYinUICache()
+    if _yinUICache.yinP then return true end
+
+    -- ⭐ Cek di ALTAR (Model "Yin" muncul di altar setelah place)
+    local hr = Workspace:FindFirstChild("HeadlessRitual")
+    if hr then
+        -- Cek di HeadlessRitual langsung
+        if hr:FindFirstChild("Yin") ~= nil then return true end
+        -- Cek di Altar
+        local altar = hr:FindFirstChild("Altar")
+        if altar and altar:FindFirstChild("Yin") ~= nil then return true end
+        -- Cek di RitualPlatforms
+        local platforms = hr:FindFirstChild("RitualPlatforms")
+        if platforms then
+            for _, p in ipairs(platforms:GetChildren()) do
+                if p.Name == "Yin" or p.Name:find("Yin", 1, true) then return true end
+            end
+        end
+    end
+
+    return false
+end
+
+local function isYangPlaced()
+    _refreshYinUICache()
+    if _yinUICache.yangP then return true end
+
+    local hr = Workspace:FindFirstChild("HeadlessRitual")
+    if hr then
+        if hr:FindFirstChild("Yang") ~= nil then return true end
+        local altar = hr:FindFirstChild("Altar")
+        if altar and altar:FindFirstChild("Yang") ~= nil then return true end
+        local platforms = hr:FindFirstChild("RitualPlatforms")
+        if platforms then
+            for _, p in ipairs(platforms:GetChildren()) do
+                if p.Name == "Yang" or p.Name:find("Yang", 1, true) then return true end
+            end
+        end
+    end
+
+    return false
+end
+
+-- 3) CEK ITEM HANDLED
+local function isItemHandled(itemName)
+    if isHoldingRitualItem(itemName) then return true end
+    if itemName == "Yin" and isYinPlaced() then return true end
+    if itemName == "Yang" and isYangPlaced() then return true end
+    return false
+end
+
+-- 4) FIRE PROMPT
+local function yinFirePrompt(prompt)
+    if not prompt then return false end
+
+    pcall(function()
+        prompt.Enabled = true
+        prompt.HoldDuration = 0
+        prompt.MaxActivationDistance = math.huge
+        prompt.RequiresLineOfSight = false
+    end)
+
+    if typeof(fireproximityprompt) == "function" then
+        pcall(fireproximityprompt, prompt)
+    end
+
+    pcall(function()
+        prompt:InputHoldBegin()
+        task.wait(0.1)
+        prompt:InputHoldEnd()
+    end)
+
+    return true
+end
+
+-- 5) TP STEP 80
+local function yinTp(pos)
+    local char = LocalPlayer.Character
+    if not char then return false end
+    local root = char:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+
+    local targetPos = pos + Vector3.new(0, YinRitualCfg.TP_HEIGHT, 0)
+    local startPos = root.Position
+    local totalDist = (targetPos - startPos).Magnitude
+
+    if totalDist <= YinRitualCfg.TP_STEP then
+        root.CFrame = CFrame.new(targetPos)
+        root.Velocity = Vector3.zero
+        root.AssemblyLinearVelocity = Vector3.zero
+        return true
+    end
+
+    local steps = math.ceil(totalDist / YinRitualCfg.TP_STEP)
+    local dir = (targetPos - startPos)
+    dir = Vector3.new(dir.X, 0, dir.Z)
+    if dir.Magnitude > 1 then dir = dir.Unit end
+
+    for i = 1, steps do
+        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not r then return false end
+
+        local dist = math.min(YinRitualCfg.TP_STEP * i, totalDist)
+        local stepPos = startPos + dir * dist
+        stepPos = Vector3.new(stepPos.X, targetPos.Y, stepPos.Z)
+
+        r.CFrame = CFrame.new(stepPos)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.06)
+    end
+
+    local r2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if r2 then
+        r2.CFrame = CFrame.new(targetPos)
+        r2.Velocity = Vector3.zero
+        r2.AssemblyLinearVelocity = Vector3.zero
+    end
+
+    return true
+end
+
+-- 6) COLLECT YIN/YANG
+local function yinCollect(itemName)
+    if isHoldingRitualItem(itemName) then
+        print("[YIN] ⏭️ " .. itemName .. " udah di tangan — SKIP collect")
+        return true
+    end
+
+    local item = findRitualItem(itemName)
+    if not item then return false end
+
+    local startTime = os.clock()
+
+    while os.clock() - startTime < YinRitualCfg.COLLECT_TIMEOUT do
+        if not YinRitualState.Enabled then return false end
+
+        if isHoldingRitualItem(itemName) then return true end
+
+        item = findRitualItem(itemName)
+        if not item then
+            task.wait(0.3)
+            if isHoldingRitualItem(itemName) then return true end
+            return false
+        end
+
+        local rootPart = item:FindFirstChild("Root") or item:FindFirstChildWhichIsA("BasePart", true)
+        if not rootPart then task.wait(0.2) continue end
+
+        local prompt = rootPart:FindFirstChild("RitualPrompt") or item:FindFirstChildWhichIsA("ProximityPrompt", true)
+
+        yinTp(rootPart.Position)
+        task.wait(0.15)
+
+        if prompt then
+            for fire = 1, 3 do
+                if not YinRitualState.Enabled then return false end
+                -- ⭐ Set paksa biar langsung nyadar kalo udah dapet
+                YinRitualState._forcedHolding[itemName] = true
+                yinFirePrompt(prompt)
+                task.wait(0.2)
+            end
+        end
+        task.wait(0.15)
+    end
+    return isHoldingRitualItem(itemName)
+end
+
+-- 7) PLACE YIN/YANG — FIXED
+local function yinPlace(itemName)
+    local hr = Workspace:FindFirstChild("HeadlessRitual")
+    if not hr then return false end
+
+    -- ⭐ Cek cooldown di awal
+    local onCd, sisaCd = isCaveOnCooldown()
+    if onCd then
+        print("[YIN PLACE] ⏳ Cave cooldown " .. sisaCd .. "s — ABORT")
+        return false
+    end
+
+    print("[YIN PLACE] 🎯 Mencari prompt 'Place " .. itemName .. "'...")
+    local startTime = os.clock()
+    local lastFireTime = 0
+    local isPlacedFn = (itemName == "Yin") and isYinPlaced or isYangPlaced
+
+    local function findPlacementPrompt()
+        local targetAction = "place " .. itemName:lower()
+        for _, d in ipairs(hr:GetDescendants()) do
+            if d:IsA("ProximityPrompt") then
+                local at = (d.ActionText or ""):lower()
+                local ot = (d.ObjectText or ""):lower()
+                -- ⭐ HARUS ada "place" DAN nama item
+                if at:find("place", 1, true)
+                   and (at:find(itemName:lower(), 1, true) or ot:find(itemName:lower(), 1, true)) then
+                    return d
+                end
+            end
+        end
+        return nil
+    end
+
+    local function getPromptPos(prompt)
+        local p = prompt.Parent
+        while p and p ~= hr do
+            if p:IsA("BasePart") then return p.Position end
+            if p:IsA("Model") then
+                local ok, pivot = pcall(function() return p:GetPivot().Position end)
+                if ok then return pivot end
+            end
+            p = p.Parent
+        end
+        return nil
+    end
+
+    while os.clock() - startTime < 20 do
+        if not YinRitualState.Enabled then return false end
+
+        -- ⭐ Cek udah placed belum
+        if isPlacedFn() then
+            print("[YIN PLACE] ✅ " .. itemName .. " udah di-place!")
+            return true
+        end
+
+        -- ⭐ Cek cooldown tiap loop
+        local cdNow, sisaNow = isCaveOnCooldown()
+        if cdNow then
+            print("[YIN PLACE] ⏳ Cave cooldown muncul " .. sisaNow .. "s — ABORT")
+            return false
+        end
+
+        local prompt = findPlacementPrompt()
+        if not prompt then
+            task.wait(0.5)
+            continue
+        end
+
+        local pos = getPromptPos(prompt)
+        if pos then
+            local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if curRoot then
+                curRoot.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
+                curRoot.Velocity = Vector3.zero
+                curRoot.AssemblyLinearVelocity = Vector3.zero
+                task.wait(0.3)
+            end
+        end
+
+        pcall(function()
+            prompt.Enabled = true
+            prompt.HoldDuration = 0
+            prompt.MaxActivationDistance = 50
+            prompt.RequiresLineOfSight = false
+        end)
+
+        if os.clock() - lastFireTime > 1.5 then
+            if typeof(fireproximityprompt) == "function" then
+                pcall(fireproximityprompt, prompt)
+            end
+            lastFireTime = os.clock()
+        end
+
+        task.wait(0.5)
+    end
+
+    -- Final check
+    if isPlacedFn() then
+        print("[YIN PLACE] ✅ " .. itemName .. " placed di final check!")
+        return true
+    end
+    print("[YIN PLACE] ❌ Timeout 20s — " .. itemName .. " gagal place")
+    return false
+end
+
+-- 8) COLLECT REWARD — FIXED v3 (detect reward INSTAN)
+local function yinCollectReward()
+    local hr = Workspace:FindFirstChild("HeadlessRitual")
+    if not hr then
+        print("[YIN REWARD] ❌ HeadlessRitual gak ada")
+        return false
+    end
+
+    -- ⭐ HELPER: cek reward udah di tangan (multi-source)
+    local function isRewardInHand()
+        -- 1. Backpack
+        local backpack = LocalPlayer:FindFirstChild("Backpack")
+        if backpack then
+            for _, obj in ipairs(backpack:GetChildren()) do
+                if (obj:IsA("Tool") or obj:IsA("Model"))
+                   and (obj.Name:lower():find("candy") or obj.Name:lower():find("reward")) then
+                    return true, "backpack: " .. obj.Name
+                end
+            end
+        end
+        -- 2. Character
+        local char = LocalPlayer.Character
+        if char then
+            for _, obj in ipairs(char:GetChildren()) do
+                if (obj:IsA("Tool") or obj:IsA("Model"))
+                   and (obj.Name:lower():find("candy") or obj.Name:lower():find("reward")) then
+                    return true, "character: " .. obj.Name
+                end
+            end
+        end
+        -- 3. Player attribute
+        if LocalPlayer:GetAttribute("HasCandy") == true then return true, "attr HasCandy" end
+        if LocalPlayer:GetAttribute("HoldingCandy") == true then return true, "attr HoldingCandy" end
+        if LocalPlayer:GetAttribute("HasReward") == true then return true, "attr HasReward" end
+        -- 4. Reward folder di Runtime udah hilang
+        local rt = hr:FindFirstChild("Runtime")
+        if rt then
+            local hasReward = false
+            for _, f in ipairs(rt:GetChildren()) do
+                if f:IsA("Folder") and f.Name:lower():find("reward", 1, true) then
+                    hasReward = true
+                    break
+                end
+            end
+            if not hasReward then
+                -- Reward folder gak ada = udah di-claim
+                return true, "reward folder hilang"
+            end
+        end
+        return false, nil
+    end
+
+    print("[YIN REWARD] 🎁 Mulai collect reward...")
+    local startTime = os.clock()
+    local fireCount = 0
+
+    while os.clock() - startTime < 20 do
+        if not YinRitualState.Enabled then
+            print("[YIN REWARD] ⏸️ Yin OFF — abort")
+            return false
+        end
+
+        -- ⭐ PRIORITAS #1: Cek reward udah di tangan SEBELUM apapun
+        local inHand, source = isRewardInHand()
+        if inHand then
+            print("[YIN REWARD] ✅ Reward ke-tangan (" .. tostring(source) .. ")")
+            return true
+        end
+
+        -- ⭐ Cari prompt fresh
+        _cachedRewardPrompt = nil
+        local prompt = findRewardPrompt()
+
+        -- ⭐ Kalo prompt hilang DAN reward gak di tangan → kemungkinan di-cancel server
+        -- Tetap tunggu 1 detik dulu, cek lagi
+        if not prompt then
+            task.wait(0.5)
+            inHand, source = isRewardInHand()
+            if inHand then
+                print("[YIN REWARD] ✅ Reward ke-tangan setelah prompt hilang (" .. tostring(source) .. ")")
+                return true
+            end
+            -- Masih gak ada reward = kemungkinan reward belum di-spawn server
+            print("[YIN REWARD] ⚠️ Prompt hilang tapi reward belum ke-tangan — tunggu...")
+            task.wait(1)
+            continue
+        end
+
+        -- ⭐ Cari posisi fresh
+        local pos = nil
+        local p = prompt.Parent
+        while p and p ~= hr do
+            if p:IsA("BasePart") then
+                pos = p.Position
+                break
+            elseif p:IsA("Model") then
+                local ok, pivot = pcall(function() return p:GetPivot().Position end)
+                if ok then
+                    pos = pivot
+                    break
+                end
+            end
+            p = p.Parent
+        end
+
+        -- Fallback pos
+        if not pos then
+            local rp = hr:FindFirstChild("RewardPoints")
+            if rp then
+                for _, d in ipairs(rp:GetChildren()) do
+                    if d:IsA("BasePart") then pos = d.Position; break end
+                    if d:IsA("Attachment") then pos = d.WorldPosition; break end
+                end
+            end
+        end
+        if not pos then
+            local altar = hr:FindFirstChild("Altar")
+            if altar and altar:IsA("BasePart") then
+                pos = altar.Position + Vector3.new(0, 10, 0)
+            end
+        end
+
+        if not pos then
+            print("[YIN REWARD] ⚠️ Pos gak ketemu — retry...")
+            task.wait(0.5)
+            continue
+        end
+
+        -- ⭐ TP ke pos
+        local char = LocalPlayer.Character
+        if not char then task.wait(0.3) continue end
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if not root then task.wait(0.3) continue end
+
+        local targetCF = CFrame.new(pos + Vector3.new(0, 3, 0))
+        local hum = char:FindFirstChildOfClass("Humanoid")
+
+        if hum and hum.SeatPart then
+            local pet = hum.SeatPart:FindFirstAncestorOfClass("Model")
+            if pet then
+                local seat = hum.SeatPart
+                local offset = root.CFrame:ToObjectSpace(seat.CFrame)
+                root.CFrame = targetCF
+                root.Velocity = Vector3.zero
+                root.AssemblyLinearVelocity = Vector3.zero
+                task.wait(0.05)
+                local newSeatCF = targetCF * offset
+                local pivotToSeat = pet:GetPivot():ToObjectSpace(seat.CFrame)
+                local targetPivot = newSeatCF * pivotToSeat:Inverse()
+                pcall(function() pet:PivotTo(targetPivot) end)
+            else
+                root.CFrame = targetCF
+                root.Velocity = Vector3.zero
+                root.AssemblyLinearVelocity = Vector3.zero
+            end
+        else
+            root.CFrame = targetCF
+            root.Velocity = Vector3.zero
+            root.AssemblyLinearVelocity = Vector3.zero
+        end
+
+        -- ⭐ Stick 0.3s (cukup buat server register)
+        local stickStart = os.clock()
+        while os.clock() - stickStart < 0.3 do
+            local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not r then break end
+            r.CFrame = targetCF
+            r.Velocity = Vector3.zero
+            r.AssemblyLinearVelocity = Vector3.zero
+            task.wait(0.05)
+        end
+
+        -- ⭐ Fire prompt CUMA 1x per loop (bukan 3x!)
+        -- Fire 3x = spam server, reward di-cancel
+        pcall(function()
+            prompt.Enabled = true
+            prompt.HoldDuration = 0
+            prompt.MaxActivationDistance = math.huge
+            prompt.RequiresLineOfSight = false
+        end)
+
+        if typeof(fireproximityprompt) == "function" then
+            pcall(fireproximityprompt, prompt)
+        end
+        fireCount = fireCount + 1
+
+        -- ⭐ CEK INSTAN setelah fire — jangan tunggu 0.3s
+        task.wait(0.1)
+        inHand, source = isRewardInHand()
+        if inHand then
+            print("[YIN REWARD] ✅ Reward ke-tangan instan setelah fire #" .. fireCount .. " (" .. tostring(source) .. ")")
+            return true
+        end
+
+        -- ⭐ Cek prompt udah hilang?
+        _cachedRewardPrompt = nil
+        if not findRewardPrompt() then
+            -- Prompt hilang = kemungkinan sukses, tapi cek reward dulu
+            task.wait(0.3)
+            inHand, source = isRewardInHand()
+            if inHand then
+                print("[YIN REWARD] ✅ Reward ke-tangan, prompt hilang (" .. tostring(source) .. ")")
+                return true
+            end
+            print("[YIN REWARD] ⚠️ Prompt hilang tapi reward belum ke-tangan — tunggu 2s...")
+            task.wait(2)
+            inHand, source = isRewardInHand()
+            if inHand then
+                print("[YIN REWARD] ✅ Reward ke-tangan delayed (" .. tostring(source) .. ")")
+                return true
+            end
+        end
+
+        -- ⭐ Jeda 0.5s sebelum loop berikutnya (biar gak spam)
+        task.wait(0.5)
+    end
+
+    -- ⭐ FINAL CHECK — reward mungkin masuk telat
+    local inHand, source = isRewardInHand()
+    if inHand then
+        print("[YIN REWARD] ✅ Reward ke-tangan di final check (" .. tostring(source) .. ")")
+        return true
+    end
+
+    print("[YIN REWARD] ❌ Timeout 20s — reward GAK ke-tangan")
+    return false
+end
+
+-- 9) RETURN TO BASE — juga HILANG!
+local function yinReturnToBase()
+    local base = nil
+    local candidates = {
+        "HalloweenHomeAnchor", "HalloweenBase", "HalloweenSpawn",
+        "HalloweenBaseplate", "HalloweenStart",
+    }
+    for _, name in ipairs(candidates) do
+        local part = Workspace:FindFirstChild(name, true)
+        if part and part:IsA("BasePart") then
+            base = part
+            print("[YIN RETURN] Base:", part:GetFullName())
+            break
+        end
+    end
+
+    if not base then
+        local hf = Workspace:FindFirstChild("Halloween")
+        if hf then
+            local sp = hf:FindFirstChildWhichIsA("SpawnLocation", true)
+            if sp then
+                base = sp
+            else
+                local bp = hf:FindFirstChildWhichIsA("BasePart", true)
+                if bp then base = bp end
+            end
+        end
+    end
+
+    if not base then
+        local Plots = Workspace:FindFirstChild("Plots")
+        if Plots then
+            for _, plot in ipairs(Plots:GetChildren()) do
+                local owner = plot:GetAttribute("OwnerUserId") or plot:GetAttribute("Owner")
+                if owner == LocalPlayer.UserId or owner == LocalPlayer.Name then
+                    local sp = plot:FindFirstChild("Spawn", true)
+                            or plot:FindFirstChildWhichIsA("SpawnLocation", true)
+                            or plot:FindFirstChild("Baseplate", true)
+                            or plot:FindFirstChildWhichIsA("BasePart", true)
+                    if sp then base = sp end
+                    break
+                end
+            end
+        end
+    end
+
+    if not base then
+        local hr = Workspace:FindFirstChild("HeadlessRitual")
+        if hr then
+            local origin = hr:FindFirstChild("Origin")
+            if origin and origin:IsA("BasePart") then base = origin end
+        end
+    end
+
+    if not base then
+        warn("[YIN RETURN] ❌ GAK ADA base — skip return")
+        return false
+    end
+
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return false end
+
+        local startPos = root.Position
+    local targetPos = base.Position + Vector3.new(0, 5, 0)
+
+    -- ⭐ LANGSUNG TP SEKALI — tanpa step, tanpa delay
+    local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if r then
+        r.CFrame = CFrame.new(targetPos)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+    end
+
+    print("[YIN RETURN] ✅ Selesai")
+    return true
+end
+
+function Features.startAutoYinRitual()
+    task.spawn(function()
+        while task.wait(YinRitualCfg.SCAN_INTERVAL) do
+            if not YinRitualState.Enabled then
+                YinRitualState.Status = "⏸️ Idle"
+                YinRitualState.Active = false
+                YinRitualState._scanStart = nil   -- ⭐ reset biar gak debug spam
+                continue
+            end
+
+-- ⭐ GUARD: skip reward kalau udah pernah diambil
+if YinRitualState._rewardTaken then
+    -- fallthrough ke bawah — jangan cek reward lagi
+    -- langsung ke cave cooldown
+else
+    if findRewardPrompt() then
+        YinRitualState.Active = true
+        YinRitualState.Status = "🎁 Collecting reward..."
+        local got = yinCollectReward()
+        if got then
+            YinRitualState._lastRewardTime = tick()
+            YinRitualState._rewardTaken = true      -- ⭐ SET FLAG
+            YinRitualState.RewardCount = YinRitualState.RewardCount + 1
+            YinRitualState.RitualCount = YinRitualState.RitualCount + 1
+            YinRitualState.Status = "✅ Reward #" .. YinRitualState.RewardCount .. " ke-tangan!"
+            YinRitualState.Status = "🏠 Returning to base..."
+            yinReturnToBase()
+            YinRitualState.Status = "⏳ Cooldown 20s..."
+        else
+            YinRitualState.Status = "⚠️ Reward retry..."
+        end
+        continue
+    end
+end
+            -- ⭐ BARU CEK CAVE COOLDOWN — kalau gak ada reward baru skip
+local onCd, sisaCd = isCaveOnCooldown()
+if onCd then
+    YinRitualState.Status = "⏳ Cave cooldown... (" .. sisaCd .. "s)"
+    YinRitualState.Active = false
+    task.wait(1)
+    continue
+end
+
+-- ⭐ Cave READY — reset flag reward (run baru, boleh collect lagi)
+YinRitualState._rewardTaken = false
+            -- Global cooldown reward
+            local _now = tick()
+            if YinRitualState._lastRewardTime and (_now - YinRitualState._lastRewardTime) < 20 then
+                YinRitualState.Status = "⏳ Reward cooldown... (" ..
+                    math.floor(20 - (_now - YinRitualState._lastRewardTime)) .. "s)"
+                YinRitualState.Active = false
+                task.wait(1)
+                continue
+            end
+
+            -- Priority checks
+            if Shared.AutoMutation_Enabled then
+                local ms = Features.getMutationState and Features.getMutationState()
+                if ms and (ms.Running or ms.EggLocked or ms.StealPaused) then
+                    YinRitualState.Status = "⏸️ Waiting Auto Mutation..."
+                    YinRitualState.Active = false
+                    continue
+                end
+            end
+
+            local hs = Features.getHalloweenState and Features.getHalloweenState()
+            if hs and hs.Enabled and _G.VRILZ_HalloweenBusy then
+                YinRitualState.Status = "⏸️ Waiting Auto Halloween..."
+                YinRitualState.Active = false
+                continue
+            end
+
+            if Shared.MutationSteal_Active and Shared.MutationSteal_Enabled then
+                YinRitualState.Status = "⏳ Waiting Mutation Steal..."
+                YinRitualState.Active = false
+                continue
+            end
+
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if not hum or hum.Health <= 0 then
+                YinRitualState.Status = "⏳ Waiting character..."
+                task.wait(1)
+                continue
+            end
+
+                       -- ═══ STEP 1: REWARD ═══
+if YinRitualState._rewardTaken then
+    -- skip, langsung ke logic bawah
+else
+    if findRewardPrompt() then
+        YinRitualState.Active = true
+        YinRitualState.Status = "🎁 Collecting reward..."
+        local got = yinCollectReward()
+        if got then
+            YinRitualState._lastRewardTime = tick()
+            YinRitualState._rewardTaken = true      -- ⭐ SET FLAG
+            YinRitualState.RewardCount = YinRitualState.RewardCount + 1
+            YinRitualState.RitualCount = YinRitualState.RitualCount + 1
+            YinRitualState.Status = "✅ Reward #" .. YinRitualState.RewardCount .. " ke-tangan!"
+            YinRitualState.Status = "🏠 Returning to base..."
+            yinReturnToBase()
+            YinRitualState.Status = "⏳ Cooldown 20s..."
+        else
+            YinRitualState.Status = "⚠️ Reward retry..."
+        end
+        continue
+    end
+end
+
+            -- ═══ STEP 2: LOGIKA URUTAN FIX ═══
+            -- Aturan server Ride a Pet:
+            --   1. Collect Yin (kalo belum)
+            --   2. Place Yin (kalo belum)
+            --   3. Collect Yang (kalo belum)
+            --   4. Place Yang (kalo belum)
+            --   5. Reward muncul, collect
+            --
+            -- ⚠️ Server cuma spawn Yin DULU. Yang baru muncul SETELAH Yin placed.
+
+            local yinHolding  = isHoldingRitualItem("Yin")
+            local yangHolding = isHoldingRitualItem("Yang")
+            local yinPlaced   = isYinPlaced()
+            local yangPlaced  = isYangPlaced()
+
+            -- ────── PRIORITAS #1: PLACE YIN (kalo di tangan & belum placed) ──────
+            if yinHolding and not yinPlaced then
+                YinRitualState.Active = true
+                YinRitualState.Status = "🔮 Placing Yin..."
+                local ok = yinPlace("Yin")
+                if ok then
+                    YinRitualState.Status = "✅ Yin placed!"
+                else
+                    YinRitualState.Status = "⚠️ Yin place gagal — retry..."
+                end
+                task.wait(0.5)
+                continue
+            end
+
+            -- ────── PRIORITAS #2: PLACE YANG (kalo di tangan & belum placed) ──────
+            if yangHolding and not yangPlaced then
+                YinRitualState.Active = true
+                YinRitualState.Status = "🔮 Placing Yang..."
+                local ok = yinPlace("Yang")
+                if ok then
+                    YinRitualState.Status = "✅ Yang placed!"
+                else
+                    YinRitualState.Status = "⚠️ Yang place gagal — retry..."
+                end
+                task.wait(0.5)
+                continue
+            end
+
+            -- ────── PRIORITAS #3: COLLECT YIN (kalo ada di runtime & belum di tangan & belum placed) ──────
+            if not yinHolding and not yinPlaced then
+                local yinItem = findRitualItem("Yin")
+                if yinItem then
+                    YinRitualState.Active = true
+                    YinRitualState.Status = "🔵 Collecting Yin..."
+                    if yinCollect("Yin") then
+                        YinRitualState.YinCount = YinRitualState.YinCount + 1
+                        -- ⭐ TUNGGU SAMPE BENERAN DI TANGAN (max 3 detik)
+                        local waitStart = os.clock()
+                        local gotYin = false
+                        while os.clock() - waitStart < 3 do
+                            if isHoldingRitualItem("Yin") then
+                                gotYin = true
+                                break
+                            end
+                            task.wait(0.2)
+                        end
+                        
+                        if gotYin then
+                            YinRitualState.Status = "🔮 Placing Yin..."
+                            if yinPlace("Yin") then
+                                YinRitualState.Status = "✅ Yin placed!"
+                            end
+                        else
+                            YinRitualState.Status = "⚠️ Yin gak masuk tangan — retry..."
+                        end
+                    end
+                    task.wait(0.5)
+                    continue
+                end
+            end
+
+            -- ────── PRIORITAS #4: COLLECT YANG (kalo ada di runtime & belum di tangan & belum placed) ──────
+            -- ⚠️ Yang cuma muncul SETELAH Yin placed
+            if not yangHolding and not yangPlaced and yinPlaced then
+                local yangItem = findRitualItem("Yang")
+                if yangItem then
+                    YinRitualState.Active = true
+                    YinRitualState.Status = "🔴 Collecting Yang..."
+                    if yinCollect("Yang") then
+                        YinRitualState.YangCount = YinRitualState.YangCount + 1
+                        -- ⭐ TUNGGU SAMPE BENERAN DI TANGAN (max 3 detik)
+                        local waitStart = os.clock()
+                        local gotYang = false
+                        while os.clock() - waitStart < 3 do
+                            if isHoldingRitualItem("Yang") then
+                                gotYang = true
+                                break
+                            end
+                            task.wait(0.2)
+                        end
+                        
+                        if gotYang then
+                            YinRitualState.Status = "🔮 Placing Yang..."
+                            if yinPlace("Yang") then
+                                YinRitualState.Status = "✅ Yang placed!"
+                            end
+                        else
+                            YinRitualState.Status = "⚠️ Yang gak masuk tangan — retry..."
+                        end
+                    end
+                    task.wait(0.5)
+                    continue
+                end
+            end
+
+            -- ────── STEP 3: SCAN LAGI ──────
+            YinRitualState.Active = false
+            YinRitualState.Status = "🔍 Scanning Yin & Yang..."
+            
+            -- ⭐ SAFETY: kalau stuck di scan >10 detik & gak ada apapun, log debug
+            if not YinRitualState._scanStart then
+                YinRitualState._scanStart = os.clock()
+            end
+            if os.clock() - YinRitualState._scanStart > 10 then
+                YinRitualState._scanStart = os.clock()
+            end
+            
+            task.wait(0.5)
+        end
+    end)
+end
+
+function Features.getYinRitualState()
+    return YinRitualState
+end
+
+function Features.setYinRitualEnabled(v)
+    YinRitualState.Enabled = v
+    if v then
+        YinRitualState.Status = "▶️ Starting..."
+        YinRitualState.Active = true
+    else
+        YinRitualState.Status = "⏸️ Idle"
+        YinRitualState.Active = false
+    end
+    -- ⭐ Reset Halloween timer
+    if HalloweenState then
+        HalloweenState._yinWaitStart = nil
+    end
+end
+
+-- ============================================================
+-- 👻 GHOST CLONE — Khusus Egg Mutation Steal
+-- Kamera nempel clone di base, karakter asli stealth
+-- ============================================================
+local GhostMode = {
+    Active = false,
+    Decoy = nil,
+    OriginalVisibility = {},
+}
+
+local function ghostSpawnDecoy()
+    local char = LocalPlayer.Character
+    if not char then
+        warn("[Ghost] No character")
+        return false
+    end
+
+    -- Coba dapet base dari plot
+    local base = getMyPlotSpawn()
+    
+    -- ⭐ FALLBACK: kalau plot gak ketemu, pake posisi sekarang (clone nempel di tempat lu berdiri)
+    if not base then
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then
+            warn("[Ghost] No HumanoidRootPart, no plot spawn")
+            return false
+        end
+        warn("[Ghost] Plot spawn not found — using current position as fallback")
+        base = hrp
+    end
+
+    -- Pastiin char Archivable
+    local oldArchivable = char.Archivable
+    char.Archivable = true
+
+    -- Bersihin clone lama
+    if GhostMode.Decoy and GhostMode.Decoy.Parent then
+        GhostMode.Decoy:Destroy()
+    end
+
+    -- Clone
+    local okClone, clone = pcall(char.Clone, char)
+    char.Archivable = oldArchivable
+
+    if not okClone or not clone then
+        warn("[Ghost] char:Clone() failed")
+        return false
+    end
+
+    clone.Name = "VRILZ_Ghost_" .. LocalPlayer.Name
+    clone.Parent = workspace
+
+    -- Pindah ke base
+    pcall(function()
+        clone:PivotTo(base.CFrame + Vector3.new(0, 3, 0))
+    end)
+
+    -- Freeze part + hapus script
+    for _, d in ipairs(clone:GetDescendants()) do
+        if d:IsA("BasePart") then
+            d.Anchored = true
+            d.CanCollide = false
+            d.CanQuery = false
+            d.CanTouch = false
+        elseif d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
+            d:Destroy()
+        end
+    end
+
+    -- Cari subject buat kamera
+    local cloneHum = clone:FindFirstChildOfClass("Humanoid")
+        or clone:FindFirstChild("HumanoidRootPart")
+
+    if not cloneHum then
+        warn("[Ghost] Clone no Humanoid / HRP")
+        clone:Destroy()
+        return false
+    end
+
+    GhostMode.Decoy = clone
+
+    -- Kamera ke clone
+    local cam = workspace.CurrentCamera
+    if cam then
+        cam.CameraSubject = cloneHum
+    end
+
+    -- Sembunyiin karakter asli
+    GhostMode.OriginalVisibility = {}
+    for _, d in ipairs(char:GetDescendants()) do
+        if d:IsA("BasePart") then
+            GhostMode.OriginalVisibility[d] = d.LocalTransparencyModifier
+            d.LocalTransparencyModifier = 1
+        end
+    end
+
+    GhostMode.Active = true
+    print("[Ghost] ✅ Clone spawned at", base.Position, "| camera set to clone")
+    return true
+end
+
+local function ghostRemoveDecoy()
+    if GhostMode.Decoy and GhostMode.Decoy.Parent then
+        GhostMode.Decoy:Destroy()
+    end
+    GhostMode.Decoy = nil
+
+    local cam = workspace.CurrentCamera
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if cam and hum then
+        cam.CameraSubject = hum
+    end
+
+    for d, v in pairs(GhostMode.OriginalVisibility) do
+        if d and d.Parent and d:IsA("BasePart") then
+            d.LocalTransparencyModifier = v
+        end
+    end
+    GhostMode.OriginalVisibility = {}
+
+    GhostMode.Active = false
+end
+
+function Features.isGhostModeActive()
+    return GhostMode.Active
+end
+
+LocalPlayer.CharacterAdded:Connect(function()
+    if GhostMode.Active then
+        ghostRemoveDecoy()
+    end
+end)
+
+-- ============================================================
+-- STEAL EXECUTOR — LOGIC ONLY (dipanggil dari UI)
+-- Tanpa GUI, tanpa toggle. UI yang bikin tombol, ini yang jalanin.
+-- Guard: Auto Mutation / Mutation Steal / Auto Farm / Volcanic Hunt
+-- Volcanic egg → cave waypoint | Normal egg → direct TP
+-- Return: STEP mode | Wait egg back: 4 seconds
+-- ============================================================
+local StealExecState = {
+    Busy = false,
+    Status = "Idle",
+    CurrentEggName = nil,
+}
+
+-- ⭐ cek fitur steal/mutation yang ON
+local function isAnyStealFeatureOn()
+    local reasons = {}
+
+    if Shared.AutoMutation_Enabled then table.insert(reasons, "Auto Mutation") end
+    if Shared.MutationSteal_Enabled then table.insert(reasons, "Mutation Steal") end
+    if Shared.AutoFarm_Enabled then table.insert(reasons, "Auto Farm") end
+    if Shared.AutoSteal_Enabled then table.insert(reasons, "Auto Steal") end
+    if Shared.VolcanicHunt_Enabled then table.insert(reasons, "Volcanic Hunt") end
+    if Shared.MutationSteal_Active then table.insert(reasons, "Mutation Steal (active)") end
+
+    local ms = Features.getMutationState and Features.getMutationState()
+    if ms and (ms.Running or ms.EggLocked or ms.StealPaused) then
+        table.insert(reasons, "Mutation (running)")
+    end
+
+    return #reasons > 0, reasons
+end
+
+-- ⭐ cari remote (persis kayak yang udah ada di file lu)
+local function seGetRemote(name)
+    local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
+    if not remotes then return nil end
+    local gameR = remotes:FindFirstChild("Game")
+    if not gameR then return nil end
+    return gameR:FindFirstChild(name)
+end
+
+local function seGetDropRemoteLocal()
+    return seGetRemote("BasketDrop")
+        or seGetRemote("DropEgg")
+        or seGetRemote("EggDrop")
+        or seGetRemote("Drop")
+end
+
+-- ⭐ return by STEP — panggil returnToMyPlot() yang udah ada di file lu
+-- (returnToMyPlot() = step 100 studs + drop prompt + remote, persis kayak Features)
+local function seReturnToPlotStep()
+    local oldFlag = Shared.AutoReturn_Enabled
+    Shared.AutoReturn_Enabled = true
+    local ok, err = pcall(returnToMyPlot)
+    Shared.AutoReturn_Enabled = oldFlag
+    return ok
+end
+
+-- ⭐ CORE: STEAL EGG BIASA (non-volcanic)
+local function seStealNormalEgg(egg)
+    StealExecState.Status = "🎯 TP to egg: " .. egg.Name
+
+    local eggPart = egg:FindFirstChildWhichIsA("BasePart", true)
+    if not eggPart then return false, "Egg has no BasePart" end
+
+    local prompt = egg:FindFirstChild("Pickup", true)
+        or egg:FindFirstChildWhichIsA("ProximityPrompt", true)
+    if not prompt then return false, "Egg has no Pickup prompt" end
+
+    if prompt:IsA("ProximityPrompt") then
+        prompt.HoldDuration = 0
+        prompt.MaxActivationDistance = math.huge
+        prompt.RequiresLineOfSight = false
+    end
+
+    -- TP langsung ke egg (persis kayak Features steal biasa)
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false, "No HumanoidRootPart" end
+    myRoot.CFrame = CFrame.lookAt(eggPart.Position + Vector3.new(0, 3, 0), eggPart.Position)
+    myRoot.Velocity = Vector3.zero
+    myRoot.AssemblyLinearVelocity = Vector3.zero
+    task.wait(0.1)
+
+    -- Pickup loop
+    local picked = false
+    for i = 1, 15 do
+        if not egg.Parent then picked = true; break end
+        if typeof(fireproximityprompt) == "function" then
+            pcall(fireproximityprompt, prompt)
+        end
+        task.wait(0.25)
+        if isHoldingEggMutation() then picked = true; break end
+        if eggPart and eggPart.Parent then
+            myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if myRoot then
+                myRoot.CFrame = CFrame.lookAt(eggPart.Position + Vector3.new(0, 3, 0), eggPart.Position)
+                myRoot.Velocity = Vector3.zero
+                myRoot.AssemblyLinearVelocity = Vector3.zero
+            end
+            task.wait(0.1)
+        end
+    end
+
+    if not picked or not isHoldingEggMutation() then
+        return false, "Failed to pickup egg"
+    end
+
+    StealExecState.Status = "🌋 TP to magma..."
+
+    -- TP ke lava (persis kayak Features step 6)
+    task.wait(0.5)
+    local safePos = findSafeVolcanoPos()
+    if safePos then
+        tpToSafeMode(safePos)  -- ⬅️ UBAH
+    end
+    task.wait(1.5)
+
+    StealExecState.Status = "🔥 Dipping..."
+
+    -- Dip sampe egg released
+    local dropWaited = 0
+    local eggReleased = false
+    while dropWaited < 15 do
+        fireVolcanoDip()
+        task.wait(1.5)
+        dropWaited = dropWaited + 1.5
+        if not isHoldingEggMutation() then eggReleased = true; break end
+    end
+
+    if not eggReleased then return false, "Egg didn't release (dip timeout)" end
+
+    StealExecState.Status = "⏳ Waiting egg back (max 20s)..."
+
+    -- Tunggu egg balik (mutation complete) — max 20s
+    local waitStart = os.clock()
+    while os.clock() - waitStart < 20 do
+        task.wait(1)
+if isHoldingEggMutation() then
+    StealExecState.Status = "✅ Mutation complete!"
+    if Shared.Notify then Shared.Notify(getWaitNotifText(), "success") end
+    -- ⭐ Wait dinamis: Instant → 8s, Step → 6s
+    task.wait((Shared.ReturnMode or "Step") == "Instant" and 8 or 6)
+         break
+        end
+    end
+
+    if not isHoldingEggMutation() then
+        return false, "Egg didn't come back (mutation timeout)"
+    end
+
+    StealExecState.Status = "🏠 Returning to plot (step)..."
+
+    -- Return by STEP (bukan Instant)
+    local ok = seReturnToPlotStep()
+    if ok then StealExecState.Status = "✅ Done!"
+    else StealExecState.Status = "⚠️ Return failed" end
+
+    return true, nil
+end
+
+-- ⭐ CORE: STEAL VOLCANIC EGG (jalur cave — beda fungsi)
+local function seStealVolcanicEgg(egg)
+    StealExecState.Status = "🌋 Volcanic detected: " .. egg.Name
+
+    local eggPart = egg:FindFirstChildWhichIsA("BasePart", true)
+    if not eggPart then return false, "Egg has no BasePart" end
+
+    -- Step 1: TP ke volcanic spawn (kalo jauh)
+    local spawns = Workspace:FindFirstChild("EggSpawns")
+    local spawnPart = spawns and spawns:FindFirstChild("Volcanic")
+    if spawnPart and spawnPart:IsA("BasePart") then
+        local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if curRoot then
+            local d = (spawnPart.Position - curRoot.Position).Magnitude
+            if d > 50 then
+                curRoot.CFrame = spawnPart.CFrame + Vector3.new(0, 5, 0)
+                curRoot.Velocity = Vector3.zero
+                curRoot.AssemblyLinearVelocity = Vector3.zero
+                task.wait(0.5)
+            end
+        end
+    end
+
+    -- Step 2: Masuk cave pake waypoint
+    StealExecState.Status = "🚶 Entering cave..."
+    for i, wp in ipairs(VolcanicWaypoints) do
+        tpWaypoint(wp)
+        local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if curRoot and eggPart and eggPart.Parent then
+            local d = (eggPart.Position - curRoot.Position).Magnitude
+            if d <= 40 then break end
+        end
+    end
+
+    -- Step 3: SELALU TP langsung ke egg (persis kayak Features)
+    local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if curRoot and eggPart and eggPart.Parent then
+        curRoot.CFrame = CFrame.lookAt(eggPart.Position + Vector3.new(0, 3, 0), eggPart.Position)
+        curRoot.Velocity = Vector3.zero
+        curRoot.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.3)
+    end
+
+    -- Step 4: Ambil egg (pake volcanicPickupVerified yang udah ada)
+    StealExecState.Status = "🖐 Picking up volcanic egg..."
+    local picked = false
+    if egg.Parent then picked = volcanicPickupVerified(egg)
+    else picked = isHoldingEggMutation() end
+
+    if not picked or not isHoldingEggMutation() then
+        return false, "Failed to pickup volcanic egg"
+    end
+
+    -- Step 5: Keluar cave (reverse waypoint)
+    StealExecState.Status = "🚶 Exiting cave..."
+    local exited = exitCave()
+    if not exited or not isHoldingEggMutation() then
+        return false, "Failed to exit cave"
+    end
+
+    -- Step 6: Ke magma (drop)
+    StealExecState.Status = "🌋 TP to magma..."
+    task.wait(0.5)
+    local safePos = findSafeVolcanoPos()
+    if safePos then
+        tpToSafeMode(safePos)
+    end
+    task.wait(1.5)
+
+    StealExecState.Status = "🔥 Dipping..."
+
+    local dropWaited = 0
+    local eggReleased = false
+    while dropWaited < 15 do
+        fireVolcanoDip()
+        task.wait(1.5)
+        dropWaited = dropWaited + 1.5
+        if not isHoldingEggMutation() then eggReleased = true; break end
+    end
+
+    if not eggReleased then return false, "Egg didn't release (dip timeout)" end
+
+    StealExecState.Status = "⏳ Waiting egg back (max 20s)..."
+
+    local waitStart = os.clock()
+    while os.clock() - waitStart < 20 do
+        task.wait(1)
+        if isHoldingEggMutation() then
+            StealExecState.Status = "✅ Mutation complete!"
+            if Shared.Notify then Shared.Notify("🔥 Wait 4 seconds!", "success") end
+            task.wait(4)
+            break
+        end
+    end
+
+    if not isHoldingEggMutation() then
+        return false, "Egg didn't come back (mutation timeout)"
+    end
+
+    StealExecState.Status = "🏠 Returning to plot (step)..."
+
+    local ok = seReturnToPlotStep()
+    if ok then StealExecState.Status = "✅ Done!"
+    else StealExecState.Status = "⚠️ Return failed" end
+
+    return true, nil
+end
+
+-- ⭐ MAIN ENTRY — dipanggil dari UI
+function Features.stealEgg(egg)
+    if StealExecState.Busy then
+        if Shared.Notify then Shared.Notify("⏳ Already stealing, wait...", "warning") end
+        return false, "busy"
+    end
+
+    -- ⭐⭐⭐ FIX: TOLAK kalau di Halloween zone / busy ⭐⭐⭐
+    if LocalPlayer:GetAttribute("InHalloweenZone") == true then
+        if Shared.Notify then Shared.Notify("❌ Gak bisa steal pas di Halloween area!", "error") end
+        StealExecState.Status = "❌ Blocked: in Halloween zone"
+        return false, "in_halloween"
+    end
+    if _G.VRILZ_HalloweenBusy then
+        if Shared.Notify then Shared.Notify("❌ Auto Halloween lagi aktif!", "error") end
+        StealExecState.Status = "❌ Blocked: Halloween busy"
+        return false, "halloween_busy"
+    end
+
+    local anyOn, reasons = isAnyStealFeatureOn()
+    if anyOn then
+        local reasonStr = table.concat(reasons, ", ")
+        if Shared.Notify then
+            Shared.Notify("⚠️ Please disable your steal/mutation first! (" .. reasonStr .. ")", "error")
+        end
+        StealExecState.Status = "❌ Blocked: " .. reasonStr
+        return false, "blocked"
+    end
+
+    if not egg or not egg.Parent then
+        if Shared.Notify then Shared.Notify("❌ Egg not found", "error") end
+        return false, "not_found"
+    end
+
+    StealExecState.Busy = true
+    StealExecState.CurrentEggName = egg.Name
+    local isVolcanic = egg.Name:lower():find("volcan") ~= nil
+    StealExecState.Status = isVolcanic and "🌋 Stealing volcanic..." or "🎯 Stealing..."
+
+        task.spawn(function()
+        -- 👻 SPAWN GHOST DI BASE
+        local ghostOk = ghostSpawnDecoy()
+        if ghostOk then
+            StealExecState.Status = "👻 Ghost di base — mulai steal..."
+            task.wait(0.3)
+        else
+            -- ⭐ CLONE GAGAL → ABORT, jangan steal
+            if Shared.Notify then
+                Shared.Notify("❌ Ghost clone gagal spawn (plot ga ketemu). Steal di-cancel.", "error")
+            end
+            StealExecState.Status = "❌ Ghost clone failed — steal aborted"
+            StealExecState.Busy = false
+            StealExecState.CurrentEggName = nil
+            return  -- ⭐ EXIT, jangan lanjut steal
+        end
+
+        local ok, err
+        if isVolcanic then ok, err = seStealVolcanicEgg(egg)
+        else ok, err = seStealNormalEgg(egg) end
+
+        -- 👻 HAPUS GHOST + BALIKIN KAMERA
+        if ghostOk then
+            ghostRemoveDecoy()
+            task.wait(0.2)
+        end
+
+        if not ok then
+            if Shared.Notify then Shared.Notify("❌ Steal failed: " .. tostring(err), "error") end
+            StealExecState.Status = "❌ " .. tostring(err)
+        else
+            if Shared.Notify then Shared.Notify("✅ Steal complete!", "success") end
+        end
+
+        StealExecState.Busy = false
+        StealExecState.CurrentEggName = nil
+    end)
+
+    return true, nil
+end
+function Features.getStealExecState()
+    return StealExecState
+end
+
+function Features.isAnyStealFeatureOn()
+    return isAnyStealFeatureOn()
+end
+
+-- ⭐ loop cuma buat update state (gak manggil GUI)
+function Features.startStealExecutor()
+    task.spawn(function()
+        while task.wait(1) do
+            -- no-op, state diupdate dari Features.stealEgg
+        end
+    end)
+end
+-- ============================================================
+-- FEATURES.INIT
+-- ============================================================
+function Features.Init(sharedState)
+    Shared = sharedState
+    -- ⭐ SET DEFAULT BIAR AMAN
+    if Shared.AntiAFK_Enabled == nil then Shared.AntiAFK_Enabled = true end
+    if Shared.MutationSteal_Active == nil then Shared.MutationSteal_Active = false end
+    if Shared.AutoRidePet_Enabled == nil then Shared.AutoRidePet_Enabled = true end
+    if Shared.YinRitual_Enabled == nil then Shared.YinRitual_Enabled = false end
+    if Shared.Fly_Enabled == nil then Shared.Fly_Enabled = false end
+    if Shared.Fly_Height == nil then Shared.Fly_Height = 100 end
+    if Shared.Fly_Speed == nil then Shared.Fly_Speed = 300 end
+
+    -- ⭐ Guard: cegah double-start anti-AFK
+    if not Features._antiAFKStarted then
+        Features._antiAFKStarted = true
+        Features.startAntiAFK()
+    end
+
+    Features.startEggESP()
+    Features.startPetESP()
+    Features.startAutoSteal()
+    Features.startAutoHatch()
+    Features.startAutoPlantEgg()
+    Features.startAutoRidePet()
+    Features.startEggPrediction()
+    Features.startSpeed()
+    Features.startInstantPickup()
+    Features.startAutoFarm()
+    Features.startVolcanicHunt()
+    Features.startAutoMutation()
+    Features.startMutationSteal()
+    Features.startAutoHatchLuck()
+    Features.startAutoHalloween()
+    Features.startAutoYinRitual()
+    Features.startInfinityJump()
+    Features.startStealExecutor() 
+
+           -- ⭐ AUTO-ENABLE AUTO RIDE PET — LANGSUNG ON
+    Shared.AutoRidePet_Enabled = true
+    Features.setAutoRideEnabled(true)
+
+    task.spawn(function()
+        -- Tunggu character loaded
+        local timeout = 0
+        while not (LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid")) do
+            task.wait(0.2)
+            timeout = timeout + 0.2
+            if timeout > 10 then break end
+        end
+
+        -- Tunggu sampe ada pet di backpack (max 15 detik)
+        local petTimeout = 0
+        while petTimeout < 15 do
+            local backpack = LocalPlayer:FindFirstChild("Backpack")
+            if backpack then
+                local hasPet = false
+                for _, tool in ipairs(backpack:GetChildren()) do
+                    if tool:IsA("Tool") and tool:GetAttribute("PetName") then
+                        hasPet = true
+                        break
+                    end
+                end
+                if hasPet then break end
+            end
+            task.wait(0.5)
+            petTimeout = petTimeout + 0.5
+        end
+
+        task.wait(0.3)
+        Shared.AutoRidePet_Enabled = true
+        Features.setAutoRideEnabled(true)
+        if Shared.Notify then
+            Shared.Notify("🐉 Auto Ride Pet: AUTO-ON", "success")
+        end
+    end)
+
+    -- ⭐ RE-TRIGGER PAS RESPAWN
+    LocalPlayer.CharacterAdded:Connect(function()
+        task.wait(3)
+        AutoRideState.LastPetName = nil
+        if Shared and Shared.AutoRidePet_Enabled ~= false then
+            if Features.setAutoRideEnabled then
+                Features.setAutoRideEnabled(true)
+            end
+        end
+    end)
+end   -- ⭐⭐⭐ TUTUP Features.Init DI SINI ⭐⭐⭐
+
+-- ============================================================
+-- AUTO OBBY v10 — TP Start → 10s → +3s → Glide Finish → Verify → Return
+-- ============================================================
+local ObbyState = ObbyState or { Running = false }
+
+function Features.startAutoObby()
+    if ObbyState.Running then return end
+    ObbyState.Running = true
+
+    task.delay(600, function()
+        if ObbyState.Running then
+            ObbyState.Running = false
+            warn("[AUTO OBBY] ⏱ Timeout 10 menit — force reset")
+        end
+    end)
+
+    task.spawn(function()
+        local player = game.Players.LocalPlayer
+
+        local GLIDE_STEP_FINISH = 100
+        local GLIDE_WAIT = 0.08
+        local STAY_START_1  = 10   -- diam 10 detik pertama
+        local STAY_START_2  = 3    -- tambahan 3 detik
+
+        print("[AUTO OBBY] ══════════════════════════════════════")
+        print("[AUTO OBBY] v10 — TP Start → 10s → +3s → Glide Finish → Verify → Return")
+
+        -- ═══ HELPER: GLIDE ═══
+        local function glideTo(targetPos, stepSize, label)
+            local char = player.Character
+            local root = char and char:FindFirstChild("HumanoidRootPart")
+            if not root then
+                print("[AUTO OBBY] ❌", label, "- HRP gak ada")
+                return false
+            end
+
+            local startP = root.Position
+            local target = Vector3.new(targetPos.X, targetPos.Y + 5, targetPos.Z)
+            local totalDist = (target - startP).Magnitude
+            local steps = math.max(1, math.ceil(totalDist / stepSize))
+
+            print(string.format("[AUTO OBBY] 🛸 %s — dist %.0f, %d step @ %d/step",
+                label, totalDist, steps, stepSize))
+
+            local dir = (target - startP)
+            if dir.Magnitude > 1 then dir = dir.Unit else dir = Vector3.zero end
+
+            for i = 1, steps do
+                if not ObbyState.Running then return false end
+                local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                if not r then return false end
+                local dist = math.min(stepSize * i, totalDist)
+                local newPos = startP + dir * dist
+                r.CFrame = CFrame.new(newPos)
+                r.Velocity = Vector3.zero
+                r.AssemblyLinearVelocity = Vector3.zero
+                if i % 5 == 0 or i == steps then
+                    print(string.format("[AUTO OBBY]   step %d/%d", i, steps))
+                end
+                task.wait(GLIDE_WAIT)
+            end
+            print("[AUTO OBBY] ✅", label, "selesai")
+            return true
+        end
+
+        -- ═══ HELPER: TP LANGSUNG ═══
+        local function tpDirect(targetPos, label)
+            local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if not r then
+                print("[AUTO OBBY] ❌", label, "- HRP gak ada")
+                return false
+            end
+            r.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
+            r.Velocity = Vector3.zero
+            r.AssemblyLinearVelocity = Vector3.zero
+            print("[AUTO OBBY] 📍 TP langsung ke", label, ":", tostring(targetPos))
+            return true
+        end
+
+        -- ═══ HELPER: DIAM DI POSISI ═══
+        local function stayAt(pos, duration, label)
+            print(string.format("[AUTO OBBY] ⏳ Diam %.0f detik di %s...", duration, label))
+            local stayStart = tick()
+            local lastLog = 0
+            while tick() - stayStart < duration do
+                if not ObbyState.Running then return false end
+                local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+                if r then
+                    r.CFrame = CFrame.new(pos + Vector3.new(0, 5, 0))
+                    r.Velocity = Vector3.zero
+                    r.AssemblyLinearVelocity = Vector3.zero
+                end
+                local elapsed = tick() - stayStart
+                if elapsed - lastLog >= 2 then
+                    print(string.format("[AUTO OBBY]   ⏳ %.0f/%.0f detik", elapsed, duration))
+                    lastLog = elapsed
+                end
+                task.wait(0.15)
+            end
+            print(string.format("[AUTO OBBY] ✅ %.0f detik di %s selesai", duration, label))
+            return true
+        end
+
+        -- ═══ START — KOORDINAT LANGSUNG ═══
+        local OBBY_START_FIXED = Vector3.new(28476.0, 40411.9, 29065.9)
+
+        -- ═══ FINISH — NYARI FOLDER ═══
+        local function findFinishPos()
+            local obbyFolder = workspace:FindFirstChild("HalloweenObbyRuns")
+
+            if obbyFolder then
+                local rf = obbyFolder:FindFirstChild(tostring(player.UserId))
+                local fm = rf and rf:FindFirstChild("Finish")
+                if fm then
+                    local ok, p = pcall(function() return fm:GetPivot().Position end)
+                    if ok then print("[AUTO OBBY] Finish dari Run folder lu"); return p end
+                end
+                for _, rf2 in ipairs(obbyFolder:GetChildren()) do
+                    local fm2 = rf2:FindFirstChild("Finish")
+                    if fm2 then
+                        local ok, p = pcall(function() return fm2:GetPivot().Position end)
+                        if ok then print("[AUTO OBBY] Finish dari Run folder lain:", rf2.Name); return p end
+                    end
+                end
+                for _, d in ipairs(obbyFolder:GetDescendants()) do
+                    if d.Name == "Finish" and (d:IsA("Model") or d:IsA("BasePart")) then
+                        local ok, p = pcall(function() return d:GetPivot().Position end)
+                        if ok then print("[AUTO OBBY] Finish dari descendant:", d:GetFullName()); return p end
+                    end
+                end
+            end
+
+            for _, name in ipairs({"HalloweenObbyFinish","ObbyFinish","FinishObby","HalloweenObbyFinishPart","ObbyFinishPart"}) do
+                local p = workspace:FindFirstChild(name, true)
+                if p and p:IsA("BasePart") then
+                    print("[AUTO OBBY] Finish dari part statis:", name)
+                    return p.Position
+                end
+            end
+            return nil
+        end
+
+        -- ═══ STEP 1: TP LANGSUNG KE START ═══
+        if Shared.Notify then Shared.Notify("📍 TP ke Start...", "info") end
+        if not tpDirect(OBBY_START_FIXED, "Start") then
+            ObbyState.Running = false
+            return
+        end
+        task.wait(0.3)
+
+        -- ═══ STEP 2: DIAM 10 DETIK DI START ═══
+        if Shared.Notify then Shared.Notify("⏳ Diam 10 detik di Start...", "info") end
+        if not stayAt(OBBY_START_FIXED, STAY_START_1, "Start") then
+            ObbyState.Running = false
+            return
+        end
+
+        -- ═══ STEP 3: TAMBAHAN 3 DETIK DI START ═══
+        if Shared.Notify then Shared.Notify("⏳ Tambahan 3 detik...", "info") end
+        if not stayAt(OBBY_START_FIXED, STAY_START_2, "Start (+3s)") then
+            ObbyState.Running = false
+            return
+        end
+
+        -- ═══ STEP 4: GLIDE KE FINISH ═══
+        local finishPos = findFinishPos()
+        if not finishPos then
+            print("[AUTO OBBY] ⚠️ Finish gak ketemu — coba join manual dulu")
+            if Shared.Notify then Shared.Notify("⚠️ Finish gak ketemu — join obby manual dulu", "warning") end
+            ObbyState.Running = false
+            return
+        end
+
+        if Shared.Notify then Shared.Notify("🛸 Glide ke Finish (100/step)...", "info") end
+        if not glideTo(finishPos, GLIDE_STEP_FINISH, "Finish") then
+            ObbyState.Running = false
+            return
+        end
+        task.wait(0.5)
+
+        -- ═══ STEP 5: VERIFIKASI FINISH ═══
+        print("[AUTO OBBY] Verifikasi finish...")
+        local verified = false
+        local verifyStart = tick()
+        while tick() - verifyStart < 10 do
+            if not ObbyState.Running then break end
+            local obbyF = workspace:FindFirstChild("HalloweenObbyRuns")
+            if not obbyF then verified = true break end
+            local rf = obbyF:FindFirstChild(tostring(player.UserId))
+            if not rf then verified = true break end
+            local fm = rf:FindFirstChild("Finish")
+            if not fm then verified = true break end
+            task.wait(0.5)
+        end
+
+        if verified then
+            print("[AUTO OBBY] ✅ FINISH VERIFIED")
+            if writefile then pcall(writefile, "vrilz_obby_time.txt", tostring(os.time())) end
+            if Shared.Notify then Shared.Notify("🏁 Auto Obby Selesai!", "success") end
+        else
+            print("[AUTO OBBY] ⚠️ Gak verified — mungkin butuh join manual")
+            if Shared.Notify then Shared.Notify("⚠️ Finish gak ke-detect", "warning") end
+        end
+
+        -- ═══ STEP 6: TP BALIK HALLOWEEN ═══
+        if Shared.Notify then Shared.Notify("🏠 TP balik Halloween...", "info") end
+        local base = workspace:FindFirstChild("HalloweenHomeAnchor")
+            or workspace:FindFirstChild("HalloweenDropOffZoneBounds")
+        if base and base:IsA("BasePart") then
+            local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+            if r then
+                r.CFrame = CFrame.new(base.Position + Vector3.new(0, 5, 0))
+                r.Velocity = Vector3.zero
+                r.AssemblyLinearVelocity = Vector3.zero
+                print("[AUTO OBBY] ✅ Balik ke", base:GetFullName())
+            end
+        else
+            print("[AUTO OBBY] ⚠️ Halloween base gak ketemu")
+        end
+
+        ObbyState.Running = false
+        print("[AUTO OBBY] ══════════════════════════════════════")
+    end)
+end
+
+-- ============================================================
+-- 🌟 AUTO SERAPH — LOGIC (dipanggil dari UI)
+-- Flow: place 3 cherub (timeout 5s) → sanctify → collect → return
+-- ============================================================
+local AutoSeraph = {
+    Enabled  = false,
+    Running  = false,
+    Status   = "Idle",
+    _started = false,
+    _origPos = nil,
+}
+
+local function seraph_tpTo(pos)
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        root.CFrame = CFrame.new(pos + Vector3.new(0, 3, 0))
+        root.Velocity = Vector3.zero
+        root.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.2)
+    end
+end
+
+local function seraph_firePrompt(prompt)
+    if not prompt or not prompt:IsA("ProximityPrompt") then return false end
+    pcall(function()
+        prompt.HoldDuration = 0
+        prompt.MaxActivationDistance = math.huge
+        prompt.RequiresLineOfSight = false
+    end)
+    if typeof(fireproximityprompt) == "function" then
+        pcall(fireproximityprompt, prompt)
+        task.wait(0.3)
+        return true
+    end
+    pcall(function()
+        prompt:InputHoldBegin()
+        task.wait(0.1)
+        prompt:InputHoldEnd()
+    end)
+    task.wait(0.3)
+    return true
+end
+
+local function seraph_run()
+    if AutoSeraph.Running then return end
+    AutoSeraph.Running = true
+
+    task.spawn(function()
+        local char = LocalPlayer.Character
+        local hum  = char and char:FindFirstChildOfClass("Humanoid")
+        local root = char and char:FindFirstChild("HumanoidRootPart")
+        if not root or not hum then
+            AutoSeraph.Status = "❌ Karakter gak valid"
+            AutoSeraph.Running = false
+            AutoSeraph._started = false
+            return
+        end
+        AutoSeraph._origPos = root.Position
+
+        -- 1) Cari placer
+        AutoSeraph.Status = "🔍 Mencari Placer..."
+        local placers = {}
+        for _, d in ipairs(Workspace:GetDescendants()) do
+            if d.Name == "CherubPlacer" and d:IsA("BasePart") then
+                table.insert(placers, d)
+            end
+        end
+
+        if #placers < 3 then
+            AutoSeraph.Status = "❌ Placer kurang dari 3!"
+            AutoSeraph.Running = false
+            AutoSeraph._started = false
+            return
+        end
+
+        -- 2) Place 3 cherub (timeout 5s per placer)
+        for i = 1, 3 do
+            if not AutoSeraph.Enabled then
+                AutoSeraph.Status = "⏹ Dihentikan"
+                AutoSeraph.Running = false
+                AutoSeraph._started = false
+                return
+            end
+
+            AutoSeraph.Status = "📍 Ke Placer " .. i
+            seraph_tpTo(placers[i].Position)
+
+            local backpack = LocalPlayer:FindFirstChild("Backpack")
+            local toolToEquip = nil
+            if backpack then
+                for _, t in ipairs(backpack:GetChildren()) do
+                    if t:IsA("Tool") and t.Name:lower():find("cherub") then
+                        toolToEquip = t
+                        break
+                    end
+                end
+            end
+
+            if toolToEquip then
+                pcall(function() hum:EquipTool(toolToEquip) end)
+                task.wait(0.3)
+                local prompt = placers[i]:FindFirstChild("Place")
+                if prompt then seraph_firePrompt(prompt) end
+            end
+
+            AutoSeraph.Status = "⏳ Nunggu Cherub " .. i .. " masuk (Max 5s)..."
+            local waitStart = os.clock()
+            local placed = false
+            while os.clock() - waitStart < 5 do
+                if not toolToEquip or not toolToEquip.Parent then
+                    placed = true
+                    break
+                end
+                if not AutoSeraph.Enabled then
+                    AutoSeraph.Status = "⏹ Dihentikan"
+                    AutoSeraph.Running = false
+                    AutoSeraph._started = false
+                    return
+                end
+                task.wait(0.2)
+            end
+
+            AutoSeraph.Status = placed
+                and ("✅ Cherub " .. i .. " Berhasil!")
+                or  ("⚠️ Cherub " .. i .. " Timeout (Lanjut)")
+            task.wait(0.5)
+        end
+
+        -- 3) TP ke tengah (SeraphSpawn)
+        AutoSeraph.Status = "📍 Teleport ke Tengah..."
+        local seraphSpawn = Workspace:FindFirstChild("SeraphSpawn", true)
+        if seraphSpawn and seraphSpawn:IsA("BasePart") then
+            seraph_tpTo(seraphSpawn.Position)
+        end
+        task.wait(1)
+
+        -- 4) Sanctify
+        AutoSeraph.Status = "✨ Mencari Sanctify..."
+        local bigNest = Workspace:FindFirstChild("BigNest", true)
+        local sanctifyPrompt = bigNest and bigNest:FindFirstChild("Sanctify", true)
+
+        if sanctifyPrompt and sanctifyPrompt:IsA("ProximityPrompt") then
+            AutoSeraph.Status = "✨ Hold Sanctify..."
+            seraph_firePrompt(sanctifyPrompt)
+            task.wait(3)
+            AutoSeraph.Status = "✅ Sanctify Selesai!"
+        else
+            AutoSeraph.Status = "❌ Sanctify gak ketemu!"
+            AutoSeraph.Running = false
+            AutoSeraph._started = false
+            return
+        end
+
+        -- 5) Auto Collect Seraph
+        AutoSeraph.Status = "🧺 Auto Collect Seraph..."
+        if bigNest then
+            local pickupPrompt = bigNest:FindFirstChildWhichIsA("ProximityPrompt", true)
+            if pickupPrompt and pickupPrompt.ActionText
+                and pickupPrompt.ActionText:lower():find("collect") then
+                seraph_firePrompt(pickupPrompt)
+            end
+        end
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if obj.Name:lower():find("seraph") and obj:IsA("Model") then
+                local prompt = obj:FindFirstChildWhichIsA("ProximityPrompt", true)
+                if prompt then
+                    seraph_firePrompt(prompt)
+                    break
+                end
+            end
+        end
+        task.wait(1)
+
+        -- 6) Auto Return
+        AutoSeraph.Status = "🏠 Auto Return..."
+        local finalChar = LocalPlayer.Character
+        local finalRoot = finalChar and finalChar:FindFirstChild("HumanoidRootPart")
+        if finalRoot and AutoSeraph._origPos then
+            finalRoot.CFrame = CFrame.new(AutoSeraph._origPos + Vector3.new(0, 3, 0))
+            finalRoot.Velocity = Vector3.zero
+            finalRoot.AssemblyLinearVelocity = Vector3.zero
+        end
+
+        AutoSeraph.Status = "✅ Selesai Semua!"
+        task.wait(2)
+
+        AutoSeraph.Enabled  = false
+        AutoSeraph.Running  = false
+        AutoSeraph._started = false
+    end)
+end
+
+-- ============================================================
+-- PUBLIC API — dipanggil dari UI
+-- ============================================================
+function Features.getAutoSeraphState()
+    return AutoSeraph
+end
+
+function Features.setAutoSeraphEnabled(v)
+    v = v and true or false
+
+    if v then
+        -- ═══ ON ═══
+        AutoSeraph.Enabled = true
+        if not AutoSeraph.Running then
+            AutoSeraph._started = true
+            seraph_run()
+        end
+    else
+        -- ═══ OFF ═══
+        AutoSeraph.Enabled = false
+        AutoSeraph.Status = "⏹ Dihentikan"
+    end
+end
+
+-- alias biar kompatibel sama UI lu yang panggil F.startAutoSeraph()
+function Features.startAutoSeraph()
+    Features.setAutoSeraphEnabled(true)
+end
+
+    _G.VRILZ_Features = Features
+_G.VRILZ_Shared = Shared
+_G.VRILZ_UI_Shared = Shared
+print("[VRILZHUB] Ride a Pet Features v3.8 loaded")
+
+return Features
 
 -- ============================================================
 -- INFINITY JUMP (FIXED v2)
