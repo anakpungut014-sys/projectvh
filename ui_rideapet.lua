@@ -23,8 +23,8 @@ local IS_MOBILE = UserInputService.TouchEnabled and not UserInputService.Keyboar
 -- ====== UI CONFIG ======
 local UI_CONFIG = {
     MOBILE = {
-    WIN_W = 620,
-    WIN_H = 720,
+    WIN_W = 340,
+    WIN_H = 560,
     -- Note: di HP viewport < 452px, ini otomatis di-clamp jadi viewport.X - 32
 
     SIDEBAR_W = 64,     -- dari 58 → 64 (biar icon tab gak kejepit)
@@ -66,7 +66,7 @@ local UI_CONFIG = {
     CHAT_PANEL_H = 340,
 },
     PC = {
-        WIN_W = 800, WIN_H = 580,
+        WIN_W = 720, WIN_H = 480,
         SIDEBAR_W = 152, TAB_H = 46, TAB_ICON = 17, TAB_SHOW_LABEL = true,
         CARD_HEADER = 36, CARD_PAD_TOP = 12, CARD_PAD_BOT = 14, CARD_PAD_SIDE = 16,
         CARD_GAP = 9, TOGGLE_H = 34, TOGGLE_W = 48, TOGGLE_KNOB = 18,
@@ -4623,13 +4623,13 @@ local function buildMainWindow(parent)
 
     local winW, winH
 if IS_MOBILE then
-    local maxW = viewport.X - 8       -- ← cuma 4px kiri-kanan
-    local maxH = viewport.Y - 20      -- ← cuma 10px atas-bawah
-    winW = math.min(CFG.WIN_W, maxW)
-    winH = math.min(CFG.WIN_H, maxH)
+    -- Samakan dengan SenaHub: ~88% x 78% viewport
+    winW = math.floor(math.clamp(viewport.X * 0.88, 280, 400))
+    winH = math.floor(math.clamp(viewport.Y * 0.78, 340, 620))
 else
-    winW = math.min(CFG.WIN_W, math.floor(viewport.X * 0.7))
-    winH = math.min(CFG.WIN_H, math.floor(viewport.Y * 0.78))
+    -- Samakan dengan SenaHub: 720 x 480
+    winW = math.min(720, math.floor(viewport.X * 0.90))
+    winH = math.min(480, math.floor(viewport.Y * 0.88))
 end
 
     local main = Instance.new("Frame")
