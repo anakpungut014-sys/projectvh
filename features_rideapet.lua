@@ -5898,6 +5898,11 @@ function Features.isCamLockActive()
     return CamLock.Active
 end
 
+-- ⭐ Force unlock dari UI (pas toggle OFF di tengah steal)
+function Features.forceCamUnlock()
+    camLock_stop()
+end
+
 -- ============================================================
 -- STEAL EXECUTOR — LOGIC ONLY (dipanggil dari UI)
 -- Tanpa GUI, tanpa toggle. UI yang bikin tombol, ini yang jalanin.
