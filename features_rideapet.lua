@@ -1989,7 +1989,6 @@ local function getEggRarity(eggName)
                 if ra then return tostring(ra) end
             end
         end
-    end
 
     -- ⭐ PRIORITY 3: Fallback "Unknown" (BUKAN "Common")
     return "Unknown"
