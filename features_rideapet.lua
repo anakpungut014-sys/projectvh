@@ -1148,12 +1148,16 @@ local lastNoEggNotif = 0
 function Features.startAutoSteal()
     task.spawn(function()
 while task.wait(0.5) do
-    if not Shared.AutoSteal_Enabled then
-        -- ⭐ Cleanup camera lock kalau OFF
-        if CameraLock.Active then camLock_release("Auto Steal OFF") end
-        continue
-    end
+if not Shared.AutoSteal_Enabled then
+    if CameraLock.Active then camLock_release("Auto Steal OFF") end
+    continue
+end
 
+-- ⭐⭐⭐ FIX: ENGAGE camera lock LANGSUNG pas Auto Steal ON ⭐⭐⭐
+-- biar user liat base, bukan karakter yang lagi TP-TP
+if not CameraLock.Active then
+    camLock_engage("Auto Steal")
+end
             -- ⭐⭐⭐ FIX: JANGAN STEAL KALO LAGI PEGANG CANDY ⭐⭐⭐
             if LocalPlayer:GetAttribute("CarriedCandyModel") ~= nil
                or LocalPlayer:GetAttribute("CarryingCandy") == true
@@ -1197,19 +1201,45 @@ end
                 continue
             end
 
-            local eggName = Shared.SelectedEgg or "Cherub"
-            local egg = findEggByName(eggName)
+-- ✅ FIX: Prioritas RARITY dulu, fallback ke nama spesifik
+local egg = nil
+local eggLabel = "?"
 
-            if not egg then
-                local now = os.clock()
-                if now - lastNoEggNotif > 5 then
-                    lastNoEggNotif = now
-                    if Shared.Notify then
-                        Shared.Notify("Egg no spawn: " .. eggName, "warning")
-                    end
-                end
-                continue
+-- 1) Coba cari by RARITY yang dipilih (kayak Auto Farm)
+local best = getBestEggInMap()  -- fungsi ini udah cek Shared.SelectedRarities
+if best and best.egg then
+    egg = best.egg
+    eggLabel = egg.Name .. " [" .. best.rarity .. "]"
+end
+
+-- 2) Fallback: kalo gak ada rarity match, coba by nama spesifik
+if not egg and Shared.SelectedEgg and Shared.SelectedEgg ~= "" then
+    egg = findEggByName(Shared.SelectedEgg)
+    if egg then eggLabel = egg.Name .. " [by name]" end
+end
+
+-- 3) Masih gak ada? Skip dengan notif
+if not egg then
+    local now = os.clock()
+    if now - lastNoEggNotif > 5 then
+        lastNoEggNotif = now
+        -- ⭐ Kasih tau user: pilih rarity atau egg dulu
+        local hasRarity = false
+        if Shared.SelectedRarities then
+            for _, v in pairs(Shared.SelectedRarities) do
+                if v then hasRarity = true; break end
             end
+        end
+        local msg
+        if not hasRarity and (not Shared.SelectedEgg or Shared.SelectedEgg == "") then
+            msg = "⚠️ Pilih RARITY atau EGG dulu di UI!"
+        else
+            msg = "Egg target gak spawn: " .. tostring(Shared.SelectedEgg or "?")
+        end
+        if Shared.Notify then Shared.Notify(msg, "warning") end
+    end
+    continue
+end
 
             local eggPart = egg:FindFirstChildWhichIsA("BasePart", true)
             local prompt = egg:FindFirstChild("Pickup", true)
@@ -1218,9 +1248,6 @@ end
             if prompt:IsA("ProximityPrompt") then
                 prompt.HoldDuration = 0
             end
-
-    -- ⭐ ENGAGE camera lock ke base SEBELUM steal
-    camLock_engage("Auto Steal")
                 
             myRoot.CFrame = eggPart.CFrame + Vector3.new(0, 3, 0)
             task.wait(0.1)
@@ -1909,7 +1936,23 @@ if GameData then
     local eggsMod = GameData:FindFirstChild("Eggs")
     if eggsMod then
         local ok, data = pcall(require, eggsMod)
-        if ok and type(data) == "table" then EggData = data end
+        if ok and type(data) == "table" then
+            EggData = data
+            local count = 0
+            for _ in pairs(EggData) do count = count + 1 end
+            print("[VRILZ] ✅ EggData loaded: " .. count .. " entries")
+            -- ⭐ DEBUG: print 3 sample
+            local n = 0
+            for name, info in pairs(EggData) do
+                print("  - " .. name .. " → " .. tostring(info.Rarity or "?"))
+                n = n + 1
+                if n >= 3 then break end
+            end
+        else
+            warn("[VRILZ] ❌ require(GameData.Eggs) failed: " .. tostring(data))
+        end
+    else
+        warn("[VRILZ] ❌ GameData.Eggs not found")
     end
     local petsMod = GameData:FindFirstChild("Pets")
     if petsMod then
@@ -1926,10 +1969,28 @@ local RARITY_ORDER = {
 }
 
 local function getEggRarity(eggName)
+    -- ⭐ PRIORITY 1: GameData
     local info = EggData[eggName]
-    return info and info.Rarity or "Common"
-end
+    if info and info.Rarity then return info.Rarity end
 
+    -- ⭐ PRIORITY 2: Attribute di instance egg real (paling akurat kalo GameData kosong)
+    local rendered = Workspace:FindFirstChild("RenderedEggs")
+    if rendered then
+        local egg = rendered:FindFirstChild(eggName)
+        if egg then
+            local r = egg:GetAttribute("Rarity")
+            if r then return tostring(r) end
+            -- Coba juga di descendant
+            for _, d in ipairs(egg:GetDescendants()) do
+                local ra = d:GetAttribute and d:GetAttribute("Rarity")
+                if ra then return tostring(ra) end
+            end
+        end
+    end
+
+    -- ⭐ PRIORITY 3: Fallback
+    return "Common"
+end
 local function isRaritySelected(eggName)
     local rarity = getEggRarity(eggName)
     if not Shared.SelectedRarities then return false end
@@ -5848,12 +5909,28 @@ local function camLock_getBaseCFrame()
     if spawnPart then
         return spawnPart.CFrame + Vector3.new(0, 8, 0)
     end
-    -- Fallback: posisi karakter sekarang
-    local char = LocalPlayer.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if root then
-        return root.CFrame + Vector3.new(0, 8, 0)
+
+    -- ⭐ FALLBACK 1: cari plot manual dengan berbagai attribute
+    local plots = Workspace:FindFirstChild("Plots")
+    if plots then
+        for _, plot in ipairs(plots:GetChildren()) do
+            local owner = plot:GetAttribute("OwnerUserId")
+                or plot:GetAttribute("Owner")
+                or plot:GetAttribute("OwnerName")
+            if tostring(owner) == tostring(LocalPlayer.UserId)
+               or tostring(owner) == LocalPlayer.Name then
+                local sp = plot:FindFirstChild("Spawn", true)
+                    or plot:FindFirstChildWhichIsA("SpawnLocation", true)
+                    or plot:FindFirstChildWhichIsA("BasePart", true)
+                if sp then
+                    return sp.CFrame + Vector3.new(0, 8, 0)
+                end
+            end
+        end
     end
+
+    -- ⭐ JANGAN fallback ke posisi karakter!
+    -- Return nil = skip lock (biar user tau plot gak ketemu)
     return nil
 end
 
@@ -5862,9 +5939,12 @@ local function camLock_engage(label)
     local cam = workspace.CurrentCamera
     if not cam then return false end
 
-    local baseCF = camLock_getBaseCFrame()
+       local baseCF = camLock_getBaseCFrame()
     if not baseCF then
         warn("[CamLock] Base CFrame gak ketemu — skip lock")
+        if Shared and Shared.Notify then
+            Shared.Notify("⚠️ Gak bisa lock kamera — plot gak ketemu!", "warning")
+        end
         return false
     end
 
