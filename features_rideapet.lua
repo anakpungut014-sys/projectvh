@@ -1135,7 +1135,6 @@ end
 -- ⭐ WRAPPER — Auto pilih Step / Instant
 local function doReturnToPlot()
     if not Shared.MutationReturn_Enabled then 
-        print("[RETURN] ❌ MutationReturn_Enabled = false")
         return 
     end
 
@@ -5028,7 +5027,6 @@ end
 -- 6) COLLECT YIN/YANG
 local function yinCollect(itemName)
     if isHoldingRitualItem(itemName) then
-        print("[YIN] ⏭️ " .. itemName .. " udah di tangan — SKIP collect")
         return true
     end
 
@@ -5079,11 +5077,8 @@ local function yinPlace(itemName)
     -- ⭐ Cek cooldown di awal
     local onCd, sisaCd = isCaveOnCooldown()
     if onCd then
-        print("[YIN PLACE] ⏳ Cave cooldown " .. sisaCd .. "s — ABORT")
         return false
     end
-
-    print("[YIN PLACE] 🎯 Mencari prompt 'Place " .. itemName .. "'...")
     local startTime = os.clock()
     local lastFireTime = 0
     local isPlacedFn = (itemName == "Yin") and isYinPlaced or isYangPlaced
@@ -5122,14 +5117,12 @@ local function yinPlace(itemName)
 
         -- ⭐ Cek udah placed belum
         if isPlacedFn() then
-            print("[YIN PLACE] ✅ " .. itemName .. " udah di-place!")
             return true
         end
 
         -- ⭐ Cek cooldown tiap loop
         local cdNow, sisaNow = isCaveOnCooldown()
         if cdNow then
-            print("[YIN PLACE] ⏳ Cave cooldown muncul " .. sisaNow .. "s — ABORT")
             return false
         end
 
@@ -5169,10 +5162,8 @@ local function yinPlace(itemName)
 
     -- Final check
     if isPlacedFn() then
-        print("[YIN PLACE] ✅ " .. itemName .. " placed di final check!")
         return true
     end
-    print("[YIN PLACE] ❌ Timeout 20s — " .. itemName .. " gagal place")
     return false
 end
 
@@ -5180,7 +5171,6 @@ end
 local function yinCollectReward()
     local hr = Workspace:FindFirstChild("HeadlessRitual")
     if not hr then
-        print("[YIN REWARD] ❌ HeadlessRitual gak ada")
         return false
     end
 
@@ -5227,21 +5217,17 @@ local function yinCollectReward()
         end
         return false, nil
     end
-
-    print("[YIN REWARD] 🎁 Mulai collect reward...")
     local startTime = os.clock()
     local fireCount = 0
 
     while os.clock() - startTime < 20 do
         if not YinRitualState.Enabled then
-            print("[YIN REWARD] ⏸️ Yin OFF — abort")
             return false
         end
 
         -- ⭐ PRIORITAS #1: Cek reward udah di tangan SEBELUM apapun
         local inHand, source = isRewardInHand()
         if inHand then
-            print("[YIN REWARD] ✅ Reward ke-tangan (" .. tostring(source) .. ")")
             return true
         end
 
@@ -5255,11 +5241,9 @@ local function yinCollectReward()
             task.wait(0.5)
             inHand, source = isRewardInHand()
             if inHand then
-                print("[YIN REWARD] ✅ Reward ke-tangan setelah prompt hilang (" .. tostring(source) .. ")")
                 return true
             end
             -- Masih gak ada reward = kemungkinan reward belum di-spawn server
-            print("[YIN REWARD] ⚠️ Prompt hilang tapi reward belum ke-tangan — tunggu...")
             task.wait(1)
             continue
         end
@@ -5299,7 +5283,6 @@ local function yinCollectReward()
         end
 
         if not pos then
-            print("[YIN REWARD] ⚠️ Pos gak ketemu — retry...")
             task.wait(0.5)
             continue
         end
@@ -5366,7 +5349,6 @@ local function yinCollectReward()
         task.wait(0.1)
         inHand, source = isRewardInHand()
         if inHand then
-            print("[YIN REWARD] ✅ Reward ke-tangan instan setelah fire #" .. fireCount .. " (" .. tostring(source) .. ")")
             return true
         end
 
@@ -5377,14 +5359,11 @@ local function yinCollectReward()
             task.wait(0.3)
             inHand, source = isRewardInHand()
             if inHand then
-                print("[YIN REWARD] ✅ Reward ke-tangan, prompt hilang (" .. tostring(source) .. ")")
                 return true
             end
-            print("[YIN REWARD] ⚠️ Prompt hilang tapi reward belum ke-tangan — tunggu 2s...")
             task.wait(2)
             inHand, source = isRewardInHand()
             if inHand then
-                print("[YIN REWARD] ✅ Reward ke-tangan delayed (" .. tostring(source) .. ")")
                 return true
             end
         end
@@ -5396,11 +5375,9 @@ local function yinCollectReward()
     -- ⭐ FINAL CHECK — reward mungkin masuk telat
     local inHand, source = isRewardInHand()
     if inHand then
-        print("[YIN REWARD] ✅ Reward ke-tangan di final check (" .. tostring(source) .. ")")
         return true
     end
 
-    print("[YIN REWARD] ❌ Timeout 20s — reward GAK ke-tangan")
     return false
 end
 
@@ -5415,7 +5392,6 @@ local function yinReturnToBase()
         local part = Workspace:FindFirstChild(name, true)
         if part and part:IsA("BasePart") then
             base = part
-            print("[YIN RETURN] Base:", part:GetFullName())
             break
         end
     end
@@ -5478,7 +5454,6 @@ local function yinReturnToBase()
         r.AssemblyLinearVelocity = Vector3.zero
     end
 
-    print("[YIN RETURN] ✅ Selesai")
     return true
 end
 
@@ -5803,7 +5778,6 @@ local function cameraLockToBase()
         c.CFrame = CFrame.lookAt(basePos + offset, basePos + Vector3.new(0, 2, 0))
     end)
 
-    print("[CameraLock] ✅ Kamera dikunci di base:", base:GetFullName())
     return true
 end
 
@@ -5842,8 +5816,6 @@ local function cameraUnlockToCharacter()
     CameraLock._origCameraType = nil
     CameraLock._origCameraSubject = nil
     CameraLock._basePos = nil
-
-    print("[CameraLock] 🔓 Kamera balik ke karakter")
 end
 
 -- ⭐⭐⭐ FIX: reset state penuh + unbind paksa + unlock pas respawn ⭐⭐⭐
@@ -6350,15 +6322,11 @@ function Features.startAutoObby()
         local STAY_START_1  = 10   -- diam 10 detik pertama
         local STAY_START_2  = 3    -- tambahan 3 detik
 
-        print("[AUTO OBBY] ══════════════════════════════════════")
-        print("[AUTO OBBY] v10 — TP Start → 10s → +3s → Glide Finish → Verify → Return")
-
         -- ═══ HELPER: GLIDE ═══
-        local function glideTo(targetPos, stepSize, label)
+            local function glideTo(targetPos, stepSize)
             local char = player.Character
             local root = char and char:FindFirstChild("HumanoidRootPart")
             if not root then
-                print("[AUTO OBBY] ❌", label, "- HRP gak ada")
                 return false
             end
 
@@ -6366,9 +6334,6 @@ function Features.startAutoObby()
             local target = Vector3.new(targetPos.X, targetPos.Y + 5, targetPos.Z)
             local totalDist = (target - startP).Magnitude
             local steps = math.max(1, math.ceil(totalDist / stepSize))
-
-            print(string.format("[AUTO OBBY] 🛸 %s — dist %.0f, %d step @ %d/step",
-                label, totalDist, steps, stepSize))
 
             local dir = (target - startP)
             if dir.Magnitude > 1 then dir = dir.Unit else dir = Vector3.zero end
@@ -6382,34 +6347,26 @@ function Features.startAutoObby()
                 r.CFrame = CFrame.new(newPos)
                 r.Velocity = Vector3.zero
                 r.AssemblyLinearVelocity = Vector3.zero
-                if i % 5 == 0 or i == steps then
-                    print(string.format("[AUTO OBBY]   step %d/%d", i, steps))
-                end
                 task.wait(GLIDE_WAIT)
             end
-            print("[AUTO OBBY] ✅", label, "selesai")
             return true
         end
 
         -- ═══ HELPER: TP LANGSUNG ═══
-        local function tpDirect(targetPos, label)
+            local function tpDirect(targetPos)
             local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
             if not r then
-                print("[AUTO OBBY] ❌", label, "- HRP gak ada")
                 return false
             end
             r.CFrame = CFrame.new(targetPos + Vector3.new(0, 5, 0))
             r.Velocity = Vector3.zero
             r.AssemblyLinearVelocity = Vector3.zero
-            print("[AUTO OBBY] 📍 TP langsung ke", label, ":", tostring(targetPos))
             return true
         end
 
         -- ═══ HELPER: DIAM DI POSISI ═══
-        local function stayAt(pos, duration, label)
-            print(string.format("[AUTO OBBY] ⏳ Diam %.0f detik di %s...", duration, label))
+            local function stayAt(pos, duration)
             local stayStart = tick()
-            local lastLog = 0
             while tick() - stayStart < duration do
                 if not ObbyState.Running then return false end
                 local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
@@ -6418,14 +6375,8 @@ function Features.startAutoObby()
                     r.Velocity = Vector3.zero
                     r.AssemblyLinearVelocity = Vector3.zero
                 end
-                local elapsed = tick() - stayStart
-                if elapsed - lastLog >= 2 then
-                    print(string.format("[AUTO OBBY]   ⏳ %.0f/%.0f detik", elapsed, duration))
-                    lastLog = elapsed
-                end
                 task.wait(0.15)
             end
-            print(string.format("[AUTO OBBY] ✅ %.0f detik di %s selesai", duration, label))
             return true
         end
 
@@ -6441,19 +6392,19 @@ function Features.startAutoObby()
                 local fm = rf and rf:FindFirstChild("Finish")
                 if fm then
                     local ok, p = pcall(function() return fm:GetPivot().Position end)
-                    if ok then print("[AUTO OBBY] Finish dari Run folder lu"); return p end
+                    if ok then return p end
                 end
                 for _, rf2 in ipairs(obbyFolder:GetChildren()) do
                     local fm2 = rf2:FindFirstChild("Finish")
                     if fm2 then
                         local ok, p = pcall(function() return fm2:GetPivot().Position end)
-                        if ok then print("[AUTO OBBY] Finish dari Run folder lain:", rf2.Name); return p end
+                        if ok then return p end
                     end
                 end
                 for _, d in ipairs(obbyFolder:GetDescendants()) do
                     if d.Name == "Finish" and (d:IsA("Model") or d:IsA("BasePart")) then
                         local ok, p = pcall(function() return d:GetPivot().Position end)
-                        if ok then print("[AUTO OBBY] Finish dari descendant:", d:GetFullName()); return p end
+                        if ok then return p end
                     end
                 end
             end
@@ -6461,7 +6412,6 @@ function Features.startAutoObby()
             for _, name in ipairs({"HalloweenObbyFinish","ObbyFinish","FinishObby","HalloweenObbyFinishPart","ObbyFinishPart"}) do
                 local p = workspace:FindFirstChild(name, true)
                 if p and p:IsA("BasePart") then
-                    print("[AUTO OBBY] Finish dari part statis:", name)
                     return p.Position
                 end
             end
@@ -6470,7 +6420,7 @@ function Features.startAutoObby()
 
         -- ═══ STEP 1: TP LANGSUNG KE START ═══
         if Shared.Notify then Shared.Notify("📍 TP ke Start...", "info") end
-        if not tpDirect(OBBY_START_FIXED, "Start") then
+        if not tpDirect(OBBY_START_FIXED) then
             ObbyState.Running = false
             return
         end
@@ -6478,14 +6428,14 @@ function Features.startAutoObby()
 
         -- ═══ STEP 2: DIAM 10 DETIK DI START ═══
         if Shared.Notify then Shared.Notify("⏳ Diam 10 detik di Start...", "info") end
-        if not stayAt(OBBY_START_FIXED, STAY_START_1, "Start") then
+        if not stayAt(OBBY_START_FIXED, STAY_START_1) then
             ObbyState.Running = false
             return
         end
 
         -- ═══ STEP 3: TAMBAHAN 3 DETIK DI START ═══
         if Shared.Notify then Shared.Notify("⏳ Tambahan 3 detik...", "info") end
-        if not stayAt(OBBY_START_FIXED, STAY_START_2, "Start (+3s)") then
+        if not stayAt(OBBY_START_FIXED, STAY_START_2) then
             ObbyState.Running = false
             return
         end
@@ -6493,21 +6443,19 @@ function Features.startAutoObby()
         -- ═══ STEP 4: GLIDE KE FINISH ═══
         local finishPos = findFinishPos()
         if not finishPos then
-            print("[AUTO OBBY] ⚠️ Finish gak ketemu — coba join manual dulu")
             if Shared.Notify then Shared.Notify("⚠️ Finish gak ketemu — join obby manual dulu", "warning") end
             ObbyState.Running = false
             return
         end
 
         if Shared.Notify then Shared.Notify("🛸 Glide ke Finish (100/step)...", "info") end
-        if not glideTo(finishPos, GLIDE_STEP_FINISH, "Finish") then
+        if not glideTo(finishPos, GLIDE_STEP_FINISH) then
             ObbyState.Running = false
             return
         end
         task.wait(0.5)
 
         -- ═══ STEP 5: VERIFIKASI FINISH ═══
-        print("[AUTO OBBY] Verifikasi finish...")
         local verified = false
         local verifyStart = tick()
         while tick() - verifyStart < 10 do
@@ -6522,11 +6470,9 @@ function Features.startAutoObby()
         end
 
         if verified then
-            print("[AUTO OBBY] ✅ FINISH VERIFIED")
             if writefile then pcall(writefile, "vrilz_obby_time.txt", tostring(os.time())) end
             if Shared.Notify then Shared.Notify("🏁 Auto Obby Selesai!", "success") end
         else
-            print("[AUTO OBBY] ⚠️ Gak verified — mungkin butuh join manual")
             if Shared.Notify then Shared.Notify("⚠️ Finish gak ke-detect", "warning") end
         end
 
@@ -6534,20 +6480,16 @@ function Features.startAutoObby()
         if Shared.Notify then Shared.Notify("🏠 TP balik Halloween...", "info") end
         local base = workspace:FindFirstChild("HalloweenHomeAnchor")
             or workspace:FindFirstChild("HalloweenDropOffZoneBounds")
-        if base and base:IsA("BasePart") then
+                if base and base:IsA("BasePart") then
             local r = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
             if r then
                 r.CFrame = CFrame.new(base.Position + Vector3.new(0, 5, 0))
                 r.Velocity = Vector3.zero
                 r.AssemblyLinearVelocity = Vector3.zero
-                print("[AUTO OBBY] ✅ Balik ke", base:GetFullName())
             end
-        else
-            print("[AUTO OBBY] ⚠️ Halloween base gak ketemu")
         end
 
         ObbyState.Running = false
-        print("[AUTO OBBY] ══════════════════════════════════════")
     end)
 end
 
