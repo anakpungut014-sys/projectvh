@@ -1917,8 +1917,23 @@ local RARITY_ORDER = {
 }
 
 local function getEggRarity(eggName)
+    -- Coba GameData dulu
     local info = EggData[eggName]
-    return info and info.Rarity or "Common"
+    if info and info.Rarity then return info.Rarity end
+    
+    -- Fallback: cek attribute dari egg instance
+    local rendered = Workspace:FindFirstChild("RenderedEggs")
+    if rendered then
+        local egg = rendered:FindFirstChild(eggName)
+        if egg then
+            local rar = egg:GetAttribute("Rarity")
+                   or egg:GetAttribute("RarityName")
+                   or egg:GetAttribute("Tier")
+            if rar then return tostring(rar) end
+        end
+    end
+    
+    return "Common"
 end
 
 local function isRaritySelected(eggName)
@@ -3413,12 +3428,13 @@ end
                 Shared.MutationSteal_Active = true
                 camLock_start()   -- 🎥 KAMERA LOCK KE BASE
 
-                local eggPart = volcanicEgg:FindFirstChildWhichIsA("BasePart", true)
-                if not eggPart then
-                    Shared.MutationSteal_Active = false
-                    task.wait(1)
-                    continue
-                end
+local eggPart = volcanicEgg:FindFirstChildWhichIsA("BasePart", true)
+if not eggPart then
+    camLock_stop()   -- 🎥 FIX
+    Shared.MutationSteal_Active = false
+    task.wait(1)
+    continue
+end
 
                 -- Step 1: TP ke spawn Volcanic (kalo jauh)
                 local spawnPart = getVolcanicSpawn()
@@ -3469,19 +3485,21 @@ end
                     picked = isHoldingEggMutation()
                 end
 
-                if not picked or not isHoldingEggMutation() then
-                    Shared.MutationSteal_Active = false
-                    task.wait(2)
-                    continue
-                end
+if not picked or not isHoldingEggMutation() then
+    camLock_stop()   -- 🎥 FIX
+    Shared.MutationSteal_Active = false
+    task.wait(2)
+    continue
+end
 
                 -- Step 5: Keluar cave (reverse waypoint)
-                local exited = exitCave()
-                if not exited or not isHoldingEggMutation() then
-                    Shared.MutationSteal_Active = false
-                    task.wait(2)
-                    continue
-                end
+local exited = exitCave()
+if not exited or not isHoldingEggMutation() then
+    camLock_stop()   -- 🎥 FIX
+    Shared.MutationSteal_Active = false
+    task.wait(2)
+    continue
+end
 
                                 -- Step 6: KE MAGMA (drop)
                 if isHoldingEggMutation() then
@@ -3569,11 +3587,12 @@ doReturnToPlot()
             local egg = targetEgg
             local eggPart = egg:FindFirstChildWhichIsA("BasePart", true)
             local prompt = egg:FindFirstChild("Pickup", true)
-            if not eggPart or not prompt then
-                Shared.MutationSteal_Active = false
-                task.wait(0.5)
-                continue
-            end
+if not eggPart or not prompt then
+    camLock_stop()   -- 🎥 FIX
+    Shared.MutationSteal_Active = false
+    task.wait(0.5)
+    continue
+end
 
             if prompt:IsA("ProximityPrompt") then
                 prompt.HoldDuration = 0
@@ -3605,13 +3624,13 @@ doReturnToPlot()
                 end
             end
 
-            -- ⭐ FIX: Kalo gagal pickup, skip
-            if not picked or not isHoldingEggMutation() then
-                Shared.MutationSteal_Active = false
-                task.wait(1)
-                continue
-            end
-
+-- ⭐ FIX: Kalo gagal pickup, skip
+if not picked or not isHoldingEggMutation() then
+    camLock_stop()   -- 🎥 FIX
+    Shared.MutationSteal_Active = false
+    task.wait(1)
+    continue
+end
             -- ⭐ STEP: TP KE LAVA (sama kayak Volcanic Step 6)
             task.wait(0.5)
             local safePos = findSafeVolcanoPos()
