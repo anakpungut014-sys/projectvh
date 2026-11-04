@@ -3208,7 +3208,7 @@ local function runMutationOnce()
     task.wait(1.5)
 
     local safePos = findSafeVolcanoPos()
-    tpToSafeMode(safePos)  -- ⬅️ UBAH
+    tpToSafeMode(safePos)
     task.wait(2)
 
     local dropWaited = 0
@@ -3236,14 +3236,13 @@ local function runMutationOnce()
         return false
     end
 
-           local retWaited = 0
+    local retWaited = 0
     while retWaited < MUT_CONFIG.RETURN_TIMEOUT do
         task.wait(1)
         retWaited = retWaited + 1
         if isHoldingEggMutation() then break end
     end
 
-    -- ⭐ STABILIZE: toleransi flicker 3s
     local stableStart = os.clock()
     local missStart = nil
     local stableOk = false
@@ -3268,11 +3267,10 @@ local function runMutationOnce()
         return false
     end
 
-              -- 🏆 PLATINUM WEBHOOK TRIGGER
     if _G.VRILZ_SendWebhook then
         local cleanEggName = normalizeEggName(eggName)
         local eggInfo = _G.VRILZ_GetEggInfo and _G.VRILZ_GetEggInfo(cleanEggName) or {}
-        
+
         _G.VRILZ_SendWebhook("mutation", {
             title = "MUTATION COMPLETE",
             description = "Egg berhasil di-mutasi! 🎉\n*Reward telah diklaim*",
@@ -3285,11 +3283,11 @@ local function runMutationOnce()
         })
     end
 
-            if Shared.MutationReturn_Enabled then
-        task.wait(0.5)  -- jeda webhook
+    if Shared.MutationReturn_Enabled then
+        task.wait(0.5)
         local oldFlag = Shared.AutoReturn_Enabled
         Shared.AutoReturn_Enabled = true
-        doReturnToPlot()  -- delay 4s udah ada di dalam returnToMyPlot/instantReturnToPlot
+        doReturnToPlot()
         Shared.AutoReturn_Enabled = oldFlag
     end
 
