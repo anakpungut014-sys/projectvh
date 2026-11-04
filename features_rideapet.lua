@@ -3611,14 +3611,22 @@ local egg = targetEgg
                 prompt.HoldDuration = 0
             end
 
-                        local picked = false
+                                    local picked = false
 
-                        if Shared.StealMode == "Fly" then
+            if Shared.StealMode == "Fly" then
                 picked = doStealFly(egg, prompt, eggPart)
             elseif Shared.StealMode == "TP GLIDE" then
                 picked = doStealGlide(egg, prompt, eggPart)
             else
-                myRoot.CFrame = eggPart.CFrame + Vector3.new(0, 3, 0)
+                -- ⭐ FIX: Re-fetch myRoot dan guard pake pcall biar gak crash
+                local currentRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if currentRoot and eggPart and eggPart.Parent then
+                    pcall(function()
+                        currentRoot.CFrame = eggPart.CFrame + Vector3.new(0, 3, 0)
+                        currentRoot.Velocity = Vector3.zero
+                        currentRoot.AssemblyLinearVelocity = Vector3.zero
+                    end)
+                end
                 task.wait(0.1)
 
                 for i = 1, 15 do
@@ -3626,17 +3634,27 @@ local egg = targetEgg
                         pcall(fireproximityprompt, prompt)
                     end
                     task.wait(0.25)
+                    
                     if not isEggStillInMap(egg) then
                         picked = true
                         break
                     end
+                    
+                    -- ⭐ FIX: Re-fetch myRoot terus tiap loop dan pake pcall
                     if eggPart and eggPart.Parent then
-                        myRoot.CFrame = eggPart.CFrame + Vector3.new(0, 3, 0)
+                        local freshRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        if freshRoot then
+                            pcall(function()
+                                freshRoot.CFrame = eggPart.CFrame + Vector3.new(0, 3, 0)
+                                freshRoot.Velocity = Vector3.zero
+                                freshRoot.AssemblyLinearVelocity = Vector3.zero
+                            end)
+                        end
                         task.wait(0.1)
                     end
                 end
             end
-
+                
             -- ⭐ FIX: Kalo gagal pickup, skip
             if not picked or not isHoldingEggMutation() then
                 Shared.MutationSteal_Active = false
