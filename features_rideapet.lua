@@ -1147,8 +1147,12 @@ local lastNoEggNotif = 0
 
 function Features.startAutoSteal()
     task.spawn(function()
-        while task.wait(0.5) do
-            if not Shared.AutoSteal_Enabled then continue end
+while task.wait(0.5) do
+    if not Shared.AutoSteal_Enabled then
+        -- ⭐ Cleanup camera lock kalau OFF
+        if CameraLock.Active then camLock_release("Auto Steal OFF") end
+        continue
+    end
 
             -- ⭐⭐⭐ FIX: JANGAN STEAL KALO LAGI PEGANG CANDY ⭐⭐⭐
             if LocalPlayer:GetAttribute("CarriedCandyModel") ~= nil
@@ -1215,6 +1219,9 @@ end
                 prompt.HoldDuration = 0
             end
 
+    -- ⭐ ENGAGE camera lock ke base SEBELUM steal
+    camLock_engage("Auto Steal")
+                
             myRoot.CFrame = eggPart.CFrame + Vector3.new(0, 3, 0)
             task.wait(0.1)
 
@@ -1236,6 +1243,8 @@ end
 
             if picked and Shared.AutoReturn_Enabled then
                 returnToMyPlot()
+                -- ⭐ RELEASE camera lock setelah balik base
+                camLock_release("Auto Steal done")
             end
 
             task.wait(0.3)
@@ -3232,11 +3241,12 @@ end
 
 function Features.startAutoMutation()
     task.spawn(function()
-        while task.wait(1) do
-            if not Shared.AutoMutation_Enabled then
-                MutationState.Running = false
-                continue
-            end
+while task.wait(1) do
+    if not Shared.AutoMutation_Enabled then
+        MutationState.Running = false
+        if CameraLock.Active then camLock_release("Auto Mutation OFF") end
+        continue
+    end
 
             -- ⭐⭐⭐ FIX: JANGAN STEAL KALO LAGI PEGANG CANDY ⭐⭐⭐
             if LocalPlayer:GetAttribute("CarriedCandyModel") ~= nil
@@ -3289,17 +3299,18 @@ end
             end
 
             -- ⭐ Cek egg di tangan
-            if isHoldingEggMutation() then
-                -- ⭐ Cek tambahan: kalo lagi di dalam cave, JANGAN dip dulu
-                -- Tunggu sampe keluar cave (posisi Y > 41000 = di luar cave)
+                        if isHoldingEggMutation() then
                 local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                 if myRoot and myRoot.Position.Y < 41000 then
-                    -- Masih di dalam cave → tunggu
                     task.wait(1)
                     continue
                 end
 
+                -- ⭐ ENGAGE camera lock sebelum mutation
+                camLock_engage("Auto Mutation")
                 pcall(runMutationOnce)
+                -- ⭐ RELEASE setelah return selesai (runMutationOnce udah return ke plot)
+                camLock_release("Auto Mutation done")
                 task.wait(2)
             end
         end
@@ -3321,11 +3332,12 @@ end
 -- ============================================================
 function Features.startMutationSteal()
     task.spawn(function()
-        while task.wait(0.5) do
-            if not Shared.MutationSteal_Enabled then
-                Shared.MutationSteal_Active = false
-                continue
-            end
+while task.wait(0.5) do
+    if not Shared.MutationSteal_Enabled then
+        Shared.MutationSteal_Active = false
+        if CameraLock.Active then camLock_release("Mutation Steal OFF") end
+        continue
+    end
 
             -- ⭐⭐⭐ FIX: JANGAN STEAL KALO LAGI PEGANG CANDY ⭐⭐⭐
             if LocalPlayer:GetAttribute("CarriedCandyModel") ~= nil
@@ -3406,6 +3418,9 @@ end
                 continue
             end
 
+    -- ⭐ ENGAGE camera lock ke base
+    camLock_engage("Mutation Steal")
+                
             -- ⭐ PRIORITY 1: CEK VOLCANIC EGG DULUAN
             local volcanicEgg = getVolcanicEgg()
 
@@ -3522,10 +3537,12 @@ end
                 -- Step 7: AUTO RETURN ke plot (Step/Instant)
 task.wait(0.4)
 doReturnToPlot()
+-- ⭐ RELEASE camera lock setelah return
+camLock_release("Mutation Steal done")
 
                 Shared.MutationSteal_Active = false
                 task.wait(3)
-                continue  -- ⭐ Lanjut loop, cek volcanic lagi
+                continue
             end
 
             -- ⭐ PRIORITY 2: KALO GAK ADA VOLCANIC → STEAL EGG BIASA (by Rarity/Name)
@@ -3665,6 +3682,8 @@ doReturnToPlot()
             -- ⭐ STEP: RETURN KE PLOT (Step/Instant)
 task.wait(0.4)
 doReturnToPlot()
+-- ⭐ RELEASE camera lock setelah return
+camLock_release("Mutation Steal done")
 
             Shared.MutationSteal_Active = false
             task.wait(3)
@@ -5813,9 +5832,110 @@ function Features.isGhostModeActive()
     return GhostMode.Active
 end
 
+-- ============================================================
+-- 📷 CAMERA LOCK — Kamera dipaku di base plot (TANPA clone)
+-- Karakter tetap steal normal, cuma kamera yang stay di base
+-- ============================================================
+local CameraLock = {
+    Active = false,
+    SavedType = nil,
+    SavedSubject = nil,
+    _conn = nil,
+}
+
+local function camLock_getBaseCFrame()
+    local spawnPart = getMyPlotSpawn()
+    if spawnPart then
+        return spawnPart.CFrame + Vector3.new(0, 8, 0)
+    end
+    -- Fallback: posisi karakter sekarang
+    local char = LocalPlayer.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if root then
+        return root.CFrame + Vector3.new(0, 8, 0)
+    end
+    return nil
+end
+
+local function camLock_engage(label)
+    if CameraLock.Active then return true end
+    local cam = workspace.CurrentCamera
+    if not cam then return false end
+
+    local baseCF = camLock_getBaseCFrame()
+    if not baseCF then
+        warn("[CamLock] Base CFrame gak ketemu — skip lock")
+        return false
+    end
+
+    CameraLock.SavedType = cam.CameraType
+    CameraLock.SavedSubject = cam.CameraSubject
+
+    cam.CameraType = Enum.CameraType.Scriptable
+    cam.CFrame = baseCF
+
+    if CameraLock._conn then
+        pcall(function() CameraLock._conn:Disconnect() end)
+    end
+    CameraLock._conn = RunService.RenderStepped:Connect(function()
+        if not CameraLock.Active then return end
+        local c = workspace.CurrentCamera
+        if not c then return end
+        c.CameraType = Enum.CameraType.Scriptable
+        c.CFrame = baseCF
+    end)
+
+    CameraLock.Active = true
+    if Shared.Notify then
+        Shared.Notify("📷 Camera lock ke base (" .. tostring(label) .. ")", "info")
+    end
+    return true
+end
+
+local function camLock_release(label)
+    if not CameraLock.Active then return end
+
+    if CameraLock._conn then
+        pcall(function() CameraLock._conn:Disconnect() end)
+        CameraLock._conn = nil
+    end
+
+    local cam = workspace.CurrentCamera
+    if cam then
+        cam.CameraType = CameraLock.SavedType or Enum.CameraType.Custom
+        if CameraLock.SavedSubject and CameraLock.SavedSubject.Parent then
+            cam.CameraSubject = CameraLock.SavedSubject
+        else
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then cam.CameraSubject = hum end
+        end
+    end
+
+    CameraLock.SavedType = nil
+    CameraLock.SavedSubject = nil
+    CameraLock.Active = false
+
+    if Shared.Notify then
+        Shared.Notify("📷 Camera normal (" .. tostring(label) .. ")", "info")
+    end
+end
+
+function Features.isCameraLockActive()
+    return CameraLock.Active
+end
+
 LocalPlayer.CharacterAdded:Connect(function()
     if GhostMode.Active then
         ghostRemoveDecoy()
+    end
+end)
+
+-- ⭐ Reset camera lock kalau respawn (biar gak nyangkut)
+LocalPlayer.CharacterAdded:Connect(function()
+    task.wait(1)
+    if CameraLock.Active then
+        camLock_release("Respawn")
     end
 end)
 
