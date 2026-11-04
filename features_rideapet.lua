@@ -778,12 +778,25 @@ end
 local function getMyPlot()
     local plots = Workspace:FindFirstChild("Plots")
     if not plots then return nil end
+
+    local myUserId = LocalPlayer.UserId
+    local myName = LocalPlayer.Name
+
     for _, plot in ipairs(plots:GetChildren()) do
-        local owner = plot:GetAttribute("OwnerUserId") or plot:GetAttribute("Owner") or plot:GetAttribute("NestsOwnerLoaded")
-        if owner == LocalPlayer.UserId or owner == LocalPlayer.Name then
+        -- ⭐ Cek SEMUA kemungkinan attribute owner
+        local owner = plot:GetAttribute("OwnerUserId")
+            or plot:GetAttribute("Owner")
+            or plot:GetAttribute("OwnerId")
+            or plot:GetAttribute("UserId")
+            or plot:GetAttribute("NestsOwnerLoaded")
+            or plot:GetAttribute("PlayerUserId")
+
+        if owner == myUserId or owner == myName
+           or tostring(owner) == tostring(myUserId) then
             return plot
         end
 
+        -- Cek ObjectValue di Data/Owner
         local data = plot:FindFirstChild("Data")
         if data then
             local ownerVal = data:FindFirstChild("Owner")
@@ -791,7 +804,23 @@ local function getMyPlot()
                 return plot
             end
         end
+
+        -- Cek ObjectValue langsung di plot
+        local ownerVal2 = plot:FindFirstChild("Owner")
+        if ownerVal2 and ownerVal2:IsA("ObjectValue") and ownerVal2.Value == LocalPlayer then
+            return plot
+        end
+
+        -- Cek di Nests folder
+        local nests = plot:FindFirstChild("Nests")
+        if nests then
+            local nestOwner = nests:GetAttribute("OwnerUserId")
+            if nestOwner == myUserId or nestOwner == myName then
+                return plot
+            end
+        end
     end
+
     return nil
 end
 
@@ -3321,9 +3350,24 @@ end
 -- ============================================================
 function Features.startMutationSteal()
     task.spawn(function()
+        -- ⭐ Helper: unlock kamera kalau aktif
+        local function unlockCamIfActive()
+            if _G.VRILZ_CameraLock and _G.VRILZ_CameraLock.IsActive() then
+                _G.VRILZ_CameraLock.Unlock()
+            end
+        end
+
+        -- ⭐ Helper: lock kamera kalau belum
+        local function lockCamIfNeeded()
+            if _G.VRILZ_CameraLock and not _G.VRILZ_CameraLock.IsActive() then
+                _G.VRILZ_CameraLock.Lock()
+            end
+        end
+
         while task.wait(0.5) do
             if not Shared.MutationSteal_Enabled then
                 Shared.MutationSteal_Active = false
+                unlockCamIfActive()   -- ⭐ unlock pas toggle OFF
                 continue
             end
 
@@ -3355,63 +3399,52 @@ function Features.startMutationSteal()
 -- ⭐⭐⭐ FIX: JANGAN STEAL KALO MASIH DI HALLOWEEN ZONE ⭐⭐⭐
 if _G.VRILZ_HalloweenBusy then
     Shared.MutationSteal_Active = false
+    unlockCamIfActive()
     task.wait(0.2)
-    continue
-end
-local inHalloween = LocalPlayer:GetAttribute("InHalloweenZone") == true
-if inHalloween then
-    Shared.MutationSteal_Active = false
-    task.wait(0.2)   -- ⬅️ 1 → 0.2
     continue
 end
 
 if _G.VRILZ_HalloweenLeaving then
     Shared.MutationSteal_Active = false
-    task.wait(0.2)   -- ⬅️ 0.5 → 0.2
+    task.wait(0.2)
     continue
 end
 
-            if Features.getMutationState and Features.getMutationState().Running then
-                Shared.MutationSteal_Active = false
-                task.wait(1)
-                continue
-            end
+if LocalPlayer:GetAttribute("InHalloweenZone") == true then
+    Shared.MutationSteal_Active = false
+    task.wait(0.5)
+    continue
+end
+                
+if Shared.VolcanicHunt_Enabled then
+    Shared.MutationSteal_Active = false
+    unlockCamIfActive()   -- ⭐ TAMBAH
+    task.wait(1)
+    continue
+end
 
-            -- Kalo Auto Volcanic Hunt aktif, skip (biar gak bentrok)
-            if Shared.VolcanicHunt_Enabled then
-                Shared.MutationSteal_Active = false
-                task.wait(1)
-                continue
-            end
+if Features.isHoldingEgg and Features.isHoldingEgg() then
+    Shared.MutationSteal_Active = false
+    unlockCamIfActive()   -- ⭐ TAMBAH
+    task.wait(0.5)
+    continue
+end
 
-            local char = LocalPlayer.Character
-            local myRoot = char and char:FindFirstChild("HumanoidRootPart")
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if not myRoot or not hum or hum.Health <= 0 then
-                task.wait(1)
-                continue
-            end
+local basket = LocalPlayer:FindFirstChild("Basket")
+if basket and #basket:GetChildren() > 0 then
+    Shared.MutationSteal_Active = false
+    unlockCamIfActive()   -- ⭐ TAMBAH
+    task.wait(0.5)
+    continue
+end
 
-            -- Kalo udah bawa egg, tunggu
-            if Features.isHoldingEgg and Features.isHoldingEgg() then
-                Shared.MutationSteal_Active = false
-                task.wait(0.5)
-                continue
-            end
+-- ⭐ PRIORITY 1: CEK VOLCANIC EGG DULUAN
+local volcanicEgg = getVolcanicEgg()
 
-            local basket = LocalPlayer:FindFirstChild("Basket")
-            if basket and #basket:GetChildren() > 0 then
-                Shared.MutationSteal_Active = false
-                task.wait(0.5)
-                continue
-            end
-
-            -- ⭐ PRIORITY 1: CEK VOLCANIC EGG DULUAN
-            local volcanicEgg = getVolcanicEgg()
-
-            if volcanicEgg and volcanicEgg.Parent then
-                Shared.MutationSteal_Active = true
-
+if volcanicEgg and volcanicEgg.Parent then
+    Shared.MutationSteal_Active = true
+    lockCamIfNeeded()
+                
                 local eggPart = volcanicEgg:FindFirstChildWhichIsA("BasePart", true)
                 if not eggPart then
                     Shared.MutationSteal_Active = false
@@ -3519,13 +3552,14 @@ end
                     end
                 end
 
-                -- Step 7: AUTO RETURN ke plot (Step/Instant)
+-- Step 7: AUTO RETURN ke plot (Step/Instant)
 task.wait(0.4)
 doReturnToPlot()
 
-                Shared.MutationSteal_Active = false
-                task.wait(3)
-                continue  -- ⭐ Lanjut loop, cek volcanic lagi
+Shared.MutationSteal_Active = false
+unlockCamIfActive()   -- ⭐ UNLOCK KAMERA SETELAH RETURN
+task.wait(3)
+continue
             end
 
             -- ⭐ PRIORITY 2: KALO GAK ADA VOLCANIC → STEAL EGG BIASA (by Rarity/Name)
@@ -3561,9 +3595,10 @@ doReturnToPlot()
                 continue
             end
 
-            Shared.MutationSteal_Active = true
+Shared.MutationSteal_Active = true
+lockCamIfNeeded()   -- ⭐ KUNCI KAMERA DI BASE
 
-            local egg = targetEgg
+local egg = targetEgg
             local eggPart = egg:FindFirstChildWhichIsA("BasePart", true)
             local prompt = egg:FindFirstChild("Pickup", true)
             if not eggPart or not prompt then
@@ -3662,12 +3697,13 @@ doReturnToPlot()
                 end
             end
 
-            -- ⭐ STEP: RETURN KE PLOT (Step/Instant)
+-- ⭐ STEP: RETURN KE PLOT (Step/Instant)
 task.wait(0.4)
 doReturnToPlot()
 
-            Shared.MutationSteal_Active = false
-            task.wait(3)
+Shared.MutationSteal_Active = false
+unlockCamIfActive()   -- ⭐ UNLOCK KAMERA SETELAH RETURN
+task.wait(3)
         end
     end)
 end
@@ -4363,11 +4399,20 @@ while task.wait(HalloweenCfg.LOOP_WAIT) do
     end
 
     -- ⭐⭐⭐ FIX BARU: SKIP SET FLAG KALAU LEAVING AKTIF ⭐⭐⭐
-    if _G.VRILZ_HalloweenLeaving then
-        HalloweenState.Status = "🚪 Leaving Halloween — transisi..."
-        task.wait(0.3)
-        continue
-    end
+if _G.VRILZ_HalloweenLeaving then
+    Shared.MutationSteal_Active = false
+    unlockCamIfActive()
+    task.wait(0.2)
+    continue
+end
+
+-- ⭐ TAMBAH INI
+if LocalPlayer:GetAttribute("InHalloweenZone") == true then
+    Shared.MutationSteal_Active = false
+    unlockCamIfActive()
+    task.wait(0.5)
+    continue
+end
 
     -- ⭐⭐⭐ SET FLAG DI AWAL ⭐⭐⭐
     _G.VRILZ_HalloweenBusy = true
@@ -5686,172 +5731,141 @@ function Features.setYinRitualEnabled(v)
 end
 
 -- ============================================================
--- 👻 GHOST CLONE — Khusus Egg Mutation Steal
--- Kamera nempel clone di base, karakter asli stealth
--- ⭐ CAMERA LOCK v2: kamera di base selama steal, balik ke karakter setelah return
+-- 🎥 CAMERA LOCK — kamera di base plot selama steal, balik ke karakter setelah selesai
+-- Tanpa clone, tanpa ghost. Cuma kamera doang.
 -- ============================================================
-local GhostMode = {
+local CameraLock = {
     Active = false,
-    Decoy = nil,
-    OriginalVisibility = {},
-    CameraLocked = false,          -- ⭐ BARU: tanda kamera sedang dikunci ke base
-    _cameraConn = nil,             -- ⭐ BARU: connection biar kamera tetap di base
+    _cameraConn = nil,
+    _origCameraType = nil,
+    _origCameraSubject = nil,
+    _basePos = nil,
 }
 
--- ⭐ Fungsi: pasang kamera ke clone (base plot)
-local function ghostLockCameraToBase()
-    local cam = workspace.CurrentCamera
-    if not cam then return end
-
-    local cloneHum = GhostMode.Decoy and (
-        GhostMode.Decoy:FindFirstChildOfClass("Humanoid")
-        or GhostMode.Decoy:FindFirstChild("HumanoidRootPart")
-    )
-    if not cloneHum then return end
-
-    cam.CameraSubject = cloneHum
-    GhostMode.CameraLocked = true
-
-    -- ⭐ Guard: kalau game / script lain ubah CameraSubject, paksa balik ke clone
-    if GhostMode._cameraConn then
-        pcall(function() GhostMode._cameraConn:Disconnect() end)
-    end
-    GhostMode._cameraConn = cam:GetPropertyChangedSignal("CameraSubject"):Connect(function()
-        if not GhostMode.CameraLocked then return end
-        local decoyHum = GhostMode.Decoy and (
-            GhostMode.Decoy:FindFirstChildOfClass("Humanoid")
-            or GhostMode.Decoy:FindFirstChild("HumanoidRootPart")
-        )
-        if decoyHum and cam.CameraSubject ~= decoyHum then
-            cam.CameraSubject = decoyHum
-        end
-    end)
-end
-
--- ⭐ Fungsi: balikin kamera ke karakter asli
-local function ghostUnlockCamera()
-    GhostMode.CameraLocked = false
-    if GhostMode._cameraConn then
-        pcall(function() GhostMode._cameraConn:Disconnect() end)
-        GhostMode._cameraConn = nil
+local function cameraLockToBase()
+    -- ⭐⭐⭐ FIX #1: IDEMPOTENT — kalau udah lock, gak perlu lock ulang ⭐⭐⭐
+    if CameraLock.Active then
+        return true
     end
 
     local cam = workspace.CurrentCamera
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if cam and hum then
-        cam.CameraSubject = hum
-    end
-end
-
-local function ghostSpawnDecoy()
-    local char = LocalPlayer.Character
-    if not char then
-        warn("[Ghost] No character")
-        return false
-    end
+    if not cam then return false end
 
     local base = getMyPlotSpawn()
-
     if not base then
-        local hrp = char:FindFirstChild("HumanoidRootPart")
-        if not hrp then
-            warn("[Ghost] No HumanoidRootPart, no plot spawn")
-            return false
-        end
-        warn("[Ghost] Plot spawn not found — using current position as fallback")
-        base = hrp
-    end
-
-    local oldArchivable = char.Archivable
-    char.Archivable = true
-
-    if GhostMode.Decoy and GhostMode.Decoy.Parent then
-        GhostMode.Decoy:Destroy()
-    end
-
-    local okClone, clone = pcall(char.Clone, char)
-    char.Archivable = oldArchivable
-
-    if not okClone or not clone then
-        warn("[Ghost] char:Clone() failed")
+        warn("[CameraLock] ❌ Plot spawn gak ketemu — kamera gak dikunci")
         return false
     end
 
-    clone.Name = "VRILZ_Ghost_" .. LocalPlayer.Name
-    clone.Parent = workspace
+    -- ⭐⭐⭐ FIX #2: VALIDASI — pastiin BasePart & size reasonable ⭐⭐⭐
+    if not base:IsA("BasePart") then
+        warn("[CameraLock] ❌ Base bukan BasePart")
+        return false
+    end
+    if base.Size.Magnitude < 5 then
+        warn("[CameraLock] ❌ Plot spawn terlalu kecil — skip lock")
+        return false
+    end
 
-    pcall(function()
-        clone:PivotTo(base.CFrame + Vector3.new(0, 3, 0))
+    CameraLock._basePos = base.Position
+    CameraLock._origCameraType = cam.CameraType
+    CameraLock._origCameraSubject = cam.CameraSubject
+
+    -- ⭐⭐⭐ FIX #3: UNBIND DULU sebelum bind baru (cegah double-bind) ⭐⭐⭐
+    pcall(function() RunService:UnbindFromRenderStep("VrilzCameraLock") end)
+
+    cam.CameraType = Enum.CameraType.Scriptable
+    CameraLock.Active = true   -- ⭐ set AFTER unbind
+
+    local offset = Vector3.new(0, 8, -18)
+
+    RunService:BindToRenderStep("VrilzCameraLock", Enum.RenderPriority.Camera.Value + 1, function()
+        if not CameraLock.Active then return end
+        local c = workspace.CurrentCamera
+        if not c then return end
+
+        -- ⭐⭐⭐ FIX #4: paksa balik Scriptable kalau game ngubah ⭐⭐⭐
+        if c.CameraType ~= Enum.CameraType.Scriptable then
+            c.CameraType = Enum.CameraType.Scriptable
+        end
+
+        local basePos = CameraLock._basePos
+        if not basePos then return end
+
+        c.CFrame = CFrame.lookAt(basePos + offset, basePos + Vector3.new(0, 2, 0))
     end)
 
-    for _, d in ipairs(clone:GetDescendants()) do
-        if d:IsA("BasePart") then
-            d.Anchored = true
-            d.CanCollide = false
-            d.CanQuery = false
-            d.CanTouch = false
-        elseif d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
-            d:Destroy()
-        end
-    end
-
-    local cloneHum = clone:FindFirstChildOfClass("Humanoid")
-        or clone:FindFirstChild("HumanoidRootPart")
-
-    if not cloneHum then
-        warn("[Ghost] Clone no Humanoid / HRP")
-        clone:Destroy()
-        return false
-    end
-
-    GhostMode.Decoy = clone
-
-    -- ⭐ KAMERA: kunci ke base (clone), bukan ke karakter asli
-    ghostLockCameraToBase()
-
-    -- Sembunyiin karakter asli
-    GhostMode.OriginalVisibility = {}
-    for _, d in ipairs(char:GetDescendants()) do
-        if d:IsA("BasePart") then
-            GhostMode.OriginalVisibility[d] = d.LocalTransparencyModifier
-            d.LocalTransparencyModifier = 1
-        end
-    end
-
-    GhostMode.Active = true
-    print("[Ghost] ✅ Clone spawned at", base.Position, "| camera LOCKED to base")
+    print("[CameraLock] ✅ Kamera dikunci di base:", base:GetFullName())
     return true
 end
 
-local function ghostRemoveDecoy()
-    if GhostMode.Decoy and GhostMode.Decoy.Parent then
-        GhostMode.Decoy:Destroy()
+local function cameraUnlockToCharacter()
+    -- ⭐⭐⭐ FIX #1: Set Active = false DULU (callback langsung stop) ⭐⭐⭐
+    CameraLock.Active = false
+
+    -- ⭐⭐⭐ FIX #2: Unbind dengan pcall ⭐⭐⭐
+    pcall(function() RunService:UnbindFromRenderStep("VrilzCameraLock") end)
+
+    local cam = workspace.CurrentCamera
+    if not cam then return end
+
+    -- ⭐⭐⭐ FIX #3: SELALU set Custom DULU ⭐⭐⭐
+    cam.CameraType = Enum.CameraType.Custom
+
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+    if hum then
+        cam.CameraSubject = hum
+    else
+        -- ⭐⭐⭐ FIX #4: Karakter mati/respawn → tunggu CharacterAdded ⭐⭐⭐
+        local conn
+        conn = LocalPlayer.CharacterAdded:Connect(function(newChar)
+            local newHum = newChar:WaitForChild("Humanoid", 5)
+            if newHum and cam then
+                cam.CameraSubject = newHum
+                cam.CameraType = Enum.CameraType.Custom
+            end
+            conn:Disconnect()
+        end)
     end
-    GhostMode.Decoy = nil
 
-    -- ⭐ KAMERA: balikin ke karakter asli
-    ghostUnlockCamera()
+    -- ⭐⭐⭐ FIX #5: Reset state SETELAH semuanya ⭐⭐⭐
+    CameraLock._origCameraType = nil
+    CameraLock._origCameraSubject = nil
+    CameraLock._basePos = nil
 
-    for d, v in pairs(GhostMode.OriginalVisibility) do
-        if d and d.Parent and d:IsA("BasePart") then
-            d.LocalTransparencyModifier = v
+    print("[CameraLock] 🔓 Kamera balik ke karakter")
+end
+
+-- ⭐⭐⭐ FIX: reset state penuh + unbind paksa + unlock pas respawn ⭐⭐⭐
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    -- Paksa unbind dulu (cegah RenderStep nyangkut)
+    pcall(function() RunService:UnbindFromRenderStep("VrilzCameraLock") end)
+    CameraLock.Active = false
+
+    -- Tunggu humanoid loaded, baru unlock
+    task.spawn(function()
+        local newHum = newChar:WaitForChild("Humanoid", 5)
+        if not newHum then return end
+        local cam = workspace.CurrentCamera
+        if cam then
+            cam.CameraType = Enum.CameraType.Custom
+            cam.CameraSubject = newHum
         end
-    end
-    GhostMode.OriginalVisibility = {}
-
-    GhostMode.Active = false
-end
-
-function Features.isGhostModeActive()
-    return GhostMode.Active
-end
-
-LocalPlayer.CharacterAdded:Connect(function()
-    if GhostMode.Active then
-        ghostRemoveDecoy()
-    end
+        -- Reset state
+        CameraLock._origCameraType = nil
+        CameraLock._origCameraSubject = nil
+        CameraLock._basePos = nil
+    end)
 end)
+
+-- ⭐ Expose camera lock ke _G biar bisa dipanggil dari mana aja
+_G.VRILZ_CameraLock = {
+    Lock = cameraLockToBase,
+    Unlock = cameraUnlockToCharacter,
+    IsActive = function() return CameraLock.Active end,
+}
 
 -- ============================================================
 -- STEAL EXECUTOR — LOGIC ONLY (dipanggil dari UI)
@@ -6160,44 +6174,42 @@ function Features.stealEgg(egg)
     local isVolcanic = egg.Name:lower():find("volcan") ~= nil
     StealExecState.Status = isVolcanic and "🌋 Stealing volcanic..." or "🎯 Stealing..."
 
-        task.spawn(function()
-        -- 👻 SPAWN GHOST DI BASE
-        local ghostOk = ghostSpawnDecoy()
-        if ghostOk then
-            StealExecState.Status = "👻 Ghost di base — mulai steal..."
-            task.wait(0.3)
-        else
-            -- ⭐ CLONE GAGAL → ABORT, jangan steal
-            if Shared.Notify then
-                Shared.Notify("❌ Ghost clone gagal spawn (plot ga ketemu). Steal di-cancel.", "error")
-            end
-            StealExecState.Status = "❌ Ghost clone failed — steal aborted"
-            StealExecState.Busy = false
-            StealExecState.CurrentEggName = nil
-            return  -- ⭐ EXIT, jangan lanjut steal
-        end
+                task.spawn(function()
+    -- 🎥 KUNCI KAMERA DI BASE (pake pcall biar gak crash)
+    local camOk = false
+    pcall(function() camOk = cameraLockToBase() end)
 
-        local ok, err
-        if isVolcanic then ok, err = seStealVolcanicEgg(egg)
-        else ok, err = seStealNormalEgg(egg) end
+    if camOk then
+        StealExecState.Status = "🎥 Kamera di base — mulai steal..."
+        task.wait(0.2)
+    else
+        warn("[Steal] Kamera gak bisa dikunci (plot gak ketemu), lanjut steal tanpa camera lock")
+    end
 
-        -- 👻 HAPUS GHOST + BALIKIN KAMERA
-        if ghostOk then
-            ghostRemoveDecoy()
-            task.wait(0.2)
-        end
+    -- ⭐⭐⭐ FIX #1: pcall biar error di seSteal* TIDAK bikin kamera stuck ⭐⭐⭐
+    local ok, err
+    if isVolcanic then
+        ok, err = pcall(seStealVolcanicEgg, egg)
+    else
+        ok, err = pcall(seStealNormalEgg, egg)
+    end
 
-        if not ok then
-            if Shared.Notify then Shared.Notify("❌ Steal failed: " .. tostring(err), "error") end
-            StealExecState.Status = "❌ " .. tostring(err)
-        else
-            if Shared.Notify then Shared.Notify("✅ Steal complete!", "success") end
-        end
+    -- ⭐⭐⭐ FIX #2: WAJIB — unlock di finally, PASTI jalan walau error ⭐⭐⭐
+    if camOk then
+        pcall(cameraUnlockToCharacter)
+        task.wait(0.1)
+    end
 
-        StealExecState.Busy = false
-        StealExecState.CurrentEggName = nil
-    end)
+    if not ok then
+        if Shared.Notify then Shared.Notify("❌ Steal failed: " .. tostring(err), "error") end
+        StealExecState.Status = "❌ " .. tostring(err)
+    else
+        if Shared.Notify then Shared.Notify("✅ Steal complete!", "success") end
+    end
 
+    StealExecState.Busy = false
+    StealExecState.CurrentEggName = nil
+end)
     return true, nil
 end
 function Features.getStealExecState()
