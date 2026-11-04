@@ -4422,14 +4422,6 @@ if _G.VRILZ_HalloweenLeaving then
     task.wait(0.2)
     continue
 end
-
--- ⭐ TAMBAH INI
-if LocalPlayer:GetAttribute("InHalloweenZone") == true then
-    Shared.MutationSteal_Active = false
-    task.wait(0.5)
-    continue
-end
-
     -- ⭐⭐⭐ SET FLAG DI AWAL ⭐⭐⭐
     _G.VRILZ_HalloweenBusy = true
                         -- ⭐ PRIORITY 1: Auto Mutation — paling utama
