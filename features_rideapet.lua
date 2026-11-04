@@ -1985,14 +1985,18 @@ local function getEggRarity(eggName)
             local r = egg:GetAttribute("Rarity")
             if r then return tostring(r) end
             for _, d in ipairs(egg:GetDescendants()) do
-                local ra = d:GetAttribute and d:GetAttribute("Rarity")
-                if ra then return tostring(ra) end
+                if d.GetAttribute then
+                    local ra = d:GetAttribute("Rarity")
+                    if ra then return tostring(ra) end
+                end
             end
         end
+    end
 
     -- ⭐ PRIORITY 3: Fallback "Unknown" (BUKAN "Common")
     return "Unknown"
 end
+
 local function isRaritySelected(eggName)
     -- ⭐ Kalau lu gak pilih rarity apapun → skip (gak steal)
     if not Shared.SelectedRarities then return false end
