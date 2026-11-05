@@ -1,5 +1,5 @@
 -- ============================================================
--- VRILZHUB UI — RIDE A PET v2.9 (AUTO-DETECT PC & MOBILE)
+-- VRILZHUB UI — RIDE A PET v3.0 (AUTO-DETECT PC & MOBILE)
 -- PC: 800x580 | Mobile: 88% x 78% viewport
 -- ============================================================
 
@@ -4906,7 +4906,7 @@ end)
     subtitle.Size = UDim2.new(0, 300, 0, 14)
     subtitle.Position = UDim2.fromOffset(IS_MOBILE and 48 or 58, IS_MOBILE and 26 or 28)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "Ride a Pet · v2.9"
+    subtitle.Text = "Ride a Pet · v3.0"
     subtitle.TextColor3 = C.Muted
     subtitle.Font = Enum.Font.GothamSemibold
     subtitle.TextSize = IS_MOBILE and 9 or 10
@@ -5862,7 +5862,7 @@ do
     local updateCard, updateContent = makeCard(infoLeft, "📢 UPDATE INFORMATION", 2)
 
     local infoLines = {
-        "Version        : 2.9",
+        "Version        : 3.0",
         "Last Update    : 02 Nov 2026",
         "Status         : Online ✅",
         "Changelog      : Fly Chard, Webhook, Auto Crash",
@@ -7604,7 +7604,7 @@ end, "WebhookMentionEveryone")
                             },
                         },
                                 footer = {
-                        text = "🏆 VRILZHUB PLATINUM  •  v2.9",
+                        text = "🏆 VRILZHUB PLATINUM  •  v3.0",
                         },
                         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
                     }}
@@ -9342,7 +9342,7 @@ local A_Links = {
 -- Changelog VRILZHUB
 local A_Changelog = {
     {
-        Version = "v2.9",
+        Version = "v3.0",
         Date = "19 Okt 2026",
         Changes = {
             "Fly Chard (Character Fly)",
