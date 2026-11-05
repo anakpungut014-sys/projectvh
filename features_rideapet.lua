@@ -6235,8 +6235,13 @@ local AutoBossState = {
 local AutoBossCfg = {
     RING_PREFIX = "hardnorth",
     ENTRY_HEIGHT = 3,
-    PER_RING_WAIT = 1.0,
+    PER_RING_WAIT = 0.5,     -- ⭐ 0.5 detik
     RESET_DELAY = 0.5,
+    -- ⭐ FLY CONFIG untuk ring 2-6
+    FLY_SPEED = 500,
+    FLY_APPROACH_DIST = 15,
+    FLY_TIMEOUT = 6,
+    FLY_LOOP_WAIT = 0.03,
 }
 
 local function autoBossGetRoot()
@@ -6244,6 +6249,7 @@ local function autoBossGetRoot()
     return c and c:FindFirstChild("HumanoidRootPart")
 end
 
+-- ⭐ TELEPORT INSTAN (buat ring 1)
 local function autoBossInstantTP(targetPos)
     local root = autoBossGetRoot()
     if not root then return false end
@@ -6251,6 +6257,89 @@ local function autoBossInstantTP(targetPos)
     root.Velocity = Vector3.zero
     root.AssemblyLinearVelocity = Vector3.zero
     return true
+end
+
+-- ⭐ FLY (buat ring 2-6) — BodyVelocity + PlatformStand
+local function autoBossFlyTo(targetPos, timeout)
+    timeout = timeout or AutoBossCfg.FLY_TIMEOUT
+
+    local root = autoBossGetRoot()
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not root or not hum then return false end
+
+    -- Bersihin dulu
+    for _, c in ipairs(root:GetChildren()) do
+        if c:IsA("BodyVelocity") or c:IsA("BodyGyro") then
+            pcall(function() c:Destroy() end)
+        end
+    end
+
+    -- ⭐ PlatformStand biar humanoid gak nahan
+    pcall(function() hum.PlatformStand = true end)
+    task.wait(0.05)
+
+    root = autoBossGetRoot()
+    if not root then
+        pcall(function() hum.PlatformStand = false end)
+        return false
+    end
+
+    local bv = Instance.new("BodyVelocity")
+    bv.Name = "Vrilz_AutoBoss_Fly"
+    bv.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+    bv.Velocity = Vector3.zero
+    bv.Parent = root
+
+    local startTime = os.clock()
+    local arrived = false
+
+    while os.clock() - startTime < timeout do
+        if not AutoBossState.Enabled then
+            bv:Destroy()
+            pcall(function() hum.PlatformStand = false end)
+            return false
+        end
+
+        local r = autoBossGetRoot()
+        if not r or not bv.Parent then
+            bv:Destroy()
+            pcall(function() hum.PlatformStand = false end)
+            return false
+        end
+
+        local delta = targetPos - r.Position
+        local dist = delta.Magnitude
+
+        if dist <= AutoBossCfg.FLY_APPROACH_DIST then
+            arrived = true
+            break
+        end
+
+        local dir = delta.Unit
+        local speed = math.min(AutoBossCfg.FLY_SPEED, dist * 8)
+        bv.Velocity = dir * speed
+        r.CFrame = CFrame.new(r.Position, r.Position + Vector3.new(dir.X, 0, dir.Z))
+
+        task.wait(AutoBossCfg.FLY_LOOP_WAIT)
+    end
+
+    -- Pas deket → TP instan ke center
+    if arrived then
+        local r = autoBossGetRoot()
+        if r then
+            bv.Velocity = Vector3.zero
+            r.CFrame = CFrame.new(targetPos + Vector3.new(0, AutoBossCfg.ENTRY_HEIGHT, 0))
+            r.Velocity = Vector3.zero
+            r.AssemblyLinearVelocity = Vector3.zero
+        end
+        task.wait(0.1)
+    end
+
+    -- Cleanup
+    pcall(function() bv:Destroy() end)
+    pcall(function() hum.PlatformStand = false end)
+
+    return arrived
 end
 
 local function autoBossGetRingsFolder()
@@ -6311,17 +6400,33 @@ function Features.startAutoBoss()
 
             local target = rings[AutoBossState.CurrentIndex + 1]
             AutoBossState.CurrentRing = target.name
-            AutoBossState.Status = "⚡ TP " .. target.name .. " (" .. (AutoBossState.CurrentIndex + 1) .. "/" .. #rings .. ")"
 
-            autoBossInstantTP(target.center)
-            task.wait(0.1)
-            autoBossInstantTP(target.center)
+            -- ⭐ RING 1 → TP INSTAN, RING 2-6 → FLY
+            local isFirstRing = (AutoBossState.CurrentIndex == 0)
 
+            if isFirstRing then
+                AutoBossState.Status = "⚡ TP " .. target.name .. " (1/" .. #rings .. ")"
+                autoBossInstantTP(target.center)
+                task.wait(0.1)
+                autoBossInstantTP(target.center)
+            else
+                AutoBossState.Status = "🛸 Fly ke " .. target.name .. " (" .. (AutoBossState.CurrentIndex + 1) .. "/" .. #rings .. ")"
+                autoBossFlyTo(target.center, AutoBossCfg.FLY_TIMEOUT)
+                task.wait(0.1)
+                -- Re-TP sekali lagi biar pasti masuk center
+                autoBossInstantTP(target.center)
+            end
+
+            -- ⭐ Jeda tetap 0.5 detik
             AutoBossState.WaitStart = os.clock()
             while os.clock() - AutoBossState.WaitStart < AutoBossCfg.PER_RING_WAIT do
                 if not AutoBossState.Enabled then break end
                 local remain = AutoBossCfg.PER_RING_WAIT - (os.clock() - AutoBossState.WaitStart)
-                AutoBossState.Status = string.format("⏳ %s — %.1fs", target.name, remain)
+                if isFirstRing then
+                    AutoBossState.Status = string.format("⏳ %s — %.1fs (TP)", target.name, remain)
+                else
+                    AutoBossState.Status = string.format("⏳ %s — %.1fs (Fly)", target.name, remain)
+                end
                 task.wait(0.05)
             end
 
