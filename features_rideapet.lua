@@ -5714,87 +5714,21 @@ function Features.setYinRitualEnabled(v)
 end
 
 -- ============================================================
--- 🎥 CAMERA LOCK — FINAL v3 (Pointer TETAP KELIATAN)
--- PC   : klik kiri drag = rotate, scroll = zoom
--- Mobile: 1 jari drag = rotate, 2 jari pinch = zoom
--- POINTER SELALU KELIATAN (MouseIconEnabled = true, MouseBehavior = Default)
+-- 🎥 CAMERA LOCK — PAKE BAWAAN ROBLOX (CameraType = Custom)
+-- Cuma ganti CameraSubject ke BasePart plot lu
+-- Scroll, rotate, pointer — SEMUA BAWAAN ROBLOX TETAP JALAN
 -- ============================================================
 local CameraLock = {
     Active = false,
-    _basePos = nil,
-    _yaw = 0,
-    _pitch = -0.35,
-    _distance = 40,
-    _minDist = 15,
-    _maxDist = 200,
-    _mouseDown = false,
-    _touchInput = nil,
-    _touchDelta = Vector2.new(0, 0),
-    _lastPinchDist = nil,
-    -- Connectors
-    _inputBeganConn = nil,
-    _inputEndedConn = nil,
-    _inputChangedConn = nil,
-    _touchMovedConn = nil,
-    _focusConn = nil,
+    _origCameraType = nil,
+    _origCameraSubject = nil,
+    _origCameraCFrame = nil,
+    _origCameraFocus = nil,
+    _basePart = nil,
 }
 
-local CameraUIS = game:GetService("UserInputService")
-
 -- ══════════════════════════════════════════════════════════════
--- ⭐ DETEKSI ENVIRONMENT
--- ══════════════════════════════════════════════════════════════
-local function cameraHasMouse()
-    return CameraUIS.MouseEnabled
-end
-
-local function cameraHasTouch()
-    return CameraUIS.TouchEnabled
-end
-
--- ══════════════════════════════════════════════════════════════
--- ⭐ DISCONNECT SEMUA CONNECTOR
--- ══════════════════════════════════════════════════════════════
-local function cameraDisconnectAll()
-    local keys = {
-        "_inputBeganConn",
-        "_inputEndedConn",
-        "_inputChangedConn",
-        "_touchMovedConn",
-        "_focusConn",
-    }
-    for _, key in ipairs(keys) do
-        local conn = CameraLock[key]
-        if conn then
-            pcall(function() conn:Disconnect() end)
-            CameraLock[key] = nil
-        end
-    end
-end
-
--- ══════════════════════════════════════════════════════════════
--- ⭐ GET DELTA — mouse dulu, fallback touch
--- ══════════════════════════════════════════════════════════════
-local function cameraGetDelta()
-    -- 1. Coba mouse (pointer masih default, delta tetep kebaca
-    --    selama klik kiri ditahan)
-    if cameraHasMouse() then
-        local d = CameraUIS:GetMouseDelta()
-        if d.Magnitude > 0 then
-            return d
-        end
-    end
-
-    -- 2. Fallback touch
-    if CameraLock._touchInput then
-        return CameraLock._touchDelta
-    end
-
-    return Vector2.new(0, 0)
-end
-
--- ══════════════════════════════════════════════════════════════
--- ⭐ LOCK KAMERA KE BASE PLOT — POINTER TETAP ADA
+-- ⭐ LOCK KAMERA KE BASE PLOT (Cuma ganti CameraSubject)
 -- ══════════════════════════════════════════════════════════════
 local function cameraLockToBase()
     if CameraLock.Active then return true end
@@ -5817,269 +5751,91 @@ local function cameraLockToBase()
     end
 
     if not base then
-        warn("[CameraLock] ❌ Plot gak ketemu setelah 5 percobaan")
+        warn("[CameraLock] ❌ Plot gak ditemuin")
         return false
     end
 
-    -- Simpan state
-    CameraLock._basePos = base.Position
-    CameraLock._yaw = 0
-    CameraLock._pitch = -0.35
-    CameraLock._distance = 40
-    CameraLock._mouseDown = false
-    CameraLock._touchInput = nil
-    CameraLock._touchDelta = Vector2.new(0, 0)
-    CameraLock._lastPinchDist = nil
+    -- ⭐ SIMPAN STATE ASLI
+    CameraLock._origCameraType = cam.CameraType
+    CameraLock._origCameraSubject = cam.CameraSubject
+    CameraLock._origCameraCFrame = cam.CFrame
+    CameraLock._origCameraFocus = cam.Focus
+    CameraLock._basePart = base
 
-    -- Bersihin sisa connector
-    pcall(function() RunService:UnbindFromRenderStep("VrilzCameraLock") end)
-    cameraDisconnectAll()
+    -- ⭐ PENTING: CameraType tetep Custom (bawaan Roblox)
+    -- Jangan di-set Scriptable — biar semua fitur bawaan Roblox tetep jalan
+    -- (scroll zoom, klik kanan rotate, pointer normal, dll)
+    cam.CameraType = Enum.CameraType.Custom
 
-    -- ⭐ PENTING: JANGAN sentuh MouseBehavior / MouseIconEnabled
-    -- Pointer tetap keliatan, tetap bisa gerak, tetap bisa klik UI
-    -- Kamera tetep Scriptable biar posisi CFrame bisa diatur
-    cam.CameraType = Enum.CameraType.Scriptable
+    -- ⭐ CUMA GANTI CameraSubject ke BasePart plot
+    -- Roblox otomatis handle orbit, zoom, rotate sekitar part ini
+    cam.CameraSubject = base
+
     CameraLock.Active = true
 
-    -- ══════════════════════════════════════════════════════════
-    -- INPUT BEGAN — mouse button / touch
-    -- ══════════════════════════════════════════════════════════
-    CameraLock._inputBeganConn = CameraUIS.InputBegan:Connect(function(input, gp)
-        if not CameraLock.Active then return end
-        if gp then return end
-
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            CameraLock._mouseDown = true
-        elseif input.UserInputType == Enum.UserInputType.Touch then
-            CameraLock._touchInput = input
-            CameraLock._touchDelta = Vector2.new(0, 0)
-            CameraLock._mouseDown = true
-            CameraLock._lastPinchDist = nil
-        end
-    end)
-
-    -- ══════════════════════════════════════════════════════════
-    -- INPUT ENDED — release
-    -- ══════════════════════════════════════════════════════════
-    CameraLock._inputEndedConn = CameraUIS.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 then
-            CameraLock._mouseDown = false
-        elseif input.UserInputType == Enum.UserInputType.Touch then
-            if CameraLock._touchInput and input == CameraLock._touchInput then
-                CameraLock._touchInput = nil
-                CameraLock._touchDelta = Vector2.new(0, 0)
-                CameraLock._mouseDown = false
-                CameraLock._lastPinchDist = nil
-            end
-        end
-    end)
-
-    -- ══════════════════════════════════════════════════════════
-    -- TOUCH MOVED — update delta + pinch zoom
-    -- ══════════════════════════════════════════════════════════
-    CameraLock._touchMovedConn = CameraUIS.TouchMoved:Connect(function(input, gp)
-        if not CameraLock.Active then return end
-        if gp then return end
-
-        -- Delta 1 jari
-        if CameraLock._touchInput and input == CameraLock._touchInput then
-            CameraLock._touchDelta = input.Delta
-        end
-
-        -- Pinch zoom 2 jari
-        local touches = CameraUIS:GetTouches()
-        if #touches >= 2 then
-            local t1 = touches[1].Position
-            local t2 = touches[2].Position
-            local dist = (t1 - t2).Magnitude
-            if CameraLock._lastPinchDist then
-                local delta = dist - CameraLock._lastPinchDist
-                if math.abs(delta) > 1 then
-                    CameraLock._distance = math.clamp(
-                        CameraLock._distance - delta * 0.3,
-                        CameraLock._minDist,
-                        CameraLock._maxDist
-                    )
-                end
-            end
-            CameraLock._lastPinchDist = dist
-        else
-            CameraLock._lastPinchDist = nil
-        end
-    end)
-
-    -- ══════════════════════════════════════════════════════════
-    -- INPUT CHANGED — scroll zoom (PC)
-    -- ══════════════════════════════════════════════════════════
-    CameraLock._inputChangedConn = CameraUIS.InputChanged:Connect(function(input, gp)
-        if not CameraLock.Active then return end
-        if gp then return end
-
-        if input.UserInputType == Enum.UserInputType.MouseWheel then
-            local scroll = input.Position.Z
-            if scroll == 0 then scroll = 1 end
-            CameraLock._distance = math.clamp(
-                CameraLock._distance - scroll * 8,
-                CameraLock._minDist,
-                CameraLock._maxDist
-            )
-        end
-    end)
-
-    -- ══════════════════════════════════════════════════════════
-    -- FOCUS LOST — reset semua input
-    -- ══════════════════════════════════════════════════════════
-    CameraLock._focusConn = CameraUIS.WindowFocusReleased:Connect(function()
-        CameraLock._mouseDown = false
-        CameraLock._touchInput = nil
-        CameraLock._touchDelta = Vector2.new(0, 0)
-        CameraLock._lastPinchDist = nil
-    end)
-
-    -- ══════════════════════════════════════════════════════════
-    -- RENDER LOOP — ORBIT
-    -- ══════════════════════════════════════════════════════════
-    RunService:BindToRenderStep("VrilzCameraLock", Enum.RenderPriority.Last.Value, function()
-        if not CameraLock.Active then return end
-
-        local c = workspace.CurrentCamera
-        if not c then return end
-
-        -- Re-assert CameraType Scriptable (WAJIB)
-        if c.CameraType ~= Enum.CameraType.Scriptable then
-            c.CameraType = Enum.CameraType.Scriptable
-        end
-
-        local basePos = CameraLock._basePos
-        if not basePos then return end
-
-        -- ═══ AUTO-RELEASE CHECK ═══
-        if CameraLock._mouseDown then
-            local stillPressed = false
-
-            -- Cek mouse button
-            if cameraHasMouse() then
-                stillPressed = CameraUIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
-            end
-
-            -- Cek touch masih ada
-            if not stillPressed and CameraLock._touchInput then
-                for _, t in ipairs(CameraUIS:GetTouches()) do
-                    if t == CameraLock._touchInput then
-                        stillPressed = true
-                        break
-                    end
-                end
-                if not stillPressed then
-                    CameraLock._touchInput = nil
-                end
-            end
-
-            if not stillPressed then
-                CameraLock._mouseDown = false
-            else
-                local delta = cameraGetDelta()
-                if delta.Magnitude > 0.5 then
-                    CameraLock._yaw = CameraLock._yaw + delta.X * 0.01
-                    CameraLock._pitch = math.clamp(
-                        CameraLock._pitch - delta.Y * 0.01,
-                        -1.2, 1.2
-                    )
-                end
-            end
-        end
-
-        -- Reset touch delta tiap frame
-        if CameraLock._touchInput then
-            CameraLock._touchDelta = Vector2.new(0, 0)
-        end
-
-        -- ═══ APPLY ORBIT ═══
-        local yaw = CameraLock._yaw
-        local pitch = CameraLock._pitch
-        local dist = CameraLock._distance
-        local lookTarget = basePos + Vector3.new(0, 5, 0)
-
-        local offset = Vector3.new(
-            math.sin(yaw) * math.cos(pitch) * dist,
-            -math.sin(pitch) * dist + 8,
-            math.cos(yaw) * math.cos(pitch) * dist
-        )
-
-        c.CFrame = CFrame.lookAt(lookTarget + offset, lookTarget)
-    end)
-
-    warn("[CameraLock] ✅ Lock ke base (pointer tetap ada):", tostring(base.Position))
+    warn("[CameraLock] ✅ Kamera di base plot (bawaan Roblox, pointer normal)")
     return true
 end
 
 -- ══════════════════════════════════════════════════════════════
--- ⭐ UNLOCK
+-- ⭐ UNLOCK — balik ke character
 -- ══════════════════════════════════════════════════════════════
 local function cameraUnlockToCharacter()
     warn("[CameraLock] 🔓 Unlock")
     CameraLock.Active = false
-    CameraLock._mouseDown = false
-    CameraLock._touchInput = nil
-    CameraLock._touchDelta = Vector2.new(0, 0)
-    CameraLock._lastPinchDist = nil
-
-    pcall(function() RunService:UnbindFromRenderStep("VrilzCameraLock") end)
-    cameraDisconnectAll()
-
-    -- Reset orbit
-    CameraLock._yaw = 0
-    CameraLock._pitch = -0.35
-    CameraLock._distance = 40
 
     local cam = workspace.CurrentCamera
     if not cam then return end
 
-    cam.CameraType = Enum.CameraType.Custom
+    -- Balik CameraType ke asli
+    if CameraLock._origCameraType then
+        cam.CameraType = CameraLock._origCameraType
+    else
+        cam.CameraType = Enum.CameraType.Custom
+    end
 
+    -- Balik CameraSubject ke Humanoid character
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
 
     if hum then
         cam.CameraSubject = hum
     else
+        -- Tunggu respawn
         local conn
         conn = LocalPlayer.CharacterAdded:Connect(function(newChar)
             local newHum = newChar:WaitForChild("Humanoid", 5)
             if newHum and cam then
                 cam.CameraSubject = newHum
-                cam.CameraType = Enum.CameraType.Custom
             end
             conn:Disconnect()
         end)
     end
 
-    CameraLock._basePos = nil
+    CameraLock._origCameraType = nil
+    CameraLock._origCameraSubject = nil
+    CameraLock._origCameraCFrame = nil
+    CameraLock._origCameraFocus = nil
+    CameraLock._basePart = nil
 end
 
 -- ══════════════════════════════════════════════════════════════
--- ⭐ RESPAWN SAFETY
+-- ⭐ RESPAWN SAFETY — auto unlock kalo player respawn
 -- ══════════════════════════════════════════════════════════════
 LocalPlayer.CharacterAdded:Connect(function(newChar)
-    pcall(function() RunService:UnbindFromRenderStep("VrilzCameraLock") end)
-    CameraLock.Active = false
-    CameraLock._mouseDown = false
-    CameraLock._touchInput = nil
-    CameraLock._touchDelta = Vector2.new(0, 0)
-    CameraLock._lastPinchDist = nil
-    CameraLock._basePos = nil
+    if CameraLock.Active then
+        CameraLock.Active = false
+        task.wait(1)
 
-    cameraDisconnectAll()
-
-    task.spawn(function()
-        local newHum = newChar:WaitForChild("Humanoid", 5)
-        if not newHum then return end
         local cam = workspace.CurrentCamera
         if cam then
             cam.CameraType = Enum.CameraType.Custom
-            cam.CameraSubject = newHum
+            local newHum = newChar:WaitForChild("Humanoid", 5)
+            if newHum then
+                cam.CameraSubject = newHum
+            end
         end
-    end)
+    end
 end)
 
 -- ══════════════════════════════════════════════════════════════
@@ -6090,16 +5846,12 @@ _G.VRILZ_CameraLock = {
     Unlock = cameraUnlockToCharacter,
     IsActive = function() return CameraLock.Active end,
     GetState = function()
+        local cam = workspace.CurrentCamera
         return {
             Active = CameraLock.Active,
-            Yaw = CameraLock._yaw,
-            Pitch = CameraLock._pitch,
-            Distance = CameraLock._distance,
-            MouseDown = CameraLock._mouseDown,
-            TouchActive = CameraLock._touchInput ~= nil,
-            BasePos = CameraLock._basePos,
-            MouseBehavior = CameraUIS.MouseBehavior,
-            MouseIcon = CameraUIS.MouseIconEnabled,
+            CameraType = cam and tostring(cam.CameraType) or "?",
+            CameraSubject = cam and tostring(cam.CameraSubject) or "?",
+            BasePart = CameraLock._basePart and CameraLock._basePart:GetFullName() or "nil",
         }
     end,
 }
