@@ -5480,11 +5480,16 @@ if isAsset then
         ic.Position = UDim2.new(0.5, -13, 0.5, -13)
     end
     ic.BackgroundTransparency = 1
-    ic.Image = "rbxassetid://" .. icon
-    -- ⭐ INI KUNCINYA: Gambar hitam akan otomatis jadi PUTIH di layar
-    ic.ImageColor3 = Color3.fromRGB(255, 255, 255) 
     ic.ZIndex = 6
     ic.Parent = btn
+    ic.ScaleType = Enum.ScaleType.Fit
+    ic.ImageColor3 = Color3.fromRGB(255, 255, 255)
+
+    -- ⭐ FIX: Decal ID → Image ID (+1)
+    local rawId = tostring(icon):gsub("%D", "")
+    local imgId = tonumber(rawId)
+    if imgId then imgId = imgId + 1 end
+    ic.Image = "rbxassetid://" .. tostring(imgId or rawId)
 
             if CFG.TAB_SHOW_LABEL then
                 local lbl = Instance.new("TextLabel")
@@ -5555,20 +5560,23 @@ if isAsset then
                     x.btn.BackgroundColor3 = C.Accent
                     x.btn.BackgroundTransparency = 0.35
                     if x.isAsset then
-                        x.ic.ImageColor3 = Color3.new(1, 1, 1)
-                    else
-                        x.ic.TextColor3 = Color3.new(1, 1, 1)
-                    end
+    x.ic.ImageColor3 = Color3.fromRGB(255, 255, 255)  -- tetap putih saat selected
+    -- ⬇️ TAPI TAMBAHKAN INI: kasih glow biar keliatan
+    x.ic.ImageTransparency = 0
+else
+    x.ic.TextColor3 = Color3.new(1, 1, 1)
+end
                     if x.btn:FindFirstChildOfClass("UIStroke") then x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.15 end
                     if x.lbl then x.lbl.TextColor3 = Color3.new(1, 1, 1) end
                 else
-                    x.btn.BackgroundColor3 = C.Surface3
-                    x.btn.BackgroundTransparency = 0.5
-                    if x.isAsset then
-                        x.ic.ImageColor3 = Color3.fromRGB(255, 255, 255)
-                    else
-                        x.ic.TextColor3 = C.Accent
-                    end
+    x.btn.BackgroundColor3 = C.Surface3
+    x.btn.BackgroundTransparency = 0.5
+    if x.isAsset then
+        x.ic.ImageColor3 = Color3.fromRGB(255, 255, 255)  -- ⬅️ BALIK KE PUTIH
+        x.ic.ImageTransparency = 0
+    else
+        x.ic.TextColor3 = C.Accent
+    end
                     if x.btn:FindFirstChildOfClass("UIStroke") then x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.82 end
                     if x.lbl then x.lbl.TextColor3 = C.Muted end
                 end
@@ -8315,15 +8323,15 @@ end
         end)
     end
 
-    registerTab("Info", "109433949772720", "Info", true)
-    registerTab("Prediksi", "138115344663574", "Prediksi", true)
-    registerTab("Egg", "108430367194565", "Egg", true)
-    registerTab("Visual", "92134919511686", "Visual", true)
-    registerTab("Auto", "92632920884261", "Auto", true)
-    registerTab("Event", "92426602911257", "Event", true)  
-    registerTab("EggMutation", "135654787106832", "EggMutation", true)  
-    registerTab("Webhook", "116684893209469", "Webhook", true)
-    registerTab("Settings", "109743631078711", "Settings", true)
+registerTab("Info", "109433949772721", "Info", true)
+registerTab("Prediksi", "138115344663575", "Prediksi", true)
+registerTab("Egg", "108430367194566", "Egg", true)
+registerTab("Visual", "92134919511687", "Visual", true)
+registerTab("Auto", "92632920884262", "Auto", true)
+registerTab("Event", "92426602911258", "Event", true)  
+registerTab("EggMutation", "135654787106833", "EggMutation", true)  
+registerTab("Webhook", "116684893209470", "Webhook", true)
+registerTab("Settings", "109743631078712", "Settings", true)
 
                 -- ⭐ AUTO BUKA TAB INFO PAS PERTAMA LAUNCH
     task.defer(function()
@@ -11377,9 +11385,28 @@ function UI.Init(sharedState)
     ScreenGui.ResetOnSpawn = false
     ScreenGui.IgnoreGuiInset = true
     ScreenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    ScreenGui.Parent = game:GetService("CoreGui")
+        ScreenGui.Parent = game:GetService("CoreGui")
 
-        setupNotifHolder(ScreenGui)
+    -- ⭐ PRELOAD TAB ICONS (biar gak blank pas pertama launch)
+    task.spawn(function()
+        local preloads = {
+            "rbxassetid://109433949772721",
+            "rbxassetid://138115344663575",
+            "rbxassetid://108430367194566",
+            "rbxassetid://92134919511687",
+            "rbxassetid://92632920884262",
+            "rbxassetid://92426602911258",
+            "rbxassetid://135654787106833",
+            "rbxassetid://116684893209470",
+            "rbxassetid://109743631078712",
+        }
+        pcall(function()
+            game:GetService("ContentProvider"):PreloadAsync(preloads)
+        end)
+        print("[UI] ✅ Tab icons preloaded")
+    end)
+
+    setupNotifHolder(ScreenGui)
     setupDropdownLayer(ScreenGui)
 
     -- ⭐ Start presence tracking
