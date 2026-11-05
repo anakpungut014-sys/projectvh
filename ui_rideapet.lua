@@ -3910,6 +3910,75 @@ end, "AutoSeraph_Enabled")
         end
     end)
 
+    -- ═══════════════════════════════════════════════════════
+    -- ⭐ CARD BARU: AUTO BOSS (DarkSpirit HardNorth)
+    -- ═══════════════════════════════════════════════════════
+    local bossCard, bossContent = makeCard(eventLeft, "🎯 AUTO BOSS", 3)
+
+    makeToggle(bossContent, "Auto Boss (HardNorth)", false, function(v)
+        Shared.AutoBoss_Enabled = v
+        local F = getFeatures()
+        if F and F.setAutoBossEnabled then
+            F.setAutoBossEnabled(v)
+        else
+            notify("❌ Features AutoBoss gak ketemu", "error")
+        end
+        if v then notify("🎯 Auto Boss: ON", "success")
+        else notify("🎯 Auto Boss: OFF", "info") end
+    end, "AutoBoss_Enabled")
+
+    local bossStatusLbl = Instance.new("TextLabel")
+    bossStatusLbl.Size = UDim2.new(1, 0, 0, 18)
+    bossStatusLbl.BackgroundTransparency = 1
+    bossStatusLbl.Text = "Status: Idle"
+    bossStatusLbl.TextColor3 = C_local.Muted
+    bossStatusLbl.Font = Enum.Font.GothamSemibold
+    bossStatusLbl.TextSize = CFG.FONT_MUTED
+    bossStatusLbl.TextXAlignment = Enum.TextXAlignment.Left
+    bossStatusLbl.LayoutOrder = 2
+    bossStatusLbl.ZIndex = 3
+    bossStatusLbl.Parent = bossContent
+    registerTheme(bossStatusLbl, "Muted", "TextColor3")
+
+    local bossRingLbl = Instance.new("TextLabel")
+    bossRingLbl.Size = UDim2.new(1, 0, 0, 16)
+    bossRingLbl.BackgroundTransparency = 1
+    bossRingLbl.Text = "Ring: -"
+    bossRingLbl.TextColor3 = C_local.Accent2
+    bossRingLbl.Font = Enum.Font.GothamSemibold
+    bossRingLbl.TextSize = CFG.FONT_MUTED
+    bossRingLbl.TextXAlignment = Enum.TextXAlignment.Left
+    bossRingLbl.LayoutOrder = 3
+    bossRingLbl.ZIndex = 3
+    bossRingLbl.Parent = bossContent
+    registerTheme(bossRingLbl, "Accent2", "TextColor3")
+
+    local bossProgLbl = Instance.new("TextLabel")
+    bossProgLbl.Size = UDim2.new(1, 0, 0, 16)
+    bossProgLbl.BackgroundTransparency = 1
+    bossProgLbl.Text = "Progress: 0/6"
+    bossProgLbl.TextColor3 = C_local.Success
+    bossProgLbl.Font = Enum.Font.GothamSemibold
+    bossProgLbl.TextSize = CFG.FONT_MUTED
+    bossProgLbl.TextXAlignment = Enum.TextXAlignment.Left
+    bossProgLbl.LayoutOrder = 4
+    bossProgLbl.ZIndex = 3
+    bossProgLbl.Parent = bossContent
+    registerTheme(bossProgLbl, "Success", "TextColor3")
+
+    task.spawn(function()
+        while bossStatusLbl.Parent do
+            task.wait(0.3)
+            local F = getFeatures()
+            if F and F.getAutoBossState then
+                local s = F.getAutoBossState()
+                bossStatusLbl.Text = "Status: " .. (s.Status or "Idle")
+                bossRingLbl.Text = "Ring: " .. (s.CurrentRing or "-")
+                bossProgLbl.Text = "Progress: " .. (s.CurrentIndex or 0) .. "/" .. (s.TotalRings or 6)
+            end
+        end
+    end)
+
     -- ═══════════════════════════════════════════
     -- ═══ KOLOM KANAN ═══
     -- ═══════════════════════════════════════════
@@ -11290,6 +11359,7 @@ function UI.Init(sharedState)
     Shared.YinRitual_Enabled = false
     Shared.InfinityJump_Enabled = false
     Shared.InfinityJump_Height = 50
+    Shared.AutoBoss_Enabled = false 
         -- ⭐ WEBHOOK STATE
     Shared.WebhookURL = loadWebhookURL() or ""
     Shared.WebhookEnabled = false
