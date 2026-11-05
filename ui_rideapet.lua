@@ -1813,31 +1813,6 @@ local function buildLightsEffectLayer(mainFrame)
     end)
 
     -- ══════════════════════════════════════════
-    -- BACKGROUND SPACE GRADIENT (deep space)
-    -- ══════════════════════════════════════════
-    local spaceBg = Instance.new("Frame")
-    spaceBg.Name = "SpaceBG"
-    spaceBg.Size = UDim2.fromScale(1, 1)
-    spaceBg.BackgroundColor3 = Color3.fromRGB(5, 8, 18)
-    spaceBg.BackgroundTransparency = 0.85
-    spaceBg.BorderSizePixel = 0
-    spaceBg.ZIndex = 4
-    spaceBg.Parent = layer
-
-    local spaceBgCorner = Instance.new("UICorner")
-    spaceBgCorner.CornerRadius = UDim.new(0, 18)
-    spaceBgCorner.Parent = spaceBg
-
-    local spaceGrad = Instance.new("UIGradient")
-    spaceGrad.Rotation = 135
-    spaceGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(8, 12, 30)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(3, 5, 15)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(1, 2, 8)),
-    })
-    spaceGrad.Parent = spaceBg
-
-    -- ══════════════════════════════════════════
     -- STARFIELD — bintang kedap-kedip (twinkle)
     -- ══════════════════════════════════════════
     local starfield = Instance.new("Frame")
@@ -2211,44 +2186,6 @@ local function buildLightsEffectLayer(mainFrame)
             task.wait(math.random(150, 350) / 100)  -- 1.5-3.5 detik
         end
     end)
-
-    -- ══════════════════════════════════════════
-    -- AMBIENT SHADOW (vignette atas & bawah)
-    -- ══════════════════════════════════════════
-    local topShadow = Instance.new("Frame")
-    topShadow.Size = UDim2.new(1, 0, 0, 60)
-    topShadow.Position = UDim2.fromScale(0, 0)
-    topShadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    topShadow.BackgroundTransparency = 0.7
-    topShadow.BorderSizePixel = 0
-    topShadow.ZIndex = 4
-    topShadow.Parent = layer
-
-    local topShadowGrad = Instance.new("UIGradient")
-    topShadowGrad.Rotation = 90
-    topShadowGrad.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.5),
-        NumberSequenceKeypoint.new(1, 1),
-    })
-    topShadowGrad.Parent = topShadow
-
-    local botShadow = Instance.new("Frame")
-    botShadow.Size = UDim2.new(1, 0, 0, 60)
-    botShadow.Position = UDim2.new(0, 0, 1, -60)
-    botShadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    botShadow.BackgroundTransparency = 0.7
-    botShadow.BorderSizePixel = 0
-    botShadow.ZIndex = 4
-    botShadow.Parent = layer
-
-    local botShadowGrad = Instance.new("UIGradient")
-    botShadowGrad.Rotation = -90
-    botShadowGrad.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.5),
-        NumberSequenceKeypoint.new(1, 1),
-    })
-    botShadowGrad.Parent = botShadow
-
     return layer
 end
 
@@ -4637,7 +4574,7 @@ main.Name = "MainWindow"
 main.AnchorPoint = Vector2.new(0.5, 0.5)
 main.Position = UDim2.fromScale(0.5, 0.5)
 main.Size = UDim2.fromOffset(winW, winH)
-main.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+main.BackgroundColor3 = Color3.fromRGB(15, 15, 20)
 main.BorderSizePixel = 0
 main.ZIndex = 1
 main.Parent = screenGui
@@ -4712,32 +4649,6 @@ local animeBgCorner = Instance.new("UICorner")
 animeBgCorner.CornerRadius = UDim.new(0, 0)
 animeBgCorner.Parent = animeBg
 
--- ⭐ Overlay gelap tipis biar teks kebaca
-local animeOverlay = Instance.new("Frame")
-animeOverlay.Name = "AnimeOverlay"
-animeOverlay.Size = UDim2.fromScale(1, 1)
-animeOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-animeOverlay.BackgroundTransparency = 0.4 -- 0.4 = gelap 40% (sesuaikan)
-animeOverlay.BorderSizePixel = 0
-animeOverlay.ZIndex = 2
-animeOverlay.Active = false
-animeOverlay.Parent = main
-
-local animeOverlayCorner = Instance.new("UICorner")
-animeOverlayCorner.CornerRadius = UDim.new(0, 0)
-animeOverlayCorner.Parent = animeOverlay
--- ⭐⭐⭐ END FOTO ANIME ⭐⭐⭐
-    -- Soft 3D shadow behind the window (visual only).
-    local shadow = Instance.new("Frame")
-    shadow.Name = "WindowShadow"
-    shadow.AnchorPoint = Vector2.new(0.5, 0.5)
-    shadow.Position = UDim2.fromScale(0.5, 0.5)
-    shadow.Size = UDim2.new(1, 28, 1, 28)
-    shadow.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    shadow.BackgroundTransparency = 0.38
-    shadow.BorderSizePixel = 0
-    shadow.ZIndex = 0
-    shadow.Parent = main
     local shadowCorner = Instance.new("UICorner")
     shadowCorner.CornerRadius = UDim.new(0, 0)
     shadowCorner.Parent = shadow
