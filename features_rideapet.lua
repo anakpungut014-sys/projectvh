@@ -5714,9 +5714,10 @@ function Features.setYinRitualEnabled(v)
 end
 
 -- ============================================================
--- 🎥 CAMERA LOCK — FINAL FIX (PC + Mobile)
+-- 🎥 CAMERA LOCK — FINAL v3 (Pointer TETAP KELIATAN)
 -- PC   : klik kiri drag = rotate, scroll = zoom
 -- Mobile: 1 jari drag = rotate, 2 jari pinch = zoom
+-- POINTER SELALU KELIATAN (MouseIconEnabled = true, MouseBehavior = Default)
 -- ============================================================
 local CameraLock = {
     Active = false,
@@ -5741,27 +5742,14 @@ local CameraLock = {
 local CameraUIS = game:GetService("UserInputService")
 
 -- ══════════════════════════════════════════════════════════════
--- ⭐ MOUSE STATE — hanya PC
+-- ⭐ DETEKSI ENVIRONMENT
 -- ══════════════════════════════════════════════════════════════
-local function cameraIsPurePC()
-    return CameraUIS.MouseEnabled and not CameraUIS.TouchEnabled
+local function cameraHasMouse()
+    return CameraUIS.MouseEnabled
 end
 
-local function cameraForceMouseLock()
-    -- Hanya PC murni yang butuh LockCenter
-    -- Hybrid (laptop touchscreen) & mobile = JANGAN SENTUH
-    if not cameraIsPurePC() then return end
-    pcall(function()
-        CameraUIS.MouseBehavior = Enum.MouseBehavior.LockCenter
-        CameraUIS.MouseIconEnabled = false
-    end)
-end
-
-local function cameraRestoreMouse()
-    pcall(function()
-        CameraUIS.MouseBehavior = Enum.MouseBehavior.Default
-        CameraUIS.MouseIconEnabled = true
-    end)
+local function cameraHasTouch()
+    return CameraUIS.TouchEnabled
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -5785,27 +5773,28 @@ local function cameraDisconnectAll()
 end
 
 -- ══════════════════════════════════════════════════════════════
--- ⭐ GET DELTA — PC (mouse) atau Mobile (touch)
+-- ⭐ GET DELTA — mouse dulu, fallback touch
 -- ══════════════════════════════════════════════════════════════
 local function cameraGetDelta()
-    -- Pure PC
-    if cameraIsPurePC() then
-        return CameraUIS:GetMouseDelta()
+    -- 1. Coba mouse (pointer masih default, delta tetep kebaca
+    --    selama klik kiri ditahan)
+    if cameraHasMouse() then
+        local d = CameraUIS:GetMouseDelta()
+        if d.Magnitude > 0 then
+            return d
+        end
     end
-    -- Mobile / hybrid: pakai touch delta
+
+    -- 2. Fallback touch
     if CameraLock._touchInput then
         return CameraLock._touchDelta
     end
-    -- Hybrid: cek mouse dulu
-    if CameraUIS.MouseEnabled then
-        local d = CameraUIS:GetMouseDelta()
-        if d.Magnitude > 0 then return d end
-    end
+
     return Vector2.new(0, 0)
 end
 
 -- ══════════════════════════════════════════════════════════════
--- ⭐ LOCK KAMERA KE BASE PLOT
+-- ⭐ LOCK KAMERA KE BASE PLOT — POINTER TETAP ADA
 -- ══════════════════════════════════════════════════════════════
 local function cameraLockToBase()
     if CameraLock.Active then return true end
@@ -5846,12 +5835,11 @@ local function cameraLockToBase()
     pcall(function() RunService:UnbindFromRenderStep("VrilzCameraLock") end)
     cameraDisconnectAll()
 
-    -- Set Scriptable
+    -- ⭐ PENTING: JANGAN sentuh MouseBehavior / MouseIconEnabled
+    -- Pointer tetap keliatan, tetap bisa gerak, tetap bisa klik UI
+    -- Kamera tetep Scriptable biar posisi CFrame bisa diatur
     cam.CameraType = Enum.CameraType.Scriptable
     CameraLock.Active = true
-
-    -- PC: force mouse lock
-    cameraForceMouseLock()
 
     -- ══════════════════════════════════════════════════════════
     -- INPUT BEGAN — mouse button / touch
@@ -5862,11 +5850,11 @@ local function cameraLockToBase()
 
         if input.UserInputType == Enum.UserInputType.MouseButton1 then
             CameraLock._mouseDown = true
-            cameraForceMouseLock()
         elseif input.UserInputType == Enum.UserInputType.Touch then
             CameraLock._touchInput = input
             CameraLock._touchDelta = Vector2.new(0, 0)
             CameraLock._mouseDown = true
+            CameraLock._lastPinchDist = nil
         end
     end)
 
@@ -5881,6 +5869,7 @@ local function cameraLockToBase()
                 CameraLock._touchInput = nil
                 CameraLock._touchDelta = Vector2.new(0, 0)
                 CameraLock._mouseDown = false
+                CameraLock._lastPinchDist = nil
             end
         end
     end)
@@ -5956,16 +5945,7 @@ local function cameraLockToBase()
         local c = workspace.CurrentCamera
         if not c then return end
 
-        -- PC: re-assert mouse lock
-        if cameraIsPurePC() then
-            if CameraUIS.MouseBehavior ~= Enum.MouseBehavior.LockCenter then
-                pcall(function()
-                    CameraUIS.MouseBehavior = Enum.MouseBehavior.LockCenter
-                end)
-            end
-        end
-
-        -- Re-assert CameraType
+        -- Re-assert CameraType Scriptable (WAJIB)
         if c.CameraType ~= Enum.CameraType.Scriptable then
             c.CameraType = Enum.CameraType.Scriptable
         end
@@ -5977,12 +5957,12 @@ local function cameraLockToBase()
         if CameraLock._mouseDown then
             local stillPressed = false
 
-            -- PC: cek mouse button
-            if CameraUIS.MouseEnabled then
+            -- Cek mouse button
+            if cameraHasMouse() then
                 stillPressed = CameraUIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1)
             end
 
-            -- Mobile: cek touch masih ada
+            -- Cek touch masih ada
             if not stillPressed and CameraLock._touchInput then
                 for _, t in ipairs(CameraUIS:GetTouches()) do
                     if t == CameraLock._touchInput then
@@ -6009,7 +5989,7 @@ local function cameraLockToBase()
             end
         end
 
-        -- Reset touch delta tiap frame (biar gak numpuk)
+        -- Reset touch delta tiap frame
         if CameraLock._touchInput then
             CameraLock._touchDelta = Vector2.new(0, 0)
         end
@@ -6029,7 +6009,7 @@ local function cameraLockToBase()
         c.CFrame = CFrame.lookAt(lookTarget + offset, lookTarget)
     end)
 
-    warn("[CameraLock] ✅ Lock ke base:", tostring(base.Position))
+    warn("[CameraLock] ✅ Lock ke base (pointer tetap ada):", tostring(base.Position))
     return true
 end
 
@@ -6046,7 +6026,6 @@ local function cameraUnlockToCharacter()
 
     pcall(function() RunService:UnbindFromRenderStep("VrilzCameraLock") end)
     cameraDisconnectAll()
-    cameraRestoreMouse()
 
     -- Reset orbit
     CameraLock._yaw = 0
@@ -6091,7 +6070,6 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     CameraLock._basePos = nil
 
     cameraDisconnectAll()
-    cameraRestoreMouse()
 
     task.spawn(function()
         local newHum = newChar:WaitForChild("Humanoid", 5)
@@ -6120,6 +6098,8 @@ _G.VRILZ_CameraLock = {
             MouseDown = CameraLock._mouseDown,
             TouchActive = CameraLock._touchInput ~= nil,
             BasePos = CameraLock._basePos,
+            MouseBehavior = CameraUIS.MouseBehavior,
+            MouseIcon = CameraUIS.MouseIconEnabled,
         }
     end,
 }
