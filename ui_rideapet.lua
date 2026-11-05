@@ -5469,43 +5469,24 @@ end)
         tabStroke.Parent = btn
         registerTheme(tabStroke, "Accent", "Color")
 
-               -- ⭐ LOGIKA BARU: Cek apakah pakai Asset ID (gambar) atau Emoji (text)
+                       -- ⭐ LOGIKA BARU: Cek apakah pakai Asset ID (gambar) atau Emoji (text)
 if isAsset then
-    -- 1. Background putih di belakang ikon hitam
-    local bgIcon = Instance.new("Frame")
-    bgIcon.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
-    bgIcon.BorderSizePixel = 0
-    bgIcon.ZIndex = 5
-    
-    if CFG.TAB_SHOW_LABEL then
-        bgIcon.Size = UDim2.fromOffset(28, 28)
-        bgIcon.Position = UDim2.fromOffset(8, (tabH - 28) / 2)
-    else
-        bgIcon.Size = UDim2.fromOffset(30, 30)
-        bgIcon.Position = UDim2.new(0.5, -15, 0.5, -15)
-    end
-    
-    bgIcon.Parent = btn
-    local bgCorner = Instance.new("UICorner")
-    bgCorner.CornerRadius = UDim.new(0, 6)
-    bgCorner.Parent = bgIcon
-
-    -- 2. Gambar Ikon
     local ic = Instance.new("ImageLabel")
     if CFG.TAB_SHOW_LABEL then
-        ic.Size = UDim2.fromOffset(20, 20)
-        ic.Position = UDim2.fromOffset(12, (tabH - 20) / 2)
+        ic.Size = UDim2.fromOffset(24, 24)
+        ic.Position = UDim2.fromOffset(10, (tabH - 24) / 2)
     else
-        ic.Size = UDim2.fromOffset(22, 22)
-        ic.Position = UDim2.new(0.5, -11, 0.5, -11)
+        ic.Size = UDim2.fromOffset(26, 26)
+        ic.Position = UDim2.new(0.5, -13, 0.5, -13)
     end
     ic.BackgroundTransparency = 1
     ic.Image = "rbxassetid://" .. icon
-    ic.ImageColor3 = Color3.new(1, 1, 1) 
+    -- ⭐ INI KUNCINYA: Gambar hitam akan otomatis jadi PUTIH di layar
+    ic.ImageColor3 = Color3.fromRGB(255, 255, 255) 
     ic.ZIndex = 6
     ic.Parent = btn
 
-                        if CFG.TAB_SHOW_LABEL then
+            if CFG.TAB_SHOW_LABEL then
                 local lbl = Instance.new("TextLabel")
                 lbl.Size = UDim2.new(1, -44, 1, 0)
                 lbl.Position = UDim2.fromOffset(42, 0)
@@ -5518,9 +5499,9 @@ if isAsset then
                 lbl.ZIndex = 6
                 lbl.Parent = btn
                 registerTheme(lbl, "Muted", "TextColor3")
-                navs[id] = {btn = btn, ic = ic, bgIcon = bgIcon, lbl = lbl, isAsset = true}
+                navs[id] = {btn = btn, ic = ic, lbl = lbl, isAsset = true}
             else
-                navs[id] = {btn = btn, ic = ic, bgIcon = bgIcon, lbl = nil, isAsset = true}
+                navs[id] = {btn = btn, ic = ic, lbl = nil, isAsset = true}
             end
         else
             -- Mode lama (Emoji / Teks)
@@ -5570,23 +5551,21 @@ if isAsset then
     end
     for n, x in pairs(navs) do
         if not x or not x.btn or not x.btn.Parent then continue end
-                if n == id then
-            x.btn.BackgroundColor3 = C.Accent
+                                if n == id then
+                    x.btn.BackgroundColor3 = C.Accent
                     x.btn.BackgroundTransparency = 0.35
                     if x.isAsset then
                         x.ic.ImageColor3 = Color3.new(1, 1, 1)
-                        if x.bgIcon then x.bgIcon.BackgroundColor3 = Color3.new(1, 1, 1) end
                     else
                         x.ic.TextColor3 = Color3.new(1, 1, 1)
                     end
                     if x.btn:FindFirstChildOfClass("UIStroke") then x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.15 end
                     if x.lbl then x.lbl.TextColor3 = Color3.new(1, 1, 1) end
-                    else
+                else
                     x.btn.BackgroundColor3 = C.Surface3
                     x.btn.BackgroundTransparency = 0.5
                     if x.isAsset then
                         x.ic.ImageColor3 = Color3.fromRGB(255, 255, 255)
-                        if x.bgIcon then x.bgIcon.BackgroundColor3 = Color3.fromRGB(220, 220, 220) end
                     else
                         x.ic.TextColor3 = C.Accent
                     end
