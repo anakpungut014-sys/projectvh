@@ -6219,10 +6219,10 @@ function Features.startStealExecutor()
 end
 
 -- ============================================================
--- AUTO BOSS SCAN — DarkSpirit HardNorth Rings
+-- AUTO BOSS — DarkSpirit HardNorth Rings
 -- TP ke tengah ring → wait 1s → next ring → reset
 -- ============================================================
-local BossScanState = {
+local AutoBossState = {
     Enabled = false,
     Status = "⏸️ Idle",
     Completed = 0,
@@ -6232,38 +6232,38 @@ local BossScanState = {
     WaitStart = 0,
 }
 
-local BossScanCfg = {
+local AutoBossCfg = {
     RING_PREFIX = "hardnorth",
     ENTRY_HEIGHT = 3,
     PER_RING_WAIT = 1.0,
     RESET_DELAY = 0.5,
 }
 
-local function bossGetRoot()
+local function autoBossGetRoot()
     local c = LocalPlayer.Character
     return c and c:FindFirstChild("HumanoidRootPart")
 end
 
-local function bossInstantTP(targetPos)
-    local root = bossGetRoot()
+local function autoBossInstantTP(targetPos)
+    local root = autoBossGetRoot()
     if not root then return false end
-    root.CFrame = CFrame.new(targetPos + Vector3.new(0, BossScanCfg.ENTRY_HEIGHT, 0))
+    root.CFrame = CFrame.new(targetPos + Vector3.new(0, AutoBossCfg.ENTRY_HEIGHT, 0))
     root.Velocity = Vector3.zero
     root.AssemblyLinearVelocity = Vector3.zero
     return true
 end
 
-local function bossGetRingsFolder()
+local function autoBossGetRingsFolder()
     local ds = Workspace:FindFirstChild("DarkSpiritScene")
     return ds and ds:FindFirstChild("Rings")
 end
 
-local function bossScanHardRings()
+local function autoBossScanHardRings()
     local list = {}
-    local folder = bossGetRingsFolder()
+    local folder = autoBossGetRingsFolder()
     if not folder then return list end
 
-    local prefix = BossScanCfg.RING_PREFIX:lower()
+    local prefix = AutoBossCfg.RING_PREFIX:lower()
     for _, r in ipairs(folder:GetChildren()) do
         if r.Name:lower():find(prefix, 1, true) then
             local ok, pivot = pcall(function() return r:GetPivot() end)
@@ -6281,73 +6281,73 @@ local function bossScanHardRings()
     return list
 end
 
-function Features.startAutoBossScan()
+function Features.startAutoBoss()
     task.spawn(function()
         while task.wait(0.05) do
-            if not BossScanState.Enabled then
-                BossScanState.Status = "⏸️ Idle"
+            if not AutoBossState.Enabled then
+                AutoBossState.Status = "⏸️ Idle"
                 continue
             end
 
             if _G.VRILZ_HalloweenBusy or _G.VRILZ_HalloweenLeaving then
-                BossScanState.Status = "⏸️ Halloween busy"
+                AutoBossState.Status = "⏸️ Halloween busy"
                 continue
             end
 
-            local rings = bossScanHardRings()
+            local rings = autoBossScanHardRings()
             if #rings == 0 then
-                BossScanState.Status = "⏳ Ring gak ada"
+                AutoBossState.Status = "⏳ Ring gak ada"
                 task.wait(0.5)
                 continue
             end
 
-            if BossScanState.CurrentIndex >= #rings then
-                BossScanState.Status = "🔄 Reset — ulang dari HardNorth_1"
-                BossScanState.CurrentIndex = 0
-                BossScanState.Completed = 0
-                task.wait(BossScanCfg.RESET_DELAY)
+            if AutoBossState.CurrentIndex >= #rings then
+                AutoBossState.Status = "🔄 Reset — ulang dari HardNorth_1"
+                AutoBossState.CurrentIndex = 0
+                AutoBossState.Completed = 0
+                task.wait(AutoBossCfg.RESET_DELAY)
                 continue
             end
 
-            local target = rings[BossScanState.CurrentIndex + 1]
-            BossScanState.CurrentRing = target.name
-            BossScanState.Status = "⚡ TP " .. target.name .. " (" .. (BossScanState.CurrentIndex + 1) .. "/" .. #rings .. ")"
+            local target = rings[AutoBossState.CurrentIndex + 1]
+            AutoBossState.CurrentRing = target.name
+            AutoBossState.Status = "⚡ TP " .. target.name .. " (" .. (AutoBossState.CurrentIndex + 1) .. "/" .. #rings .. ")"
 
-            bossInstantTP(target.center)
+            autoBossInstantTP(target.center)
             task.wait(0.1)
-            bossInstantTP(target.center)
+            autoBossInstantTP(target.center)
 
-            BossScanState.WaitStart = os.clock()
-            while os.clock() - BossScanState.WaitStart < BossScanCfg.PER_RING_WAIT do
-                if not BossScanState.Enabled then break end
-                local remain = BossScanCfg.PER_RING_WAIT - (os.clock() - BossScanState.WaitStart)
-                BossScanState.Status = string.format("⏳ %s — %.1fs", target.name, remain)
+            AutoBossState.WaitStart = os.clock()
+            while os.clock() - AutoBossState.WaitStart < AutoBossCfg.PER_RING_WAIT do
+                if not AutoBossState.Enabled then break end
+                local remain = AutoBossCfg.PER_RING_WAIT - (os.clock() - AutoBossState.WaitStart)
+                AutoBossState.Status = string.format("⏳ %s — %.1fs", target.name, remain)
                 task.wait(0.05)
             end
 
-            if not BossScanState.Enabled then break end
+            if not AutoBossState.Enabled then break end
 
-            BossScanState.Completed = BossScanState.Completed + 1
-            BossScanState.Status = "✅ " .. target.name .. " (" .. BossScanState.Completed .. ")"
-            BossScanState.CurrentIndex = BossScanState.CurrentIndex + 1
+            AutoBossState.Completed = AutoBossState.Completed + 1
+            AutoBossState.Status = "✅ " .. target.name .. " (" .. AutoBossState.Completed .. ")"
+            AutoBossState.CurrentIndex = AutoBossState.CurrentIndex + 1
         end
     end)
 end
 
-function Features.setAutoBossScanEnabled(v)
-    BossScanState.Enabled = v
+function Features.setAutoBossEnabled(v)
+    AutoBossState.Enabled = v
     if v then
-        BossScanState.Status = "▶️ Starting..."
-        BossScanState.CurrentIndex = 0
-        BossScanState.Completed = 0
-        BossScanState.CurrentRing = "-"
+        AutoBossState.Status = "▶️ Starting..."
+        AutoBossState.CurrentIndex = 0
+        AutoBossState.Completed = 0
+        AutoBossState.CurrentRing = "-"
     else
-        BossScanState.Status = "⏸️ Idle"
+        AutoBossState.Status = "⏸️ Idle"
     end
 end
 
-function Features.getBossScanState()
-    return BossScanState
+function Features.getAutoBossState()
+    return AutoBossState
 end
 
 -- ============================================================
@@ -6388,7 +6388,7 @@ function Features.Init(sharedState)
     Features.startAutoYinRitual()
     Features.startInfinityJump()
     Features.startStealExecutor() 
-    Features.startAutoBossScan()
+    Features.startAutoBoss()
 
            -- ⭐ AUTO-ENABLE AUTO RIDE PET — LANGSUNG ON
     Shared.AutoRidePet_Enabled = true
