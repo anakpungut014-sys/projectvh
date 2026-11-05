@@ -8314,15 +8314,15 @@ end
         end)
     end
 
-    registerTab("Info", "ℹ", "Info")
-    registerTab("Prediksi", "◎", "Prediksi")
-    registerTab("Egg", "◯", "Egg")
-    registerTab("Visual", "👁️", "Visual")
-    registerTab("Auto", "▶", "Auto")
-    registerTab("Event", "👻", "Event")  
-    registerTab("EggMutation", "⚔️", "EggMutation")  
-    registerTab("Webhook", "🔔", "Webhook")
-    registerTab("Settings", "⚙", "Settings")
+    registerTab("Info", "109433949772720", "Info", true)
+    registerTab("Prediksi", "138115344663574", "Prediksi", true)
+    registerTab("Egg", "108430367194565", "Egg", true)
+    registerTab("Visual", "92134919511686", "Visual", true)
+    registerTab("Auto", "92632920884261", "Auto", true)
+    registerTab("Event", "92426602911257", "Event", true)  
+    registerTab("EggMutation", "135654787106832", "EggMutation", true)  
+    registerTab("Webhook", "116684893209469", "Webhook", true)
+    registerTab("Settings", "109743631078711", "Settings", true)
 
                 -- ⭐ AUTO BUKA TAB INFO PAS PERTAMA LAUNCH
     task.defer(function()
