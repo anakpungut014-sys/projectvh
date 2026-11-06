@@ -4711,6 +4711,7 @@ end
 -- ⭐⭐⭐ END GITHUB IMAGE LOADER ⭐⭐⭐
 animeBg.ScaleType = Enum.ScaleType.Crop
 animeBg.ZIndex = 1
+animeBg.Parent = main
 
 local animeBgCorner = Instance.new("UICorner")
 animeBgCorner.CornerRadius = UDim.new(0, 0)
@@ -5500,31 +5501,6 @@ if isAsset then
 
     local rawId = tostring(icon):gsub("%D", "")
     ic.Image = "rbxassetid://" .. rawId
-
-    -- Fallback (kalau gambar gagal load)
-    task.spawn(function()
-        task.wait(1.5)
-        if ic and ic.Parent then
-            local success, isLoaded = pcall(function() return ic.IsLoaded end)
-            if not success or not isLoaded then
-                ic:Destroy()
-                local fallbackIcon = Instance.new("TextLabel")
-                fallbackIcon.Size = UDim2.fromScale(1, 1)
-                fallbackIcon.BackgroundTransparency = 1
-                fallbackIcon.Text = "📁"
-                fallbackIcon.TextSize = CFG.TAB_ICON
-                fallbackIcon.Font = Enum.Font.GothamBold
-                fallbackIcon.TextColor3 = C.Accent
-                fallbackIcon.ZIndex = 6
-                fallbackIcon.Parent = iconBox
-                if navs[id] then
-                    navs[id].ic = fallbackIcon
-                    navs[id].isAsset = false
-                end
-            end
-        end
-    end)
-
     if CFG.TAB_SHOW_LABEL then
         local lbl = Instance.new("TextLabel")
         lbl.Size = UDim2.new(1, -44, 1, 0)
