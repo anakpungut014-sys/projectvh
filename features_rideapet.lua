@@ -6219,11 +6219,11 @@ function Features.startStealExecutor()
 end
 
 -- ============================================================
--- AUTO BOSS v8 — BENERAN FIX
--- Aturan:
---   1. Menit 58-59 → masuk portal, diem sampai jam bulat, eksekusi
---   2. Menit 00 (jam bulat) → langsung masuk portal + eksekusi
---   3. Menit lain (01-57) → DIEM DI BASE, JANGAN TP
+-- AUTO BOSS v9 — ENGLISH + FIXED
+-- Rules:
+--   1. Minute 58-59 → enter portal, wait until top of hour, execute
+--   2. Minute 00 (top of hour) → enter portal + execute immediately
+--   3. Other minutes (01-57) → STAY IN BASE, DO NOT TP
 -- ============================================================
 local AutoBossState = {
     Enabled = false,
@@ -6232,7 +6232,7 @@ local AutoBossState = {
     Completed = 0,
     CurrentRing = "-",
     CurrentIndex = 0,
-    ExecuteAt = 0,           -- timestamp kapan harus eksekusi (jam bulat)
+    ExecuteAt = 0,
     RingCycleDone = 0,
     OrigPos = nil,
     EnteredAt = 0,
@@ -6250,14 +6250,14 @@ local AutoBossCfg = {
     WAIT_AFTER_EXIT = 5,
 }
 
--- ⭐ WAKTU DEVICE (DateTime, bukan os.time)
+-- Device time via DateTime (NOT os.time)
 local function ab_Now()
     local ok, t = pcall(function() return DateTime.now().UnixTimestamp end)
     if ok and t then return t end
     return os.time()
 end
 
--- ⭐ KOMPONEN WAKTU DARI TIMESTAMP (NO STRING PARSE)
+-- Time components from timestamp (NO STRING PARSE)
 local function ab_GetComponents(ts)
     local ok, y, mo, d, h, mi, s = pcall(function()
         local dt = DateTime.fromUnixTimestamp(ts)
@@ -6268,7 +6268,7 @@ local function ab_GetComponents(ts)
     return t.year, t.month, t.day, t.hour, t.min, t.sec
 end
 
--- ⭐ FORMAT JAM (buat status)
+-- Format time for status
 local function ab_Fmt(ts, fmt)
     fmt = fmt or "%H:%M:%S"
     local ok, r = pcall(function()
@@ -6301,32 +6301,29 @@ local function ab_Hum()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
--- ⭐ HITUNG TIMESTAMP JAM BULAT BERIKUTNYA DARI SEKARANG
+-- ⭐ FIX: Next top of hour — seconds within hour = mi*60 + s (NOT h*3600 + mi*60 + s)
 local function ab_NextHourTimestamp()
     local now = ab_Now()
-    local _, _, _, h, mi, s = ab_GetComponents(now)
-    h = h or 0; mi = mi or 0; s = s or 0
-    local secInHour = h * 3600 + mi * 60 + s
-    return now + (3600 - secInHour)  -- maju ke jam bulat berikutnya
+    local _, _, _, _, mi, s = ab_GetComponents(now)
+    mi = mi or 0; s = s or 0
+    local secInHour = mi * 60 + s   -- 0-3599
+    return now + (3600 - secInHour)
 end
 
--- ⭐ HITUNG TIMESTAMP MENIT 58 JAM INI ATAU BERIKUTNYA
+-- ⭐ FIX: Next boss timestamp (minute 58) — same fix
 local function ab_NextBossTimestamp()
     local now = ab_Now()
-    local _, _, _, h, mi, s = ab_GetComponents(now)
-    h = h or 0; mi = mi or 0; s = s or 0
-    local secInHour = h * 3600 + mi * 60 + s
-    local bossSec = 58 * 60  -- 3480 detik (menit 58:00)
+    local _, _, _, _, mi, s = ab_GetComponents(now)
+    mi = mi or 0; s = s or 0
+    local secInHour = mi * 60 + s
+    local bossSec = 58 * 60  -- 3480
 
     if secInHour < bossSec then
-        -- belum menit 58 → hari ini jam ini
         return now + (bossSec - secInHour)
     end
-    -- udah lewat menit 58 → jam berikutnya
     return now + (3600 - secInHour) + bossSec
 end
 
--- ⭐ TP INSTAN
 local function ab_TP(pos)
     local r = ab_Root()
     if not r then return false end
@@ -6336,7 +6333,6 @@ local function ab_TP(pos)
     return true
 end
 
--- ⭐ FLY
 local function ab_Fly(targetPos, timeout)
     timeout = timeout or AutoBossCfg.FLY_TIMEOUT
     local root = ab_Root()
@@ -6399,7 +6395,6 @@ local function ab_Fly(targetPos, timeout)
     return arrived
 end
 
--- ⭐ SCAN RING
 local function ab_ScanRings()
     local list = {}
     local prefix = AutoBossCfg.RING_PREFIX:lower()
@@ -6440,7 +6435,6 @@ local function ab_ScanRings()
     return list
 end
 
--- ⭐ ENTER PORTAL
 local function ab_EnterPortal()
     if #ab_ScanRings() > 0 then return true end
 
@@ -6469,7 +6463,7 @@ local function ab_EnterPortal()
     end
 
     if not portalPrompt then
-        AutoBossState.Status = "❌ Portal gak ketemu"
+        AutoBossState.Status = "❌ Portal not found"
         return false
     end
 
@@ -6507,9 +6501,8 @@ local function ab_EnterPortal()
     return Workspace:FindFirstChild("BossFight") ~= nil
 end
 
--- ⭐ EXIT PORTAL
 local function ab_ExitPortal()
-    AutoBossState.Status = "🚪 Keluar dari area boss..."
+    AutoBossState.Status = "🚪 Exiting boss area..."
 
     local exitPart, exitPrompt
     local bf = Workspace:FindFirstChild("BossFight")
@@ -6559,7 +6552,7 @@ local function ab_ExitPortal()
     local w = os.clock()
     while os.clock() - w < 10 do
         if not Workspace:FindFirstChild("BossFight") then
-            AutoBossState.Status = "✅ Keluar area boss"
+            AutoBossState.Status = "✅ Exited boss area"
             return true
         end
         task.wait(0.5)
@@ -6576,22 +6569,20 @@ local function ab_ExitPortal()
     return true
 end
 
--- ⭐ CEK BOSS SELESAI
 local function ab_IsBossDone()
     if not Workspace:FindFirstChild("BossFight") then
-        return true, "BossFight hilang"
+        return true, "BossFight gone"
     end
     local hum = ab_Hum()
     if not hum or hum.Health <= 0 then
-        return true, "Karakter mati"
+        return true, "Character died"
     end
     if AutoBossState.RingCycleDone > 0 and #ab_ScanRings() == 0 then
-        return true, "Ring hilang"
+        return true, "Rings gone"
     end
     return false, nil
 end
 
--- ⭐ MAIN LOOP
 function Features.startAutoBoss()
     task.spawn(function()
         while task.wait(0.1) do
@@ -6608,35 +6599,33 @@ function Features.startAutoBoss()
                 continue
             end
 
-            -- ═══════════════════════════════════════════════════
-            -- PHASE: IDLE → cek jam device, putusin masuk atau nunggu
-            -- ═══════════════════════════════════════════════════
+            -- ═══ PHASE: IDLE ═══
             if AutoBossState.Phase == "idle" then
                 local now = ab_Now()
-                local _, _, _, h, mi = ab_GetComponents(now)
-                h = h or 0; mi = mi or 0
+                local _, _, _, _, mi = ab_GetComponents(now)
+                mi = mi or 0
 
-                -- ⭐ JAM BULAT (menit 0) → langsung masuk + eksekusi
+                -- Top of hour (minute 0) → enter + execute immediately
                 if mi == 0 then
-                    AutoBossState.ExecuteAt = now  -- eksekusi sekarang
+                    AutoBossState.ExecuteAt = now
                     AutoBossState.Phase = "entering"
-                    AutoBossState.Status = "🚪 Jam bulat! Langsung masuk + eksekusi..."
+                    AutoBossState.Status = "🚪 Top of hour! Entering + executing..."
                     continue
                 end
 
-                -- ⭐ MENIT 58 / 59 → masuk portal, tunggu jam bulat
+                -- Minute 58/59 → enter, wait for top of hour
                 if mi == 58 or mi == 59 then
                     AutoBossState.ExecuteAt = ab_NextHourTimestamp()
                     AutoBossState.Phase = "entering"
-                    AutoBossState.Status = "🚪 Waktunya masuk! Tunggu jam " .. ab_FmtHM(AutoBossState.ExecuteAt)
+                    AutoBossState.Status = "🚪 Time to enter! Waiting for " .. ab_FmtHM(AutoBossState.ExecuteAt)
                     continue
                 end
 
-                -- ⭐ MENIT LAIN (01-57) → DIEM DI BASE, JANGAN TP
+                -- Other minutes (01-57) → STAY IN BASE
                 local nextBoss = ab_NextBossTimestamp()
                 local remain = nextBoss - now
                 AutoBossState.Status = string.format(
-                    "⏰ DIEM DI BASE — boss jam %s (%s lagi)",
+                    "⏰ STAYING IN BASE — boss at %s (%s remaining)",
                     ab_FmtHM(nextBoss),
                     ab_FmtCountdown(remain)
                 )
@@ -6644,12 +6633,10 @@ function Features.startAutoBoss()
                 continue
             end
 
-            -- ═══════════════════════════════════════════════════
-            -- PHASE: ENTERING → TP portal, masuk, tentuin eksekusi
-            -- ═══════════════════════════════════════════════════
+            -- ═══ PHASE: ENTERING ═══
             if AutoBossState.Phase == "entering" then
                 if not ab_EnterPortal() then
-                    AutoBossState.Status = "⚠️ Gagal masuk — retry 5s"
+                    AutoBossState.Status = "⚠️ Failed to enter — retry 5s"
                     task.wait(5)
                     continue
                 end
@@ -6659,35 +6646,32 @@ function Features.startAutoBoss()
                 AutoBossState.CurrentIndex = 0
                 AutoBossState.Completed = 0
 
-                -- Kalo ExecuteAt udah lewat (jam bulat case) → langsung eksekusi
+                -- If ExecuteAt already passed → execute immediately
                 if AutoBossState.ExecuteAt <= ab_Now() then
                     AutoBossState.Phase = "executing"
-                    AutoBossState.Status = "⚡ Masuk area — langsung eksekusi ring!"
+                    AutoBossState.Status = "⚡ Entered area — executing rings immediately!"
                     continue
                 end
 
-                -- Kalo belum waktunya → diem di area, tunggu jam bulat
+                -- Otherwise wait in area until top of hour
                 AutoBossState.Phase = "waiting"
-                AutoBossState.Status = "✅ Masuk area — tunggu eksekusi jam " .. ab_FmtHM(AutoBossState.ExecuteAt)
+                AutoBossState.Status = "✅ Entered area — waiting for " .. ab_FmtHM(AutoBossState.ExecuteAt)
                 continue
             end
 
-            -- ═══════════════════════════════════════════════════
-            -- PHASE: WAITING → diem di area sampai jam bulat
-            -- ═══════════════════════════════════════════════════
+            -- ═══ PHASE: WAITING ═══
             if AutoBossState.Phase == "waiting" then
                 local now = ab_Now()
                 local remain = AutoBossState.ExecuteAt - now
 
                 if remain > 0 then
                     AutoBossState.Status = string.format(
-                        "🔍 Di area — tunggu eksekusi jam %s (%s lagi)",
+                        "🔍 In area — waiting for %s (%s remaining)",
                         ab_Fmt(AutoBossState.ExecuteAt, "%H:%M:%S"),
                         ab_FmtCountdown(remain)
                     )
-                    -- Kalo keluar area (BossFight ilang), retry masuk
                     if not Workspace:FindFirstChild("BossFight") then
-                        AutoBossState.Status = "⚠️ Keluar area saat nunggu — retry"
+                        AutoBossState.Status = "⚠️ Kicked out while waiting — retry"
                         AutoBossState.Phase = "entering"
                         task.wait(2)
                     else
@@ -6696,33 +6680,30 @@ function Features.startAutoBoss()
                     continue
                 end
 
-                -- ⭐ JAM BULAT TIBA → eksekusi
                 AutoBossState.Phase = "executing"
-                AutoBossState.Status = "⚡ Jam " .. ab_FmtHM(ab_Now()) .. " — eksekusi ring!"
+                AutoBossState.Status = "⚡ " .. ab_FmtHM(ab_Now()) .. " — executing rings!"
                 continue
             end
 
-            -- ═══════════════════════════════════════════════════
-            -- PHASE: EXECUTING → TP/Fly semua ring
-            -- ═══════════════════════════════════════════════════
+            -- ═══ PHASE: EXECUTING ═══
             if AutoBossState.Phase == "executing" then
                 local done, reason = ab_IsBossDone()
                 if done then
-                    AutoBossState.Status = "✅ Boss selesai (" .. tostring(reason) .. ")"
+                    AutoBossState.Status = "✅ Boss done (" .. tostring(reason) .. ")"
                     AutoBossState.Phase = "exiting"
                     continue
                 end
 
                 local rings = ab_ScanRings()
                 if #rings == 0 then
-                    AutoBossState.Status = "⏳ Ring gak ada — 2s"
+                    AutoBossState.Status = "⏳ No rings — 2s"
                     task.wait(2)
                     continue
                 end
 
                 if AutoBossState.CurrentIndex >= #rings then
                     AutoBossState.RingCycleDone = AutoBossState.RingCycleDone + 1
-                    AutoBossState.Status = "🔄 Cycle #" .. AutoBossState.RingCycleDone .. " — ulang ring 1"
+                    AutoBossState.Status = "🔄 Cycle #" .. AutoBossState.RingCycleDone .. " — restart ring 1"
                     AutoBossState.CurrentIndex = 0
                     AutoBossState.Completed = 0
                     task.wait(AutoBossCfg.RESET_DELAY)
@@ -6746,7 +6727,7 @@ function Features.startAutoBoss()
                     if not AutoBossState.Enabled or AutoBossState.Phase ~= "executing" then break end
                     local dm, _ = ab_IsBossDone()
                     if dm then
-                        AutoBossState.Status = "✅ Boss selesai mid-ring"
+                        AutoBossState.Status = "✅ Boss done mid-ring"
                         AutoBossState.Phase = "exiting"
                         break
                     end
@@ -6760,9 +6741,7 @@ function Features.startAutoBoss()
                 continue
             end
 
-            -- ═══════════════════════════════════════════════════
-            -- PHASE: EXITING → keluar portal
-            -- ═══════════════════════════════════════════════════
+            -- ═══ PHASE: EXITING ═══
             if AutoBossState.Phase == "exiting" then
                 ab_ExitPortal()
                 task.wait(AutoBossCfg.WAIT_AFTER_EXIT)
@@ -6781,7 +6760,7 @@ function Features.setAutoBossEnabled(v)
             print("[DateTime]:", DateTime.now():FormatLocalTime("%H:%M:%S %d/%m/%Y", "en-us"))
             print("[os.date()]:", os.date("%H:%M:%S %d/%m/%Y"))
             local _, _, _, h, mi = ab_GetComponents(ab_Now())
-            print("[Component jam:menit]:", h, mi)
+            print("[Hour:Minute Component]:", h, mi)
             print("======================")
         end)
 
