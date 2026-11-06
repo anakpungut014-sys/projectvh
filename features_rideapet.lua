@@ -6219,8 +6219,14 @@ function Features.startStealExecutor()
 end
 
 -- ============================================================
--- AUTO BOSS — DarkSpirit HardNorth Rings
--- TP ke tengah ring → wait 1s → next ring → reset
+-- AUTO BOSS v3 — SCHEDULE BASED
+-- Boss aktif tiap 58 menit (19:58, 20:58, 21:58, ...)
+-- Flow:
+--   1. Tunggu jam XX:58 (schedule) → TP portal → masuk
+--   2. Diem 1 menit di dalam area (cek kecolongan)
+--   3. Eksekusi ring
+--   4. Boss selesai (BossFight hilang / mati / ring hilang) → keluar
+--   5. Tunggu jam (XX+1):58 → ulang
 -- ============================================================
 local AutoBossState = {
     Enabled = false,
@@ -6230,18 +6236,29 @@ local AutoBossState = {
     CurrentIndex = 0,
     TotalRings = 6,
     WaitStart = 0,
+
+    -- ⭐ SCHEDULE STATE
+    Phase = "idle",           -- "idle" | "waiting_schedule" | "entering" | "verifying" | "executing" | "exiting" | "waiting_next"
+    NextBossTime = 0,         -- os.time() target boss berikutnya (misal 19:58)
+    EnteredAt = 0,            -- os.time() saat masuk portal
+    RingCycleDone = 0,
+    OrigPos = nil,
+
+    -- ⭐ CONFIG
+    ScheduleMinute = 58,      -- menit ke-58 tiap jam
+    VerifyDuration = 60,      -- diem 1 menit di dalam area (cek kecolongan)
 }
 
 local AutoBossCfg = {
     RING_PREFIX = "hardnorth",
     ENTRY_HEIGHT = 3,
-    PER_RING_WAIT = 0.5,     -- ⭐ 0.5 detik
+    PER_RING_WAIT = 0.5,
     RESET_DELAY = 0.5,
-    -- ⭐ FLY CONFIG untuk ring 2-6
     FLY_SPEED = 500,
     FLY_APPROACH_DIST = 15,
     FLY_TIMEOUT = 6,
     FLY_LOOP_WAIT = 0.03,
+    WAIT_AFTER_EXIT = 5,       -- jeda 5 detik setelah keluar sebelum hitung next
 }
 
 local function autoBossGetRoot()
@@ -6249,7 +6266,46 @@ local function autoBossGetRoot()
     return c and c:FindFirstChild("HumanoidRootPart")
 end
 
--- ⭐ TELEPORT INSTAN (buat ring 1)
+local function autoBossGetHum()
+    local c = LocalPlayer.Character
+    return c and c:FindFirstChildOfClass("Humanoid")
+end
+
+-- ⭐ HITUNG WAKTU BOSS BERIKUTNYA
+-- Kalau sekarang 19:45 → next = 19:58 hari ini
+-- Kalau sekarang 19:59 → next = 20:58 (karena 19:58 udah lewat)
+-- Kalau sekarang 20:01 → next = 20:58
+local function autoBossCalcNextBossTime()
+    local now = os.time()
+    local t = os.date("*t", now)
+
+    -- Target: jam ini, menit ScheduleMinute, detik 0
+    local target = os.time({
+        year = t.year, month = t.month, day = t.day,
+        hour = t.hour, min = AutoBossState.ScheduleMinute, sec = 0,
+    })
+
+    -- Kalau target udah lewat (sekarang > target), tambah 1 jam
+    if now >= target then
+        target = target + 3600
+    end
+
+    return target
+end
+
+-- ⭐ FORMAT COUNTDOWN
+local function autoBossFormatCountdown(seconds)
+    if seconds < 0 then seconds = 0 end
+    local h = math.floor(seconds / 3600)
+    local m = math.floor((seconds % 3600) / 60)
+    local s = math.floor(seconds % 60)
+    if h > 0 then
+        return string.format("%02d:%02d:%02d", h, m, s)
+    end
+    return string.format("%02d:%02d", m, s)
+end
+
+-- ⭐ TELEPORT INSTAN
 local function autoBossInstantTP(targetPos)
     local root = autoBossGetRoot()
     if not root then return false end
@@ -6259,22 +6315,19 @@ local function autoBossInstantTP(targetPos)
     return true
 end
 
--- ⭐ FLY (buat ring 2-6) — BodyVelocity + PlatformStand
+-- ⭐ FLY
 local function autoBossFlyTo(targetPos, timeout)
     timeout = timeout or AutoBossCfg.FLY_TIMEOUT
-
     local root = autoBossGetRoot()
-    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    local hum = autoBossGetHum()
     if not root or not hum then return false end
 
-    -- Bersihin dulu
     for _, c in ipairs(root:GetChildren()) do
         if c:IsA("BodyVelocity") or c:IsA("BodyGyro") then
             pcall(function() c:Destroy() end)
         end
     end
 
-    -- ⭐ PlatformStand biar humanoid gak nahan
     pcall(function() hum.PlatformStand = true end)
     task.wait(0.05)
 
@@ -6294,7 +6347,7 @@ local function autoBossFlyTo(targetPos, timeout)
     local arrived = false
 
     while os.clock() - startTime < timeout do
-        if not AutoBossState.Enabled then
+        if not AutoBossState.Enabled or AutoBossState.Phase ~= "executing" then
             bv:Destroy()
             pcall(function() hum.PlatformStand = false end)
             return false
@@ -6323,7 +6376,6 @@ local function autoBossFlyTo(targetPos, timeout)
         task.wait(AutoBossCfg.FLY_LOOP_WAIT)
     end
 
-    -- Pas deket → TP instan ke center
     if arrived then
         local r = autoBossGetRoot()
         if r then
@@ -6335,46 +6387,232 @@ local function autoBossFlyTo(targetPos, timeout)
         task.wait(0.1)
     end
 
-    -- Cleanup
     pcall(function() bv:Destroy() end)
     pcall(function() hum.PlatformStand = false end)
-
     return arrived
 end
 
-local function autoBossGetRingsFolder()
-    local ds = Workspace:FindFirstChild("DarkSpiritScene")
-    return ds and ds:FindFirstChild("Rings")
-end
-
+-- ⭐ SCAN RING
 local function autoBossScanHardRings()
     local list = {}
-    local folder = autoBossGetRingsFolder()
-    if not folder then return list end
-
     local prefix = AutoBossCfg.RING_PREFIX:lower()
-    for _, r in ipairs(folder:GetChildren()) do
-        if r.Name:lower():find(prefix, 1, true) then
-            local ok, pivot = pcall(function() return r:GetPivot() end)
-            if ok then
-                local num = tonumber(r.Name:match("(%d+)$")) or 999
-                table.insert(list, {
-                    name = r.Name,
-                    number = num,
-                    center = pivot.Position,
-                })
+    local seen = {}
+
+    local function addFromFolder(folder)
+        if not folder then return end
+        for _, r in ipairs(folder:GetChildren()) do
+            if r.Name:lower():find(prefix, 1, true) and not seen[r] then
+                seen[r] = true
+                local ok, pivot = pcall(function() return r:GetPivot() end)
+                if ok then
+                    local num = tonumber(r.Name:match("(%d+)$")) or 999
+                    table.insert(list, { name = r.Name, number = num, center = pivot.Position })
+                end
             end
         end
     end
+
+    addFromFolder(Workspace:FindFirstChild("DarkSpiritScene"))
+    addFromFolder(Workspace:FindFirstChild("BossFight"))
+    addFromFolder(Workspace:FindFirstChild("Rings"))
+
+    if #list == 0 then
+        for _, d in ipairs(Workspace:GetDescendants()) do
+            if d:IsA("Model") and d.Name:lower():find(prefix, 1, true) then
+                seen[d] = true
+                local ok, pivot = pcall(function() return d:GetPivot() end)
+                if ok then
+                    local num = tonumber(d.Name:match("(%d+)$")) or 999
+                    table.insert(list, { name = d.Name, number = num, center = pivot.Position })
+                end
+            end
+        end
+    end
+
     table.sort(list, function(a, b) return a.number < b.number end)
     return list
 end
 
+-- ⭐ ENTER PORTAL
+local function autoBossEnterPortal()
+    if #autoBossScanHardRings() > 0 then return true end
+
+    local portalModel = Workspace:FindFirstChild("Map")
+        and Workspace.Map:FindFirstChild("Heaven")
+        and Workspace.Map.Heaven:FindFirstChild("DarkSpiritPortal")
+
+    local portalPart, portalPrompt
+
+    if portalModel then
+        local promptPart = portalModel:FindFirstChild("PromptPart", true)
+        portalPrompt = promptPart and promptPart:FindFirstChild("DarkSpiritPrompt")
+        if not portalPrompt then
+            portalPrompt = portalModel:FindFirstChildWhichIsA("ProximityPrompt", true)
+        end
+        portalPart = promptPart and promptPart:FindFirstChildWhichIsA("BasePart", true)
+        if not portalPart then
+            portalPart = portalModel:FindFirstChildWhichIsA("BasePart", true)
+        end
+    end
+
+    if not portalPrompt then
+        for _, d in ipairs(Workspace:GetDescendants()) do
+            if d:IsA("ProximityPrompt")
+               and (d.ObjectText or ""):lower():find("dark spirit", 1, true) then
+                portalPrompt = d
+                portalPart = d.Parent:FindFirstChildWhichIsA("BasePart", true)
+                    or d.Parent:FindFirstAncestorWhichIsA("BasePart")
+                break
+            end
+        end
+    end
+
+    if not portalPrompt then
+        AutoBossState.Status = "❌ Portal gak ketemu"
+        return false
+    end
+
+    local root = autoBossGetRoot()
+    if root then AutoBossState.OrigPos = root.Position end
+
+    if root and portalPart then
+        root.CFrame = CFrame.new(portalPart.Position + Vector3.new(0, 5, 0))
+        root.Velocity = Vector3.zero
+        root.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.4)
+    end
+
+    portalPrompt.HoldDuration = 0
+    portalPrompt.MaxActivationDistance = math.huge
+    portalPrompt.RequiresLineOfSight = false
+
+    if typeof(fireproximityprompt) == "function" then
+        pcall(fireproximityprompt, portalPrompt)
+    end
+
+    local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
+        and game:GetService("ReplicatedStorage").Remotes:FindFirstChild("Game")
+        and game:GetService("ReplicatedStorage").Remotes.Game:FindFirstChild("DarkSpirit")
+    if remote then
+        pcall(function() remote:FireServer() end)
+        task.wait(0.2)
+        pcall(function() remote:FireServer("Enter") end)
+        task.wait(0.2)
+        pcall(function() remote:FireServer(true) end)
+    end
+
+    -- Tunggu area load
+    local waitStart = os.clock()
+    while os.clock() - waitStart < 12 do
+        if #autoBossScanHardRings() > 0 or Workspace:FindFirstChild("BossFight") then
+            return true
+        end
+        task.wait(0.3)
+    end
+    return Workspace:FindFirstChild("BossFight") ~= nil
+end
+
+-- ⭐ EXIT PORTAL
+local function autoBossExitPortal()
+    AutoBossState.Status = "🚪 Keluar dari area boss..."
+
+    local exitPart, exitPrompt
+    local bf = Workspace:FindFirstChild("BossFight")
+    if bf then
+        local exitObj = bf:FindFirstChild("DarkSpiritExit")
+        if exitObj then
+            exitPart = exitObj:IsA("BasePart") and exitObj
+                or exitObj:FindFirstChildWhichIsA("BasePart", true)
+            exitPrompt = exitObj:FindFirstChildWhichIsA("ProximityPrompt", true)
+        end
+    end
+
+    if not exitPrompt then
+        for _, d in ipairs(Workspace:GetDescendants()) do
+            if d:IsA("ProximityPrompt")
+               and (d.ActionText or ""):lower():find("return", 1, true) then
+                exitPrompt = d
+                exitPart = d.Parent:FindFirstChildWhichIsA("BasePart", true)
+                    or d.Parent:FindFirstAncestorWhichIsA("BasePart")
+                break
+            end
+        end
+    end
+
+    local root = autoBossGetRoot()
+    if root and exitPart then
+        root.CFrame = CFrame.new(exitPart.Position + Vector3.new(0, 5, 0))
+        root.Velocity = Vector3.zero
+        root.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.4)
+    end
+
+    if exitPrompt then
+        exitPrompt.HoldDuration = 0
+        exitPrompt.MaxActivationDistance = math.huge
+        exitPrompt.RequiresLineOfSight = false
+        if typeof(fireproximityprompt) == "function" then
+            pcall(fireproximityprompt, exitPrompt)
+        end
+        local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
+            and game:GetService("ReplicatedStorage").Remotes:FindFirstChild("Game")
+            and game:GetService("ReplicatedStorage").Remotes.Game:FindFirstChild("DarkSpirit")
+        if remote then
+            pcall(function() remote:FireServer("Exit") end)
+            task.wait(0.2)
+            pcall(function() remote:FireServer("Return") end)
+        end
+    end
+
+    local waitStart = os.clock()
+    while os.clock() - waitStart < 10 do
+        if not Workspace:FindFirstChild("BossFight") then
+            AutoBossState.Status = "✅ Keluar area boss"
+            return true
+        end
+        task.wait(0.5)
+    end
+
+    -- Fallback TP balik
+    if AutoBossState.OrigPos then
+        local r = autoBossGetRoot()
+        if r then
+            r.CFrame = CFrame.new(AutoBossState.OrigPos + Vector3.new(0, 5, 0))
+            r.Velocity = Vector3.zero
+            r.AssemblyLinearVelocity = Vector3.zero
+        end
+    end
+    return true
+end
+
+-- ⭐ CEK BOSS SELESAI
+local function autoBossIsBossDone()
+    local bf = Workspace:FindFirstChild("BossFight")
+    if not bf then
+        return true, "BossFight hilang"
+    end
+
+    local hum = autoBossGetHum()
+    if not hum or hum.Health <= 0 then
+        return true, "Karakter mati"
+    end
+
+    if AutoBossState.RingCycleDone > 0 and #autoBossScanHardRings() == 0 then
+        return true, "Ring hilang"
+    end
+
+    return false, nil
+end
+
+-- ⭐ MAIN LOOP
 function Features.startAutoBoss()
     task.spawn(function()
-        while task.wait(0.05) do
+        while task.wait(0.1) do
             if not AutoBossState.Enabled then
-                AutoBossState.Status = "⏸️ Idle"
+                if AutoBossState.Phase ~= "idle" then
+                    AutoBossState.Phase = "idle"
+                    AutoBossState.Status = "⏸️ Idle"
+                end
                 continue
             end
 
@@ -6383,58 +6621,173 @@ function Features.startAutoBoss()
                 continue
             end
 
-            local rings = autoBossScanHardRings()
-            if #rings == 0 then
-                AutoBossState.Status = "⏳ Ring gak ada"
-                task.wait(0.5)
+            -- ═══════════════════════════════════════════════════
+            -- PHASE: IDLE → hitung next boss time
+            -- ═══════════════════════════════════════════════════
+            if AutoBossState.Phase == "idle" then
+                AutoBossState.NextBossTime = autoBossCalcNextBossTime()
+                AutoBossState.Phase = "waiting_schedule"
+
+                local nextStr = os.date("%H:%M", AutoBossState.NextBossTime)
+                AutoBossState.Status = "⏰ Nunggu jam " .. nextStr
                 continue
             end
 
-            if AutoBossState.CurrentIndex >= #rings then
-                AutoBossState.Status = "🔄 Reset — ulang dari HardNorth_1"
+            -- ═══════════════════════════════════════════════════
+            -- PHASE: WAITING_SCHEDULE → tunggu os.time() == NextBossTime
+            -- ═══════════════════════════════════════════════════
+            if AutoBossState.Phase == "waiting_schedule" then
+                local now = os.time()
+                local remaining = AutoBossState.NextBossTime - now
+
+                if remaining > 0 then
+                    AutoBossState.Status = string.format(
+                        "⏰ Nunggu %s — %s lagi",
+                        os.date("%H:%M", AutoBossState.NextBossTime),
+                        autoBossFormatCountdown(remaining)
+                    )
+                    task.wait(1)
+                    continue
+                end
+
+                -- ⭐ Waktunya tiba (jam XX:58) → masuk portal
+                AutoBossState.Phase = "entering"
+                AutoBossState.Status = "🚪 Waktunya! Masuk portal..."
+                continue
+            end
+
+            -- ═══════════════════════════════════════════════════
+            -- PHASE: ENTERING → TP portal & masuk
+            -- ═══════════════════════════════════════════════════
+            if AutoBossState.Phase == "entering" then
+                if not autoBossEnterPortal() then
+                    AutoBossState.Status = "⚠️ Gagal masuk — retry 5s"
+                    task.wait(5)
+                    continue
+                end
+
+                AutoBossState.EnteredAt = os.time()
+                AutoBossState.Phase = "verifying"
+                AutoBossState.RingCycleDone = 0
                 AutoBossState.CurrentIndex = 0
                 AutoBossState.Completed = 0
-                task.wait(AutoBossCfg.RESET_DELAY)
+                AutoBossState.Status = "✅ Masuk portal — verifikasi 1 menit..."
                 continue
             end
 
-            local target = rings[AutoBossState.CurrentIndex + 1]
-            AutoBossState.CurrentRing = target.name
+            -- ═══════════════════════════════════════════════════
+            -- PHASE: VERIFYING → diem 1 menit (cek kecolongan)
+            -- ═══════════════════════════════════════════════════
+            if AutoBossState.Phase == "verifying" then
+                local elapsed = os.time() - AutoBossState.EnteredAt
+                local remaining = AutoBossState.VerifyDuration - elapsed
 
-            -- ⭐ RING 1 → TP INSTAN, RING 2-6 → FLY
-            local isFirstRing = (AutoBossState.CurrentIndex == 0)
-
-            if isFirstRing then
-                AutoBossState.Status = "⚡ TP " .. target.name .. " (1/" .. #rings .. ")"
-                autoBossInstantTP(target.center)
-                task.wait(0.1)
-                autoBossInstantTP(target.center)
-            else
-                AutoBossState.Status = "🛸 Fly ke " .. target.name .. " (" .. (AutoBossState.CurrentIndex + 1) .. "/" .. #rings .. ")"
-                autoBossFlyTo(target.center, AutoBossCfg.FLY_TIMEOUT)
-                task.wait(0.1)
-                -- Re-TP sekali lagi biar pasti masuk center
-                autoBossInstantTP(target.center)
-            end
-
-            -- ⭐ Jeda tetap 0.5 detik
-            AutoBossState.WaitStart = os.clock()
-            while os.clock() - AutoBossState.WaitStart < AutoBossCfg.PER_RING_WAIT do
-                if not AutoBossState.Enabled then break end
-                local remain = AutoBossCfg.PER_RING_WAIT - (os.clock() - AutoBossState.WaitStart)
-                if isFirstRing then
-                    AutoBossState.Status = string.format("⏳ %s — %.1fs (TP)", target.name, remain)
-                else
-                    AutoBossState.Status = string.format("⏳ %s — %.1fs (Fly)", target.name, remain)
+                if remaining > 0 then
+                    AutoBossState.Status = string.format(
+                        "🔍 Verifikasi di dalam area — %ds lagi",
+                        remaining
+                    )
+                    -- Safety: kalau keluar area, retry masuk
+                    if not Workspace:FindFirstChild("BossFight") then
+                        AutoBossState.Status = "⚠️ Keluar area saat verifikasi — retry"
+                        AutoBossState.Phase = "entering"
+                        task.wait(2)
+                    else
+                        task.wait(1)
+                    end
+                    continue
                 end
-                task.wait(0.05)
+
+                -- 1 menit lewat → eksekusi
+                AutoBossState.Phase = "executing"
+                AutoBossState.Status = "⚡ 1 menit lewat — eksekusi ring!"
+                continue
             end
 
-            if not AutoBossState.Enabled then break end
+            -- ═══════════════════════════════════════════════════
+            -- PHASE: EXECUTING → TP/Fly semua ring
+            -- ═══════════════════════════════════════════════════
+            if AutoBossState.Phase == "executing" then
+                local done, reason = autoBossIsBossDone()
+                if done then
+                    AutoBossState.Status = "✅ Boss selesai (" .. tostring(reason) .. ")"
+                    AutoBossState.Phase = "exiting"
+                    continue
+                end
 
-            AutoBossState.Completed = AutoBossState.Completed + 1
-            AutoBossState.Status = "✅ " .. target.name .. " (" .. AutoBossState.Completed .. ")"
-            AutoBossState.CurrentIndex = AutoBossState.CurrentIndex + 1
+                local rings = autoBossScanHardRings()
+                if #rings == 0 then
+                    AutoBossState.Status = "⏳ Ring gak ada — 2s"
+                    task.wait(2)
+                    continue
+                end
+
+                if AutoBossState.CurrentIndex >= #rings then
+                    AutoBossState.RingCycleDone = AutoBossState.RingCycleDone + 1
+                    AutoBossState.Status = "🔄 Cycle #" .. AutoBossState.RingCycleDone .. " — ulang ring 1"
+                    AutoBossState.CurrentIndex = 0
+                    AutoBossState.Completed = 0
+                    task.wait(AutoBossCfg.RESET_DELAY)
+                    continue
+                end
+
+                local target = rings[AutoBossState.CurrentIndex + 1]
+                AutoBossState.CurrentRing = target.name
+                local isFirstRing = (AutoBossState.CurrentIndex == 0)
+
+                if isFirstRing then
+                    AutoBossState.Status = "⚡ TP " .. target.name .. " (1/" .. #rings .. ")"
+                    autoBossInstantTP(target.center)
+                    task.wait(0.1)
+                    autoBossInstantTP(target.center)
+                else
+                    AutoBossState.Status = "🛸 Fly " .. target.name .. " (" .. (AutoBossState.CurrentIndex + 1) .. "/" .. #rings .. ")"
+                    autoBossFlyTo(target.center, AutoBossCfg.FLY_TIMEOUT)
+                    task.wait(0.1)
+                    autoBossInstantTP(target.center)
+                end
+
+                AutoBossState.WaitStart = os.clock()
+                while os.clock() - AutoBossState.WaitStart < AutoBossCfg.PER_RING_WAIT do
+                    if not AutoBossState.Enabled or AutoBossState.Phase ~= "executing" then break end
+                    local doneMid, reasonMid = autoBossIsBossDone()
+                    if doneMid then
+                        AutoBossState.Status = "✅ Boss selesai mid-ring"
+                        AutoBossState.Phase = "exiting"
+                        break
+                    end
+                    task.wait(0.05)
+                end
+
+                if AutoBossState.Phase ~= "executing" then continue end
+
+                AutoBossState.Completed = AutoBossState.Completed + 1
+                AutoBossState.Status = "✅ " .. target.name .. " (" .. AutoBossState.Completed .. ")"
+                AutoBossState.CurrentIndex = AutoBossState.CurrentIndex + 1
+                continue
+            end
+
+            -- ═══════════════════════════════════════════════════
+            -- PHASE: EXITING → keluar portal
+            -- ═══════════════════════════════════════════════════
+            if AutoBossState.Phase == "exiting" then
+                autoBossExitPortal()
+                task.wait(AutoBossCfg.WAIT_AFTER_EXIT)
+                AutoBossState.Phase = "waiting_next"
+                continue
+            end
+
+            -- ═══════════════════════════════════════════════════
+            -- PHASE: WAITING_NEXT → tunggu jam (XX+1):58
+            -- ═══════════════════════════════════════════════════
+            if AutoBossState.Phase == "waiting_next" then
+                AutoBossState.NextBossTime = autoBossCalcNextBossTime()
+                AutoBossState.Phase = "waiting_schedule"
+
+                local nextStr = os.date("%H:%M", AutoBossState.NextBossTime)
+                AutoBossState.Status = "⏰ Boss selesai — nunggu jam " .. nextStr
+                continue
+            end
         end
     end)
 end
@@ -6443,11 +6796,17 @@ function Features.setAutoBossEnabled(v)
     AutoBossState.Enabled = v
     if v then
         AutoBossState.Status = "▶️ Starting..."
+        AutoBossState.Phase = "idle"
+        AutoBossState.NextBossTime = 0
+        AutoBossState.EnteredAt = 0
         AutoBossState.CurrentIndex = 0
         AutoBossState.Completed = 0
         AutoBossState.CurrentRing = "-"
+        AutoBossState.RingCycleDone = 0
+        AutoBossState.OrigPos = nil
     else
         AutoBossState.Status = "⏸️ Idle"
+        AutoBossState.Phase = "idle"
     end
 end
 
