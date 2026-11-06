@@ -4711,8 +4711,6 @@ end
 -- ⭐⭐⭐ END GITHUB IMAGE LOADER ⭐⭐⭐
 animeBg.ScaleType = Enum.ScaleType.Crop
 animeBg.ZIndex = 1
-animeBg.Parent = main
-registerTheme(animeBg, "Accent", "ImageColor3")
 
 local animeBgCorner = Instance.new("UICorner")
 animeBgCorner.CornerRadius = UDim.new(0, 0)
@@ -5456,7 +5454,6 @@ end)
         btn.AutoButtonColor = false
         btn.ZIndex = 5
         btn.Parent = sidebarScroll
-        registerTheme(btn, "Surface3", "BackgroundColor3")
 
         local corner = Instance.new("UICorner")
         corner.CornerRadius = UDim.new(0, 11)
@@ -5563,9 +5560,7 @@ ic.Image = "rbxassetid://" .. rawId
                 lbl.ZIndex = 6
                 lbl.Parent = btn
                 registerTheme(lbl, "Muted", "TextColor3")
-                navs[id] = {btn = btn, ic = ic, lbl = lbl, isAsset = true}
             else
-                navs[id] = {btn = btn, ic = ic, lbl = nil, isAsset = true}
             end
         else
             -- Mode lama (Emoji / Teks)
@@ -5607,59 +5602,64 @@ ic.Image = "rbxassetid://" .. rawId
 
                 local function switchTo()
     if not pages or not navs then return end
+
+    -- Hide semua page
     for n, p in pairs(pages) do
         if p and p.Parent then p.Visible = false end
     end
     if pages[id] and pages[id].Parent then
         pages[id].Visible = true
     end
-    
+
+    -- Update visual semua tab
     for n, x in pairs(navs) do
         if not x or not x.btn or not x.btn.Parent then continue end
-        
-        if n == id then
+
+        local isActive = (n == id)
+
+        if isActive then
             -- ⭐ STATE AKTIF (DIKLIK)
             x.btn.BackgroundColor3 = C.Accent
             x.btn.BackgroundTransparency = 0.35
-            
+
+            -- Icon box: jadi biru / accent
             if x.box then
-                -- Kotak icon berubah jadi biru (atau warna Accent tema)
                 x.box.BackgroundColor3 = C.Accent
                 x.box.BackgroundTransparency = 0.1
             end
-            
+
+            -- Icon: putih
             if x.isAsset then
                 x.ic.ImageColor3 = Color3.fromRGB(255, 255, 255)
                 x.ic.ImageTransparency = 0
             else
                 x.ic.TextColor3 = Color3.fromRGB(255, 255, 255)
             end
-            
-            if x.btn:FindFirstChildOfClass("UIStroke") then 
-                x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.15 
+
+            if x.btn:FindFirstChildOfClass("UIStroke") then
+                x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.15
             end
             if x.lbl then x.lbl.TextColor3 = Color3.new(1, 1, 1) end
-            
         else
             -- ⭐ STATE TIDAK AKTIF (GAK DIKLIK)
             x.btn.BackgroundColor3 = C.Surface3
             x.btn.BackgroundTransparency = 0.5
-            
+
+            -- Icon box: balik ke gelap (theme-aware)
             if x.box then
-                -- Kotak icon balik ke warna gelap
-                x.box.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+                x.box.BackgroundColor3 = C.Surface2       -- ⭐ ganti dari static RGB
                 x.box.BackgroundTransparency = 0.2
             end
-            
+
             if x.isAsset then
                 x.ic.ImageColor3 = Color3.fromRGB(255, 255, 255)
                 x.ic.ImageTransparency = 0
             else
                 x.ic.TextColor3 = C.Accent
             end
-            
-            if x.btn:FindFirstChildOfClass("UIStroke") then 
-                x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.82 
+
+            if x.btn:FindFirstChildOfClass("UIStroke") then
+                x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.82
             end
             if x.lbl then x.lbl.TextColor3 = C.Muted end
         end
@@ -8407,11 +8407,11 @@ end
 
 registerTab("Info", "129516985087314", "Info", true)
 registerTab("Prediksi", "86552780174782", "Prediksi", true)
-registerTab("Egg", "88235257025924", "Egg", true)
+registerTab("Egg", "71907576522732", "Egg", true)
 registerTab("Visual", "108965719868153", "Visual", true)
 registerTab("Auto", "75410123129821", "Auto", true)
-registerTab("Event", "80545971882432", "Event", true)  
-registerTab("EggMutation", "110024266377801", "EggMutation", true)  
+registerTab("Event", "125933064004474", "Event", true)  
+registerTab("EggMutation", "123426071854429", "EggMutation", true)  
 registerTab("Webhook", "78129393420657", "Webhook", true)
 registerTab("Settings", "97834340359225", "Settings", true)
 
@@ -11470,18 +11470,18 @@ function UI.Init(sharedState)
         ScreenGui.Parent = game:GetService("CoreGui")
 
     -- ⭐ PRELOAD TAB ICONS (biar gak blank pas pertama launch)
-    task.spawn(function()
-local preloads = {
-    "rbxassetid://129516985087314",
-    "rbxassetid://86552780174782",
-    "rbxassetid://88235257025924",
-    "rbxassetid://108965719868153",
-    "rbxassetid://75410123129821",
-    "rbxassetid://80545971882432",
-    "rbxassetid://110024266377801",
-    "rbxassetid://78129393420657",
-    "rbxassetid://97834340359225",
-}
+task.spawn(function()
+    local preloads = {
+        "rbxassetid://129516985087314",  -- Info
+        "rbxassetid://86552780174782",   -- Prediksi
+        "rbxassetid://71907576522732",   -- Egg
+        "rbxassetid://108965719868153",  -- Visual
+        "rbxassetid://75410123129821",   -- Auto
+        "rbxassetid://125933064004474",  -- Event
+        "rbxassetid://123426071854429",  -- EggMutation
+        "rbxassetid://78129393420657",   -- Webhook
+        "rbxassetid://97834340359225",   -- Settings
+    }
         pcall(function()
             game:GetService("ContentProvider"):PreloadAsync(preloads)
         end)
