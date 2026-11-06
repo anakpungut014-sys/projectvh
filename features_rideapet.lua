@@ -6219,13 +6219,17 @@ function Features.startStealExecutor()
 end
 
 -- ============================================================
--- AUTO BOSS v4 — SCHEDULE BASED (tunggu jam bulat berikutnya)
--- Boss muncul tiap jam menit 58 (19:58, 20:58, ...)
+-- AUTO BOSS v5 — FINAL FIX
+-- Boss muncul tiap jam menit 58 (19:58, 20:58, 21:58, ...)
+-- Eksekusi tiap jam bulat (20:00, 21:00, 22:00, ...)
+--
 -- Flow:
---   1. Tunggu jam XX:58 → TP portal → masuk area boss
---   2. Diem di area boss SAMPAI JAM BULAT BERIKUTNYA (XX+1):00
---   3. Baru eksekusi ring
---   4. Boss selesai → keluar → tunggu (XX+1):58 → ulang
+--   Toggle ON XX:01-XX:57 → tunggu XX:58 → masuk portal →
+--                          diem → eksekusi (XX+1):00
+--   Toggle ON XX:58-XX:59 → langsung masuk portal →
+--                          diem → eksekusi (XX+1):00
+--   Toggle ON XX:00 (jam bulat) → langsung masuk portal →
+--                          LANGSUNG eksekusi (gak nunggu)
 -- ============================================================
 local AutoBossState = {
     Enabled = false,
@@ -6237,7 +6241,7 @@ local AutoBossState = {
     WaitStart = 0,
 
     -- ⭐ SCHEDULE STATE
-    Phase = "idle",
+    Phase = "idle",           -- "idle" | "waiting_schedule" | "entering" | "verifying" | "executing" | "exiting" | "waiting_next"
     NextBossTime = 0,         -- os.time() target boss (XX:58)
     ExecuteTime = 0,          -- os.time() target eksekusi (XX+1):00
     EnteredAt = 0,
@@ -6271,32 +6275,61 @@ local function autoBossGetHum()
 end
 
 -- ⭐ HITUNG WAKTU BOSS BERIKUTNYA — tiap jam menit 58
+-- Handle window 58-59:59 = masih boss time jam ini
 local function autoBossCalcNextBossTime()
     local now = os.time()
     local t = os.date("*t", now)
 
-    local target = os.time({
+    local currentBossTime = os.time({
         year = t.year, month = t.month, day = t.day,
         hour = t.hour, min = AutoBossState.ScheduleMinute, sec = 0,
     })
 
-    if now >= target then
-        target = target + 3600   -- +1 JAM
-    end
-    return target
-end
-
--- ⭐ HITUNG WAKTU EKSEKUSI — jam bulat berikutnya SETELAH boss time
--- Contoh: BossTime = 19:58:00 → ExecuteTime = 20:00:00
---         BossTime = 23:58:00 → ExecuteTime = 00:00:00 (besok)
-local function autoBossCalcExecuteTime(bossTime)
-    local t = os.date("*t", bossTime)
-    -- Tambah 1 jam, set menit & detik ke 0
-    local execTarget = os.time({
+    local nextHourTime = os.time({
         year = t.year, month = t.month, day = t.day,
         hour = t.hour + 1, min = 0, sec = 0,
     })
-    return execTarget
+
+    -- ⭐ Masih di window boss jam ini (58-59:59) → pake boss time jam ini
+    if now >= currentBossTime and now < nextHourTime then
+        return currentBossTime
+    end
+
+    -- ⭐ Belum sampe menit 58 → pake boss time jam ini
+    if now < currentBossTime then
+        return currentBossTime
+    end
+
+    -- ⭐ Udah lewat jam bulat → next boss jam berikutnya
+    return currentBossTime + 3600
+end
+
+-- ⭐ HITUNG WAKTU EKSEKUSI — jam bulat berikutnya SETELAH boss time
+-- Handle wrap: boss 23:58 → execute 00:00 (besok)
+local function autoBossCalcExecuteTime(bossTime)
+    local t = os.date("*t", bossTime)
+    local execHour = t.hour + 1
+    local execDay = t.day
+    local execMonth = t.month
+    local execYear = t.year
+
+    if execHour >= 24 then
+        execHour = 0
+        -- Pake os.time biar otomatis handle bulan/tahun baru
+        local tempTime = os.time({
+            year = execYear, month = execMonth, day = execDay + 1,
+            hour = 12, min = 0, sec = 0,
+        })
+        local tempT = os.date("*t", tempTime)
+        execDay = tempT.day
+        execMonth = tempT.month
+        execYear = tempT.year
+    end
+
+    return os.time({
+        year = execYear, month = execMonth, day = execDay,
+        hour = execHour, min = 0, sec = 0,
+    })
 end
 
 -- ⭐ FORMAT COUNTDOWN
@@ -6626,9 +6659,34 @@ function Features.startAutoBoss()
             end
 
             -- ═══════════════════════════════════════════════════
-            -- PHASE: IDLE → hitung next boss time + execute time
+            -- PHASE: IDLE
             -- ═══════════════════════════════════════════════════
             if AutoBossState.Phase == "idle" then
+                local now = os.time()
+                local t = os.date("*t", now)
+
+                -- ⭐ KASUS 1: Jam bulat (XX:00) → langsung masuk + eksekusi
+                if t.min == 0 then
+                    AutoBossState.NextBossTime = now
+                    AutoBossState.ExecuteTime = now
+                    AutoBossState.Phase = "entering"
+                    AutoBossState.Status = "🚪 Jam bulat! Langsung masuk + eksekusi..."
+                    continue
+                end
+
+                -- ⭐ KASUS 2: Window boss (XX:58 / XX:59) → masuk, tunggu jam bulat
+                if t.min == 58 or t.min == 59 then
+                    AutoBossState.NextBossTime = os.time({
+                        year = t.year, month = t.month, day = t.day,
+                        hour = t.hour, min = AutoBossState.ScheduleMinute, sec = 0,
+                    })
+                    AutoBossState.ExecuteTime = autoBossCalcExecuteTime(AutoBossState.NextBossTime)
+                    AutoBossState.Phase = "entering"
+                    AutoBossState.Status = "🚪 Window boss — masuk, tunggu eksekusi!"
+                    continue
+                end
+
+                -- ⭐ KASUS 3: Normal (XX:01-XX:57) → tunggu XX:58
                 AutoBossState.NextBossTime = autoBossCalcNextBossTime()
                 AutoBossState.ExecuteTime = autoBossCalcExecuteTime(AutoBossState.NextBossTime)
                 AutoBossState.Phase = "waiting_schedule"
@@ -6672,17 +6730,25 @@ function Features.startAutoBoss()
                 end
 
                 AutoBossState.EnteredAt = os.time()
-                AutoBossState.Phase = "verifying"
                 AutoBossState.RingCycleDone = 0
                 AutoBossState.CurrentIndex = 0
                 AutoBossState.Completed = 0
+
+                -- ⭐ Kasus jam bulat: ExecuteTime <= now → langsung eksekusi
+                if AutoBossState.ExecuteTime <= os.time() then
+                    AutoBossState.Phase = "executing"
+                    AutoBossState.Status = "⚡ Masuk area — langsung eksekusi ring!"
+                    continue
+                end
+
+                -- ⭐ Kasus window: masuk di XX:58/59 → tunggu jam bulat
+                AutoBossState.Phase = "verifying"
                 AutoBossState.Status = "✅ Masuk area — nunggu " .. os.date("%H:%M", AutoBossState.ExecuteTime)
                 continue
             end
 
             -- ═══════════════════════════════════════════════════
-            -- PHASE: VERIFYING → tunggu JAM BULAT berikutnya
-            -- Contoh: masuk 19:58 → nunggu sampai 20:00 → eksekusi
+            -- PHASE: VERIFYING → tunggu JAM BULAT
             -- ═══════════════════════════════════════════════════
             if AutoBossState.Phase == "verifying" then
                 local now = os.time()
@@ -6694,7 +6760,6 @@ function Features.startAutoBoss()
                         os.date("%H:%M:%S", AutoBossState.ExecuteTime),
                         autoBossFormatCountdown(remaining)
                     )
-                    -- Safety: kalau keluar area, retry masuk
                     if not Workspace:FindFirstChild("BossFight") then
                         AutoBossState.Status = "⚠️ Keluar area saat nunggu — retry"
                         AutoBossState.Phase = "entering"
@@ -6705,7 +6770,6 @@ function Features.startAutoBoss()
                     continue
                 end
 
-                -- ⭐ Jam bulat tiba → eksekusi
                 AutoBossState.Phase = "executing"
                 AutoBossState.Status = "⚡ Jam " .. os.date("%H:%M") .. " — eksekusi ring!"
                 continue
@@ -6785,7 +6849,7 @@ function Features.startAutoBoss()
             end
 
             -- ═══════════════════════════════════════════════════
-            -- PHASE: WAITING_NEXT → hitung next boss (XX+1):58
+            -- PHASE: WAITING_NEXT → hitung next boss
             -- ═══════════════════════════════════════════════════
             if AutoBossState.Phase == "waiting_next" then
                 AutoBossState.NextBossTime = autoBossCalcNextBossTime()
