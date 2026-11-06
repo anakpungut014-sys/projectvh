@@ -8321,15 +8321,15 @@ end
         end)
     end
 
-registerTab("Info", "109433949772720", "Info", true)
-registerTab("Prediksi", "138115344663574", "Prediksi", true)
-registerTab("Egg", "108430367194565", "Egg", true)
-registerTab("Visual", "92134919511686", "Visual", true)
-registerTab("Auto", "92632920884261", "Auto", true)
-registerTab("Event", "92426602911257", "Event", true)  
-registerTab("EggMutation", "135654787106832", "EggMutation", true)  
-registerTab("Webhook", "116684893209469", "Webhook", true)
-registerTab("Settings", "109743631078711", "Settings", true)
+registerTab("Info", "129516985087314", "Info", true)
+registerTab("Prediksi", "86552780174782", "Prediksi", true)
+registerTab("Egg", "88235257025924", "Egg", true)
+registerTab("Visual", "108965719868153", "Visual", true)
+registerTab("Auto", "75410123129821", "Auto", true)
+registerTab("Event", "80545971882432", "Event", true)  
+registerTab("EggMutation", "110024266377801", "EggMutation", true)  
+registerTab("Webhook", "78129393420657", "Webhook", true)
+registerTab("Settings", "97834340359225", "Settings", true)
 
                 -- ⭐ AUTO BUKA TAB INFO PAS PERTAMA LAUNCH
     task.defer(function()
@@ -11388,15 +11388,15 @@ function UI.Init(sharedState)
     -- ⭐ PRELOAD TAB ICONS (biar gak blank pas pertama launch)
     task.spawn(function()
 local preloads = {
-    "rbxassetid://109433949772720",
-    "rbxassetid://138115344663574",
-    "rbxassetid://108430367194565",
-    "rbxassetid://92134919511686",
-    "rbxassetid://92632920884261",
-    "rbxassetid://92426602911257",
-    "rbxassetid://135654787106832",
-    "rbxassetid://116684893209469",
-    "rbxassetid://109743631078711",
+    "rbxassetid://129516985087314",
+    "rbxassetid://86552780174782",
+    "rbxassetid://88235257025924",
+    "rbxassetid://108965719868153",
+    "rbxassetid://75410123129821",
+    "rbxassetid://80545971882432",
+    "rbxassetid://110024266377801",
+    "rbxassetid://78129393420657",
+    "rbxassetid://97834340359225",
 }
         pcall(function()
             game:GetService("ContentProvider"):PreloadAsync(preloads)
