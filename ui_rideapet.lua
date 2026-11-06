@@ -8383,11 +8383,11 @@ end
 
 registerTab("Info", "129516985087314", "Info", true)
 registerTab("Prediksi", "86552780174782", "Prediksi", true)
-registerTab("Egg", "71907576522732", "Egg", true)
+registerTab("Egg", "97796889305691", "Egg", true)
 registerTab("Visual", "108965719868153", "Visual", true)
 registerTab("Auto", "75410123129821", "Auto", true)
-registerTab("Event", "125933064004474", "Event", true)  
-registerTab("EggMutation", "123426071854429", "EggMutation", true)  
+registerTab("Event", "122875675034034", "Event", true)  
+registerTab("EggMutation", "85209430814229", "EggMutation", true)  
 registerTab("Webhook", "78129393420657", "Webhook", true)
 registerTab("Settings", "97834340359225", "Settings", true)
 
@@ -11450,11 +11450,11 @@ task.spawn(function()
     local preloads = {
         "rbxassetid://129516985087314",  -- Info
         "rbxassetid://86552780174782",   -- Prediksi
-        "rbxassetid://71907576522732",   -- Egg
+        "rbxassetid://97796889305691",   -- Egg
         "rbxassetid://108965719868153",  -- Visual
         "rbxassetid://75410123129821",   -- Auto
-        "rbxassetid://125933064004474",  -- Event
-        "rbxassetid://123426071854429",  -- EggMutation
+        "rbxassetid://122875675034034",  -- Event
+        "rbxassetid://85209430814229",  -- EggMutation
         "rbxassetid://78129393420657",   -- Webhook
         "rbxassetid://97834340359225",   -- Settings
     }
