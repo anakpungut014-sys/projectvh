@@ -5471,19 +5471,80 @@ end)
 
                        -- ⭐ LOGIKA BARU: Cek apakah pakai Asset ID (gambar) atau Emoji (text)
 if isAsset then
-    local ic = Instance.new("ImageLabel")
+    -- 1. Bikin wadah kotak di belakang icon
+    local iconBox = Instance.new("Frame")
+    iconBox.Name = "IconBox"
     if CFG.TAB_SHOW_LABEL then
-        ic.Size = UDim2.fromOffset(24, 24)
-        ic.Position = UDim2.fromOffset(10, (tabH - 24) / 2)
+        iconBox.Size = UDim2.fromOffset(26, 26)
+        iconBox.Position = UDim2.fromOffset(8, (tabH - 26) / 2)
     else
-        ic.Size = UDim2.fromOffset(26, 26)
-        ic.Position = UDim2.new(0.5, -13, 0.5, -13)
+        iconBox.Size = UDim2.fromOffset(28, 28)
+        iconBox.Position = UDim2.new(0.5, -14, 0.5, -14)
     end
+    iconBox.BackgroundColor3 = Color3.fromRGB(40, 40, 45) -- Warna kotak default (gelap)
+    iconBox.BackgroundTransparency = 0.2
+    iconBox.BorderSizePixel = 0
+    iconBox.ZIndex = 5
+    iconBox.Parent = btn
+    
+    local boxCorner = Instance.new("UICorner")
+    boxCorner.CornerRadius = UDim.new(0, 6)
+    boxCorner.Parent = iconBox
+
+    -- 2. Icon di dalam kotak
+    local ic = Instance.new("ImageLabel")
+    ic.Size = UDim2.fromScale(0.8, 0.8)
+    ic.Position = UDim2.fromScale(0.1, 0.1)
     ic.BackgroundTransparency = 1
     ic.ZIndex = 6
-    ic.Parent = btn
+    ic.Parent = iconBox
     ic.ScaleType = Enum.ScaleType.Fit
     ic.ImageColor3 = Color3.fromRGB(255, 255, 255)
+
+    local rawId = tostring(icon):gsub("%D", "")
+    ic.Image = "rbxassetid://" .. rawId
+
+    -- Fallback (kalau gambar gagal load)
+    task.spawn(function()
+        task.wait(1.5)
+        if ic and ic.Parent then
+            local success, isLoaded = pcall(function() return ic.IsLoaded end)
+            if not success or not isLoaded then
+                ic:Destroy()
+                local fallbackIcon = Instance.new("TextLabel")
+                fallbackIcon.Size = UDim2.fromScale(1, 1)
+                fallbackIcon.BackgroundTransparency = 1
+                fallbackIcon.Text = "📁"
+                fallbackIcon.TextSize = CFG.TAB_ICON
+                fallbackIcon.Font = Enum.Font.GothamBold
+                fallbackIcon.TextColor3 = C.Accent
+                fallbackIcon.ZIndex = 6
+                fallbackIcon.Parent = iconBox
+                if navs[id] then
+                    navs[id].ic = fallbackIcon
+                    navs[id].isAsset = false
+                end
+            end
+        end
+    end)
+
+    if CFG.TAB_SHOW_LABEL then
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, -44, 1, 0)
+        lbl.Position = UDim2.fromOffset(42, 0)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = label
+        lbl.TextColor3 = C.Muted
+        lbl.TextSize = CFG.FONT_LABEL
+        lbl.Font = Enum.Font.GothamSemibold
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.ZIndex = 6
+        lbl.Parent = btn
+        registerTheme(lbl, "Muted", "TextColor3")
+        navs[id] = {btn = btn, ic = ic, lbl = lbl, isAsset = true, box = iconBox}
+    else
+        navs[id] = {btn = btn, ic = ic, lbl = nil, isAsset = true, box = iconBox}
+    end
 
 -- ⭐ FIX: pakai ID asli langsung (sudah ID Image, bukan Decal)
 local rawId = tostring(icon):gsub("%D", "")
@@ -5552,35 +5613,58 @@ ic.Image = "rbxassetid://" .. rawId
     if pages[id] and pages[id].Parent then
         pages[id].Visible = true
     end
+    
     for n, x in pairs(navs) do
         if not x or not x.btn or not x.btn.Parent then continue end
-                                if n == id then
-                    x.btn.BackgroundColor3 = C.Accent
-                    x.btn.BackgroundTransparency = 0.35
-                    if x.isAsset then
-    x.ic.ImageColor3 = Color3.fromRGB(255, 255, 255)  -- tetap putih saat selected
-    -- ⬇️ TAPI TAMBAHKAN INI: kasih glow biar keliatan
-    x.ic.ImageTransparency = 0
-else
-    x.ic.TextColor3 = Color3.new(1, 1, 1)
-end
-                    if x.btn:FindFirstChildOfClass("UIStroke") then x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.15 end
-                    if x.lbl then x.lbl.TextColor3 = Color3.new(1, 1, 1) end
-                else
-    x.btn.BackgroundColor3 = C.Surface3
-    x.btn.BackgroundTransparency = 0.5
-    if x.isAsset then
-        x.ic.ImageColor3 = Color3.fromRGB(255, 255, 255)  -- ⬅️ BALIK KE PUTIH
-        x.ic.ImageTransparency = 0
-    else
-        x.ic.TextColor3 = C.Accent
-    end
-                    if x.btn:FindFirstChildOfClass("UIStroke") then x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.82 end
-                    if x.lbl then x.lbl.TextColor3 = C.Muted end
-                end
+        
+        if n == id then
+            -- ⭐ STATE AKTIF (DIKLIK)
+            x.btn.BackgroundColor3 = C.Accent
+            x.btn.BackgroundTransparency = 0.35
+            
+            if x.box then
+                -- Kotak icon berubah jadi biru (atau warna Accent tema)
+                x.box.BackgroundColor3 = C.Accent
+                x.box.BackgroundTransparency = 0.1
             end
+            
+            if x.isAsset then
+                x.ic.ImageColor3 = Color3.fromRGB(255, 255, 255)
+                x.ic.ImageTransparency = 0
+            else
+                x.ic.TextColor3 = Color3.fromRGB(255, 255, 255)
+            end
+            
+            if x.btn:FindFirstChildOfClass("UIStroke") then 
+                x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.15 
+            end
+            if x.lbl then x.lbl.TextColor3 = Color3.new(1, 1, 1) end
+            
+        else
+            -- ⭐ STATE TIDAK AKTIF (GAK DIKLIK)
+            x.btn.BackgroundColor3 = C.Surface3
+            x.btn.BackgroundTransparency = 0.5
+            
+            if x.box then
+                -- Kotak icon balik ke warna gelap
+                x.box.BackgroundColor3 = Color3.fromRGB(40, 40, 45)
+                x.box.BackgroundTransparency = 0.2
+            end
+            
+            if x.isAsset then
+                x.ic.ImageColor3 = Color3.fromRGB(255, 255, 255)
+                x.ic.ImageTransparency = 0
+            else
+                x.ic.TextColor3 = C.Accent
+            end
+            
+            if x.btn:FindFirstChildOfClass("UIStroke") then 
+                x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.82 
+            end
+            if x.lbl then x.lbl.TextColor3 = C.Muted end
         end
-
+    end
+end
                 btn.MouseButton1Click:Connect(function()
             local ok, err = pcall(switchTo)
             if not ok then warn("[TAB] switchTo error: " .. tostring(err)) end
