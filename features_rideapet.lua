@@ -6219,9 +6219,12 @@ function Features.startStealExecutor()
 end
 
 -- ============================================================
--- AUTO BOSS v5 — FINAL FIX
+-- AUTO BOSS v6 — FINAL FIX (PAKE DateTime DEVICE)
 -- Boss muncul tiap jam menit 58 (19:58, 20:58, 21:58, ...)
 -- Eksekusi tiap jam bulat (20:00, 21:00, 22:00, ...)
+--
+-- ⭐ PAKE DateTime.now() — dapet waktu DEVICE yang bener
+--    (bukan os.time() yang suka UTC/ngaco)
 --
 -- Flow:
 --   Toggle ON XX:01-XX:57 → tunggu XX:58 → masuk portal →
@@ -6242,8 +6245,8 @@ local AutoBossState = {
 
     -- ⭐ SCHEDULE STATE
     Phase = "idle",           -- "idle" | "waiting_schedule" | "entering" | "verifying" | "executing" | "exiting" | "waiting_next"
-    NextBossTime = 0,         -- os.time() target boss (XX:58)
-    ExecuteTime = 0,          -- os.time() target eksekusi (XX+1):00
+    NextBossTime = 0,         -- timestamp device target boss (XX:58)
+    ExecuteTime = 0,          -- timestamp device target eksekusi (XX+1):00
     EnteredAt = 0,
     RingCycleDone = 0,
     OrigPos = nil,
@@ -6264,6 +6267,36 @@ local AutoBossCfg = {
     WAIT_AFTER_EXIT = 5,
 }
 
+-- ⭐ FUNGSI WAKTU DEVICE — PAKE DateTime.now() (akurat, bukan os.time)
+local function autoBossGetDeviceTime()
+    local ok, result = pcall(function()
+        return DateTime.now().UnixTimestamp
+    end)
+    if ok and result then
+        return result
+    end
+    -- Fallback: os.time() (kurang akurat tapi better than nothing)
+    return os.time()
+end
+
+-- ⭐ FORMAT TIME DARI TIMESTAMP DEVICE
+local function autoBossFormatTime(timestamp, fmt)
+    fmt = fmt or "%H:%M:%S"
+    local ok, result = pcall(function()
+        return DateTime.fromUnixTimestamp(timestamp):FormatLocalTime(fmt, "en-us")
+    end)
+    if ok and result then
+        return result
+    end
+    -- Fallback: os.date (mungkin salah timezone)
+    return os.date(fmt, timestamp)
+end
+
+-- ⭐ FORMAT JAM:MENIT
+local function autoBossFormatHM(timestamp)
+    return autoBossFormatTime(timestamp, "%H:%M")
+end
+
 local function autoBossGetRoot()
     local c = LocalPlayer.Character
     return c and c:FindFirstChild("HumanoidRootPart")
@@ -6274,65 +6307,52 @@ local function autoBossGetHum()
     return c and c:FindFirstChildOfClass("Humanoid")
 end
 
--- ⭐ HITUNG WAKTU BOSS BERIKUTNYA — tiap jam menit 58
+-- ⭐ HITUNG WAKTU BOSS BERIKUTNYA — tiap jam menit 58 (pake device time)
 -- Handle window 58-59:59 = masih boss time jam ini
 local function autoBossCalcNextBossTime()
-    local now = os.time()
-    local t = os.date("*t", now)
+    local now = autoBossGetDeviceTime()
 
-    local currentBossTime = os.time({
-        year = t.year, month = t.month, day = t.day,
-        hour = t.hour, min = AutoBossState.ScheduleMinute, sec = 0,
-    })
+    -- Ambil komponen jam device
+    local dateStr = autoBossFormatTime(now, "%Y-%m-%d %H:%M:%S")
+    local year, month, day, hour, min, sec =
+        dateStr:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+    year, month, day = tonumber(year), tonumber(month), tonumber(day)
+    hour, min, sec = tonumber(hour), tonumber(min), tonumber(sec)
 
-    local nextHourTime = os.time({
-        year = t.year, month = t.month, day = t.day,
-        hour = t.hour + 1, min = 0, sec = 0,
-    })
-
-    -- ⭐ Masih di window boss jam ini (58-59:59) → pake boss time jam ini
-    if now >= currentBossTime and now < nextHourTime then
-        return currentBossTime
+    if not year then
+        -- Fallback: pake os.date
+        local t = os.date("*t", now)
+        year, month, day, hour, min = t.year, t.month, t.day, t.hour, t.min
     end
 
-    -- ⭐ Belum sampe menit 58 → pake boss time jam ini
-    if now < currentBossTime then
-        return currentBossTime
+    -- Hitung detik-detik dalam jam ini (0-3599)
+    local secInHour = hour * 3600 + min * 60 + sec
+    local bossSecInHour = AutoBossState.ScheduleMinute * 60  -- 58*60 = 3480
+    local nextHourSec = 3600
+
+    -- ⭐ Window boss = menit 58-59:59 (3480 - 3599)
+    -- Kalo sekarang di window → pake boss time JAM INI
+    if secInHour >= bossSecInHour and secInHour < nextHourSec then
+        return now - (secInHour - bossSecInHour)  -- mundur ke menit 58:00
     end
 
-    -- ⭐ Udah lewat jam bulat → next boss jam berikutnya
-    return currentBossTime + 3600
+    -- ⭐ Belum sampe menit 58 → pake boss time JAM INI
+    if secInHour < bossSecInHour then
+        return now + (bossSecInHour - secInHour)  -- maju ke menit 58:00
+    end
+
+    -- ⭐ Udah lewat jam bulat (harusnya gak mungkin karena max 3599)
+    -- Fallback: next jam
+    return now + (3600 - secInHour) + bossSecInHour
 end
 
 -- ⭐ HITUNG WAKTU EKSEKUSI — jam bulat berikutnya SETELAH boss time
--- Handle wrap: boss 23:58 → execute 00:00 (besok)
 local function autoBossCalcExecuteTime(bossTime)
-    local t = os.date("*t", bossTime)
-    local execHour = t.hour + 1
-    local execDay = t.day
-    local execMonth = t.month
-    local execYear = t.year
-
-    if execHour >= 24 then
-        execHour = 0
-        -- Pake os.time biar otomatis handle bulan/tahun baru
-        local tempTime = os.time({
-            year = execYear, month = execMonth, day = execDay + 1,
-            hour = 12, min = 0, sec = 0,
-        })
-        local tempT = os.date("*t", tempTime)
-        execDay = tempT.day
-        execMonth = tempT.month
-        execYear = tempT.year
-    end
-
-    return os.time({
-        year = execYear, month = execMonth, day = execDay,
-        hour = execHour, min = 0, sec = 0,
-    })
+    -- Boss time = XX:58:00, execute = (XX+1):00:00 = bossTime + 2 menit
+    return bossTime + 120
 end
 
--- ⭐ FORMAT COUNTDOWN
+-- ⭐ FORMAT COUNTDOWN (dari timestamp device)
 local function autoBossFormatCountdown(seconds)
     if seconds < 0 then seconds = 0 end
     local h = math.floor(seconds / 3600)
@@ -6662,11 +6682,14 @@ function Features.startAutoBoss()
             -- PHASE: IDLE
             -- ═══════════════════════════════════════════════════
             if AutoBossState.Phase == "idle" then
-                local now = os.time()
-                local t = os.date("*t", now)
+                local now = autoBossGetDeviceTime()
+                local dateStr = autoBossFormatTime(now, "%Y-%m-%d %H:%M:%S")
+                local _, _, _, hour, min =
+                    dateStr:match("(%d+)-(%d+)-(%d+) (%d+):(%d+):(%d+)")
+                hour, min = tonumber(hour), tonumber(min)
 
                 -- ⭐ KASUS 1: Jam bulat (XX:00) → langsung masuk + eksekusi
-                if t.min == 0 then
+                if min == 0 then
                     AutoBossState.NextBossTime = now
                     AutoBossState.ExecuteTime = now
                     AutoBossState.Phase = "entering"
@@ -6675,12 +6698,13 @@ function Features.startAutoBoss()
                 end
 
                 -- ⭐ KASUS 2: Window boss (XX:58 / XX:59) → masuk, tunggu jam bulat
-                if t.min == 58 or t.min == 59 then
-                    AutoBossState.NextBossTime = os.time({
-                        year = t.year, month = t.month, day = t.day,
-                        hour = t.hour, min = AutoBossState.ScheduleMinute, sec = 0,
-                    })
-                    AutoBossState.ExecuteTime = autoBossCalcExecuteTime(AutoBossState.NextBossTime)
+                if min == 58 or min == 59 then
+                    -- Boss time = jam ini, menit 58, detik 0
+                    local secInHour = hour * 3600 + min * 60 + 0
+                    -- Mundur ke menit 58:00
+                    local bossTimestamp = now - ((min * 60) - (58 * 60))
+                    AutoBossState.NextBossTime = bossTimestamp
+                    AutoBossState.ExecuteTime = autoBossCalcExecuteTime(bossTimestamp)
                     AutoBossState.Phase = "entering"
                     AutoBossState.Status = "🚪 Window boss — masuk, tunggu eksekusi!"
                     continue
@@ -6691,8 +6715,8 @@ function Features.startAutoBoss()
                 AutoBossState.ExecuteTime = autoBossCalcExecuteTime(AutoBossState.NextBossTime)
                 AutoBossState.Phase = "waiting_schedule"
 
-                local nextStr = os.date("%H:%M", AutoBossState.NextBossTime)
-                local execStr = os.date("%H:%M", AutoBossState.ExecuteTime)
+                local nextStr = autoBossFormatHM(AutoBossState.NextBossTime)
+                local execStr = autoBossFormatHM(AutoBossState.ExecuteTime)
                 AutoBossState.Status = "⏰ Nunggu " .. nextStr .. " (eksekusi " .. execStr .. ")"
                 continue
             end
@@ -6701,13 +6725,13 @@ function Features.startAutoBoss()
             -- PHASE: WAITING_SCHEDULE → tunggu XX:58
             -- ═══════════════════════════════════════════════════
             if AutoBossState.Phase == "waiting_schedule" then
-                local now = os.time()
+                local now = autoBossGetDeviceTime()
                 local remaining = AutoBossState.NextBossTime - now
 
                 if remaining > 0 then
                     AutoBossState.Status = string.format(
                         "⏰ Nunggu %s — %s lagi",
-                        os.date("%H:%M", AutoBossState.NextBossTime),
+                        autoBossFormatHM(AutoBossState.NextBossTime),
                         autoBossFormatCountdown(remaining)
                     )
                     task.wait(1)
@@ -6729,13 +6753,13 @@ function Features.startAutoBoss()
                     continue
                 end
 
-                AutoBossState.EnteredAt = os.time()
+                AutoBossState.EnteredAt = autoBossGetDeviceTime()
                 AutoBossState.RingCycleDone = 0
                 AutoBossState.CurrentIndex = 0
                 AutoBossState.Completed = 0
 
                 -- ⭐ Kasus jam bulat: ExecuteTime <= now → langsung eksekusi
-                if AutoBossState.ExecuteTime <= os.time() then
+                if AutoBossState.ExecuteTime <= autoBossGetDeviceTime() then
                     AutoBossState.Phase = "executing"
                     AutoBossState.Status = "⚡ Masuk area — langsung eksekusi ring!"
                     continue
@@ -6743,7 +6767,7 @@ function Features.startAutoBoss()
 
                 -- ⭐ Kasus window: masuk di XX:58/59 → tunggu jam bulat
                 AutoBossState.Phase = "verifying"
-                AutoBossState.Status = "✅ Masuk area — nunggu " .. os.date("%H:%M", AutoBossState.ExecuteTime)
+                AutoBossState.Status = "✅ Masuk area — nunggu " .. autoBossFormatHM(AutoBossState.ExecuteTime)
                 continue
             end
 
@@ -6751,13 +6775,13 @@ function Features.startAutoBoss()
             -- PHASE: VERIFYING → tunggu JAM BULAT
             -- ═══════════════════════════════════════════════════
             if AutoBossState.Phase == "verifying" then
-                local now = os.time()
+                local now = autoBossGetDeviceTime()
                 local remaining = AutoBossState.ExecuteTime - now
 
                 if remaining > 0 then
                     AutoBossState.Status = string.format(
                         "🔍 Di area — tunggu eksekusi jam %s (%s lagi)",
-                        os.date("%H:%M:%S", AutoBossState.ExecuteTime),
+                        autoBossFormatTime(AutoBossState.ExecuteTime, "%H:%M:%S"),
                         autoBossFormatCountdown(remaining)
                     )
                     if not Workspace:FindFirstChild("BossFight") then
@@ -6771,7 +6795,7 @@ function Features.startAutoBoss()
                 end
 
                 AutoBossState.Phase = "executing"
-                AutoBossState.Status = "⚡ Jam " .. os.date("%H:%M") .. " — eksekusi ring!"
+                AutoBossState.Status = "⚡ Jam " .. autoBossFormatTime(autoBossGetDeviceTime(), "%H:%M") .. " — eksekusi ring!"
                 continue
             end
 
@@ -6856,8 +6880,8 @@ function Features.startAutoBoss()
                 AutoBossState.ExecuteTime = autoBossCalcExecuteTime(AutoBossState.NextBossTime)
                 AutoBossState.Phase = "waiting_schedule"
 
-                local nextStr = os.date("%H:%M", AutoBossState.NextBossTime)
-                local execStr = os.date("%H:%M", AutoBossState.ExecuteTime)
+                local nextStr = autoBossFormatHM(AutoBossState.NextBossTime)
+                local execStr = autoBossFormatHM(AutoBossState.ExecuteTime)
                 AutoBossState.Status = "⏰ Boss selesai — nunggu " .. nextStr .. " (eksekusi " .. execStr .. ")"
                 continue
             end
@@ -6868,6 +6892,17 @@ end
 function Features.setAutoBossEnabled(v)
     AutoBossState.Enabled = v
     if v then
+        -- ⭐ DEBUG: print waktu device vs os.time vs DateTime
+        pcall(function()
+            print("=== AUTO BOSS TIME DEBUG ===")
+            print("[DateTime.now().UnixTimestamp]:", DateTime.now().UnixTimestamp)
+            print("[DateTime FormatLocalTime]:", DateTime.now():FormatLocalTime("%H:%M:%S %d/%m/%Y", "en-us"))
+            print("[os.time()]:", os.time())
+            print("[os.date()]:", os.date("%H:%M:%S %d/%m/%Y"))
+            print("[Cek jam device lu manual, harusnya sama dengan DateTime]")
+            print("============================")
+        end)
+
         AutoBossState.Status = "▶️ Starting..."
         AutoBossState.Phase = "idle"
         AutoBossState.NextBossTime = 0
