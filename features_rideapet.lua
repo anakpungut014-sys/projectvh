@@ -6124,17 +6124,16 @@ local function seStealVolcanicEgg(egg)
     return true, nil
 end
 
--- ⭐ CAMERA MODE untuk steal executor
-Shared.StealCameraMode = Shared.StealCameraMode or "Lock Base"
---   "Lock Base"   = kamera dikunci di plot (perilaku sekarang, DEFAULT)
---   "Unlock Base" = kamera ikut karakter (steal biasa, tanpa lock)
-
 -- ⭐ MAIN ENTRY — dipanggil dari UI
 function Features.stealEgg(egg)
     if StealExecState.Busy then
         if Shared.Notify then Shared.Notify("⏳ Already stealing, wait...", "warning") end
         return false, "busy"
     end
+
+    -- ⬇️ TAMBAHKAN DI SINI ⬇️
+    Shared.StealCameraMode = Shared.StealCameraMode or "Lock Base"
+    -- ⬆️ SAMPAI SINI ⬆️
 
     -- ⭐⭐⭐ FIX: TOLAK kalau di Halloween zone / busy ⭐⭐⭐
     if LocalPlayer:GetAttribute("InHalloweenZone") == true then
