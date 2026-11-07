@@ -8021,33 +8021,8 @@ do
         notify("Steal Mode: " .. v, "info")
     end)
 
-    -- ═══ LIVE CHAT CARD ═══
-    local chatToggleCard, chatToggleContent = makeCard(setRight, "💬 LIVE CHAT", 2)
-    local liveChatWin = buildLiveChatWindow(screenGui)
-
-    makeToggle(chatToggleContent, "Show Live Chat Window", false, function(v)
-        if liveChatWin then
-            liveChatWin.Visible = v
-            if v then
-                pcall(function()
-                    if ChatClient and ChatClient.start then ChatClient.start() end
-                end)
-                notify("💬 Live Chat opened", "success")
-            else
-                notify("💬 Live Chat closed", "info")
-            end
-        end
-    end)
-
-    local chatHint = Instance.new("TextLabel")
-    chatHint.Size = UDim2.new(1, 0, 0, 16)
-    chatHint.BackgroundTransparency = 1
-    chatHint.Text = "🌐 Global chat · all user vrilzhub"
-    chatHint.TextColor3 = C.Muted
-    chatHint.Font = Enum.Font.GothamSemibold
-    chatHint.TextSize = CFG.FONT_MUTED
-    chatHint.TextXAlignment = Enum.TextXAlignment.Left
-    chatHint.Parent = chatToggleContent
+    -- ═══ LIVE CHAT — dipindah ke tab sendiri ═══
+    local liveChatWin = nil
 
     -- ═══ GRAPHICS CARD ═══
     local fpsCard, fpsContent = makeCard(setRight, "⚡ GRAPHICS", 3)
@@ -8098,6 +8073,465 @@ do
         end
     end, "LightningEffect_Enabled")
 end
+
+        -- ============================================================
+        -- 💬 LIVE CHAT TAB — SHOW → INLINE FULL (di dalam window utama)
+        -- ============================================================
+        do
+            local liveChatPage = createPage("LiveChat")
+            pages.LiveChat = liveChatPage
+
+            -- State
+            local chatShown = false
+            local msgCounter = 0
+            local OWNER_IDS = {
+                [5126297278] = true,   -- ganti userId owner kalau beda
+            }
+
+            -- Wrapper card (biar konsisten sama tab lain)
+            local wrapCard, wrapContent = makeCard(liveChatPage, "💬 LIVE CHAT (GLOBAL)", 1)
+            wrapCard.Size = UDim2.new(1, 0, 0, 520)
+
+            -- ═══ STATE 1: TOMBOL SHOW ═══
+            local showFrame = Instance.new("Frame")
+            showFrame.Name = "ShowFrame"
+            showFrame.Size = UDim2.new(1, 0, 0, 0)
+            showFrame.AutomaticSize = Enum.AutomaticSize.Y
+            showFrame.BackgroundTransparency = 1
+            showFrame.LayoutOrder = 1
+            showFrame.ZIndex = 3
+            showFrame.Parent = wrapContent
+
+            local showLayout = Instance.new("UIListLayout")
+            showLayout.Padding = UDim.new(0, 14)
+            showLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            showLayout.Parent = showFrame
+
+            local showDesc = Instance.new("TextLabel")
+            showDesc.Size = UDim2.new(1, 0, 0, 56)
+            showDesc.BackgroundTransparency = 1
+            showDesc.Text = "🌐 Global chat — semua user VRILZHUB bisa ngobrol di sini.\nKlik tombol di bawah untuk buka window chat."
+            showDesc.TextColor3 = C.Muted
+            showDesc.Font = Enum.Font.GothamSemibold
+            showDesc.TextSize = CFG.FONT_LABEL
+            showDesc.TextWrapped = true
+            showDesc.TextXAlignment = Enum.TextXAlignment.Left
+            showDesc.TextYAlignment = Enum.TextYAlignment.Top
+            showDesc.LayoutOrder = 1
+            showDesc.ZIndex = 3
+            showDesc.Parent = showFrame
+            registerTheme(showDesc, "Muted", "TextColor3")
+
+            local showBtn = Instance.new("TextButton")
+            showBtn.Size = UDim2.new(1, 0, 0, 56)
+            showBtn.BackgroundColor3 = C.Accent
+            showBtn.Text = "💬  SHOW LIVE CHAT"
+            showBtn.TextColor3 = Color3.new(1, 1, 1)
+            showBtn.Font = Enum.Font.GothamBlack
+            showBtn.TextSize = CFG.FONT_LARGE
+            showBtn.AutoButtonColor = false
+            showBtn.BorderSizePixel = 0
+            showBtn.LayoutOrder = 2
+            showBtn.ZIndex = 4
+            showBtn.Parent = showFrame
+            registerTheme(showBtn, "Accent", "BackgroundColor3")
+
+            local showCorner = Instance.new("UICorner")
+            showCorner.CornerRadius = UDim.new(0, 12)
+            showCorner.Parent = showBtn
+
+            local showStroke = Instance.new("UIStroke")
+            showStroke.Color = C.Accent2
+            showStroke.Thickness = 1.5
+            showStroke.Transparency = 0.3
+            showStroke.Parent = showBtn
+            registerTheme(showStroke, "Accent2", "Color")
+
+            showBtn.MouseEnter:Connect(function()
+                TweenService:Create(showBtn, TweenInfo.new(0.15), {
+                    BackgroundColor3 = C.Accent2
+                }):Play()
+            end)
+            showBtn.MouseLeave:Connect(function()
+                TweenService:Create(showBtn, TweenInfo.new(0.15), {
+                    BackgroundColor3 = C.Accent
+                }):Play()
+            end)
+
+            -- ═══ STATE 2: LIVE CHAT INLINE ═══
+            local chatFrame = Instance.new("Frame")
+            chatFrame.Name = "ChatFrame"
+            chatFrame.Size = UDim2.new(1, 0, 0, 0)
+            chatFrame.AutomaticSize = Enum.AutomaticSize.Y
+            chatFrame.BackgroundTransparency = 1
+            chatFrame.LayoutOrder = 2
+            chatFrame.Visible = false
+            chatFrame.ZIndex = 3
+            chatFrame.Parent = wrapContent
+
+            local chatFrameLayout = Instance.new("UIListLayout")
+            chatFrameLayout.Padding = UDim.new(0, 8)
+            chatFrameLayout.SortOrder = Enum.SortOrder.LayoutOrder
+            chatFrameLayout.Parent = chatFrame
+
+            -- Header bar (judul + tombol close ×)
+            local chatHeader = Instance.new("Frame")
+            chatHeader.Size = UDim2.new(1, 0, 0, 36)
+            chatHeader.BackgroundColor3 = C.Surface2
+            chatHeader.BackgroundTransparency = 0.4
+            chatHeader.BorderSizePixel = 0
+            chatHeader.LayoutOrder = 1
+            chatHeader.ZIndex = 4
+            chatHeader.Parent = chatFrame
+            registerTheme(chatHeader, "Surface2", "BackgroundColor3")
+
+            local chCorner = Instance.new("UICorner")
+            chCorner.CornerRadius = UDim.new(0, 10)
+            chCorner.Parent = chatHeader
+
+            local chDot = Instance.new("Frame")
+            chDot.Size = UDim2.fromOffset(8, 8)
+            chDot.Position = UDim2.new(0, 10, 0.5, -4)
+            chDot.BackgroundColor3 = C.Accent
+            chDot.BorderSizePixel = 0
+            chDot.ZIndex = 5
+            chDot.Parent = chatHeader
+            registerTheme(chDot, "Accent", "BackgroundColor3")
+
+            local chDotCorner = Instance.new("UICorner")
+            chDotCorner.CornerRadius = UDim.new(1, 0)
+            chDotCorner.Parent = chDot
+
+            local chTitle = Instance.new("TextLabel")
+            chTitle.Size = UDim2.new(1, -60, 1, 0)
+            chTitle.Position = UDim2.fromOffset(26, 0)
+            chTitle.BackgroundTransparency = 1
+            chTitle.Text = "LIVE CHAT  ·  GLOBAL"
+            chTitle.TextColor3 = C.Text
+            chTitle.Font = Enum.Font.GothamBold
+            chTitle.TextSize = CFG.FONT_LABEL
+            chTitle.TextXAlignment = Enum.TextXAlignment.Left
+            chTitle.ZIndex = 5
+            chTitle.Parent = chatHeader
+            registerTheme(chTitle, "Text", "TextColor3")
+
+            local chClose = Instance.new("TextButton")
+            chClose.Size = UDim2.fromOffset(28, 24)
+            chClose.Position = UDim2.new(1, -34, 0.5, -12)
+            chClose.BackgroundColor3 = C.Surface3
+            chClose.Text = "×"
+            chClose.TextColor3 = C.Text
+            chClose.Font = Enum.Font.GothamBold
+            chClose.TextSize = 18
+            chClose.BorderSizePixel = 0
+            chClose.AutoButtonColor = false
+            chClose.ZIndex = 5
+            chClose.Parent = chatHeader
+            registerTheme(chClose, "Surface3", "BackgroundColor3")
+            registerTheme(chClose, "Text", "TextColor3")
+
+            local chCloseCorner = Instance.new("UICorner")
+            chCloseCorner.CornerRadius = UDim.new(0, 6)
+            chCloseCorner.Parent = chClose
+
+            chClose.MouseEnter:Connect(function()
+                TweenService:Create(chClose, TweenInfo.new(0.15), {
+                    BackgroundColor3 = C.Error
+                }):Play()
+            end)
+            chClose.MouseLeave:Connect(function()
+                TweenService:Create(chClose, TweenInfo.new(0.15), {
+                    BackgroundColor3 = C.Surface3
+                }):Play()
+            end)
+
+            -- Message list
+            local listFrame = Instance.new("ScrollingFrame")
+            listFrame.Name = "ChatList"
+            listFrame.Size = UDim2.new(1, 0, 0, 340)
+            listFrame.BackgroundColor3 = C.Surface2
+            listFrame.BackgroundTransparency = 0.4
+            listFrame.BorderSizePixel = 0
+            listFrame.ScrollBarThickness = 4
+            listFrame.ScrollBarImageColor3 = C.Accent
+            listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+            listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+            listFrame.LayoutOrder = 2
+            listFrame.ZIndex = 4
+            listFrame.Parent = chatFrame
+            registerTheme(listFrame, "Surface2", "BackgroundColor3")
+
+            local lc = Instance.new("UICorner")
+            lc.CornerRadius = UDim.new(0, 10)
+            lc.Parent = listFrame
+
+            local ls = Instance.new("UIStroke")
+            ls.Color = C.Accent
+            ls.Thickness = 1
+            ls.Transparency = 0.65
+            ls.Parent = listFrame
+            registerTheme(ls, "Accent", "Color")
+
+            local lp = Instance.new("UIPadding")
+            lp.PaddingTop = UDim.new(0, 8)
+            lp.PaddingBottom = UDim.new(0, 8)
+            lp.PaddingLeft = UDim.new(0, 8)
+            lp.PaddingRight = UDim.new(0, 8)
+            lp.Parent = listFrame
+
+            local ll = Instance.new("UIListLayout")
+            ll.Padding = UDim.new(0, 6)
+            ll.SortOrder = Enum.SortOrder.LayoutOrder
+            ll.Parent = listFrame
+
+            local emptyLbl = Instance.new("TextLabel")
+            emptyLbl.Size = UDim2.new(1, 0, 0, 40)
+            emptyLbl.BackgroundTransparency = 1
+            emptyLbl.Text = "No messages yet... say hi! 👋"
+            emptyLbl.TextColor3 = C.Muted
+            emptyLbl.Font = Enum.Font.GothamSemibold
+            emptyLbl.TextSize = CFG.FONT_LABEL
+            emptyLbl.ZIndex = 5
+            emptyLbl.Parent = listFrame
+            registerTheme(emptyLbl, "Muted", "TextColor3")
+
+            -- Input row
+            local inputBg = Instance.new("Frame")
+            inputBg.Size = UDim2.new(1, 0, 0, 42)
+            inputBg.BackgroundColor3 = C.Surface3
+            inputBg.BorderSizePixel = 0
+            inputBg.LayoutOrder = 3
+            inputBg.ZIndex = 4
+            inputBg.Parent = chatFrame
+            registerTheme(inputBg, "Surface3", "BackgroundColor3")
+
+            local ic = Instance.new("UICorner")
+            ic.CornerRadius = UDim.new(0, 10)
+            ic.Parent = inputBg
+
+            local is = Instance.new("UIStroke")
+            is.Color = C.Accent
+            is.Thickness = 1
+            is.Transparency = 0.5
+            is.Parent = inputBg
+            registerTheme(is, "Accent", "Color")
+
+            local box = Instance.new("TextBox")
+            box.Size = UDim2.new(1, -76, 1, 0)
+            box.Position = UDim2.fromOffset(12, 0)
+            box.BackgroundTransparency = 1
+            box.Text = ""
+            box.PlaceholderText = "Type message..."
+            box.PlaceholderColor3 = C.Muted
+            box.TextColor3 = C.Text
+            box.Font = Enum.Font.GothamSemibold
+            box.TextSize = CFG.FONT_LABEL
+            box.TextXAlignment = Enum.TextXAlignment.Left
+            box.ClearTextOnFocus = false
+            box.ZIndex = 5
+            box.Parent = inputBg
+            registerTheme(box, "Text", "TextColor3")
+
+            local sendBtn = Instance.new("TextButton")
+            sendBtn.Size = UDim2.fromOffset(60, 32)
+            sendBtn.Position = UDim2.new(1, -68, 0.5, -16)
+            sendBtn.BackgroundColor3 = C.Accent
+            sendBtn.Text = IS_MOBILE and "▶" or "SEND"
+            sendBtn.TextColor3 = Color3.new(1, 1, 1)
+            sendBtn.Font = Enum.Font.GothamBold
+            sendBtn.TextSize = IS_MOBILE and 14 or 11
+            sendBtn.AutoButtonColor = false
+            sendBtn.BorderSizePixel = 0
+            sendBtn.ZIndex = 5
+            sendBtn.Parent = inputBg
+            registerTheme(sendBtn, "Accent", "BackgroundColor3")
+
+            local sc = Instance.new("UICorner")
+            sc.CornerRadius = UDim.new(0, 8)
+            sc.Parent = sendBtn
+
+            -- Render message
+            local function scrollBottom()
+                task.defer(function()
+                    listFrame.CanvasPosition = Vector2.new(0, listFrame.AbsoluteCanvasSize.Y)
+                end)
+            end
+
+            local function renderMessage(msg)
+                if emptyLbl.Parent then emptyLbl:Destroy() end
+
+                local isMe = (msg.userId == LocalPlayer.UserId)
+                local isOwner = (OWNER_IDS[msg.userId] == true)
+
+                local avatarSize = IS_MOBILE and 26 or 32
+                local avatarGap  = IS_MOBILE and 6 or 9
+
+                local row = Instance.new("Frame")
+                row.Size = UDim2.new(1, 0, 0, 0)
+                row.AutomaticSize = Enum.AutomaticSize.Y
+                row.BackgroundColor3 = isOwner and Color3.fromRGB(45, 20, 10)
+                    or (isMe and C.Surface3 or C.Surface)
+                row.BackgroundTransparency = 0.3
+                row.BorderSizePixel = 0
+                msgCounter = msgCounter + 1
+                row.LayoutOrder = msgCounter
+                row.ZIndex = 5
+                row.Parent = listFrame
+
+                local rc = Instance.new("UICorner")
+                rc.CornerRadius = UDim.new(0, 8)
+                rc.Parent = row
+
+                if isOwner then
+                    local ownerStroke = Instance.new("UIStroke")
+                    ownerStroke.Color = Color3.fromRGB(255, 200, 50)
+                    ownerStroke.Thickness = 1.5
+                    ownerStroke.Transparency = 0.2
+                    ownerStroke.Parent = row
+                end
+
+                local rp = Instance.new("UIPadding")
+                rp.PaddingTop = UDim.new(0, 7)
+                rp.PaddingBottom = UDim.new(0, 7)
+                rp.PaddingLeft = UDim.new(0, IS_MOBILE and 8 or 10)
+                rp.PaddingRight = UDim.new(0, IS_MOBILE and 8 or 10)
+                rp.Parent = row
+
+                local avContainer = Instance.new("Frame")
+                avContainer.Size = UDim2.fromOffset(avatarSize, avatarSize)
+                avContainer.BackgroundColor3 = C.Surface2
+                avContainer.BorderSizePixel = 0
+                avContainer.ZIndex = 6
+                avContainer.Parent = row
+
+                local avCorner = Instance.new("UICorner")
+                avCorner.CornerRadius = UDim.new(1, 0)
+                avCorner.Parent = avContainer
+
+                local avImg = Instance.new("ImageLabel")
+                avImg.Size = UDim2.fromScale(1, 1)
+                avImg.BackgroundTransparency = 1
+                avImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(msg.userId) .. "&w=100&h=100"
+                avImg.ZIndex = 7
+                avImg.Parent = avContainer
+
+                local avImgCorner = Instance.new("UICorner")
+                avImgCorner.CornerRadius = UDim.new(1, 0)
+                avImgCorner.Parent = avImg
+
+                local avStroke = Instance.new("UIStroke")
+                avStroke.Thickness = 1.5
+                avStroke.Transparency = 0.2
+                avStroke.Parent = avContainer
+                avStroke.Color = isOwner and Color3.fromRGB(255, 200, 50)
+                    or (isMe and C.Accent2 or C.Accent)
+
+                local hdr = Instance.new("Frame")
+                hdr.Size = UDim2.new(1, -(avatarSize + avatarGap), 0, IS_MOBILE and 16 or 18)
+                hdr.Position = UDim2.fromOffset(avatarSize + avatarGap, 0)
+                hdr.BackgroundTransparency = 1
+                hdr.ZIndex = 6
+                hdr.Parent = row
+
+                local nameLbl = Instance.new("TextLabel")
+                nameLbl.Size = UDim2.new(1, -60, 1, 0)
+                nameLbl.BackgroundTransparency = 1
+                nameLbl.Text = (isMe and "You" or msg.displayName) .. (isOwner and " 👑" or "")
+                nameLbl.TextColor3 = isOwner and Color3.fromRGB(255, 200, 50)
+                    or (isMe and C.Accent2 or C.Accent)
+                nameLbl.Font = Enum.Font.GothamBold
+                nameLbl.TextSize = IS_MOBILE and 10 or 11
+                nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+                nameLbl.ZIndex = 7
+                nameLbl.Parent = hdr
+
+                local timeLbl = Instance.new("TextLabel")
+                timeLbl.Size = UDim2.fromOffset(50, 16)
+                timeLbl.Position = UDim2.new(1, -50, 0, 0)
+                timeLbl.BackgroundTransparency = 1
+                timeLbl.Text = msg.time
+                timeLbl.TextColor3 = C.Muted
+                timeLbl.Font = Enum.Font.GothamSemibold
+                timeLbl.TextSize = IS_MOBILE and 9 or 10
+                timeLbl.TextXAlignment = Enum.TextXAlignment.Right
+                timeLbl.ZIndex = 7
+                timeLbl.Parent = hdr
+
+                local bodyLbl = Instance.new("TextLabel")
+                bodyLbl.Size = UDim2.new(1, -(avatarSize + avatarGap), 0, 0)
+                bodyLbl.AutomaticSize = Enum.AutomaticSize.Y
+                bodyLbl.Position = UDim2.fromOffset(avatarSize + avatarGap, IS_MOBILE and 18 or 20)
+                bodyLbl.BackgroundTransparency = 1
+                bodyLbl.Text = msg.text
+                bodyLbl.TextColor3 = C.Text
+                bodyLbl.Font = Enum.Font.GothamSemibold
+                bodyLbl.TextSize = CFG.CHAT_FONT
+                bodyLbl.TextWrapped = true
+                bodyLbl.TextXAlignment = Enum.TextXAlignment.Left
+                bodyLbl.TextYAlignment = Enum.TextYAlignment.Top
+                bodyLbl.ZIndex = 6
+                bodyLbl.Parent = row
+                registerTheme(bodyLbl, "Text", "TextColor3")
+
+                scrollBottom()
+            end
+
+            -- Hydrate existing messages
+            for _, m in ipairs(Shared.LiveChat_Messages) do
+                renderMessage(m)
+            end
+
+            ChatClient.onMessage(function(msg)
+                if chatShown then
+                    renderMessage(msg)
+                end
+            end)
+
+            -- Send logic
+            local function doSend()
+                local text = box.Text
+                if text == "" then return end
+                sendBtn.Text = "..."
+                task.spawn(function()
+                    local ok, err = ChatClient.send(text)
+                    if ok then
+                        box.Text = ""
+                    else
+                        notify("Chat: " .. tostring(err), "error")
+                    end
+                    sendBtn.Text = IS_MOBILE and "▶" or "SEND"
+                end)
+            end
+
+            sendBtn.MouseButton1Click:Connect(doSend)
+            box.FocusLost:Connect(function(enter)
+                if enter then doSend() end
+            end)
+
+            -- SHOW / HIDE
+            local function openChat()
+                if chatShown then return end
+                chatShown = true
+                showFrame.Visible = false
+                chatFrame.Visible = true
+                pcall(function()
+                    if ChatClient and ChatClient.start then ChatClient.start() end
+                end)
+                task.defer(scrollBottom)
+                notify("💬 Live Chat dibuka", "success")
+            end
+
+            local function closeChat()
+                if not chatShown then return end
+                chatShown = false
+                chatFrame.Visible = false
+                showFrame.Visible = true
+                notify("💬 Live Chat ditutup", "info")
+            end
+
+            showBtn.MouseButton1Click:Connect(openChat)
+            chClose.MouseButton1Click:Connect(closeChat)
+        end
 
         -- ===== EVENT TAB =====
     do
@@ -8632,6 +9066,7 @@ registerTab("Prediksi", "86552780174782", "Prediksi", true)
 registerTab("Egg", "97796889305691", "Egg", true)
 registerTab("Visual", "108965719868153", "Visual", true)
 registerTab("Auto", "75410123129821", "Auto", true)
+registerTab("LiveChat", "78129393420657", "Live Chat", true)
 registerTab("Event", "122875675034034", "Event", true)  
 registerTab("AdminAbuse", "108708492155123", "Admin Abuse", true)
 registerTab("EggMutation", "85209430814229", "EggMutation", true)  
@@ -11733,6 +12168,7 @@ task.spawn(function()
         "rbxassetid://97796889305691",   -- Egg
         "rbxassetid://108965719868153",  -- Visual
         "rbxassetid://75410123129821",   -- Auto
+        "rbxassetid://78129393420657",   -- Live Chat
         "rbxassetid://122875675034034",  -- Event
         "rbxassetid://108708492155123",  -- AdminAbuse
         "rbxassetid://85209430814229",  -- EggMutation
