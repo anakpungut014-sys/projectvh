@@ -8259,22 +8259,42 @@ end
         -- ═══════════════════════════════════════════════════════════
         -- ⭐ REFRESH LOCK STATE
         -- ═══════════════════════════════════════════════════════════
-        local function refreshAdminLock()
-            local unlocked, reason = isAdminAbuseUnlocked()
+local function refreshAdminLock()
+    -- ⭐ AMBIL DARI _G (bukan local scope)
+    local helper = _G.VRILZ_IsAdminAbuseUnlocked
+    if type(helper) ~= "function" then
+        warn("[AdminAbuse] _G.VRILZ_IsAdminAbuseUnlocked NOT FOUND")
+        return
+    end
 
-            lockFrame.Visible = not unlocked
-            adminToggleHolder.Visible = unlocked
-            adminRarityLbl.Visible = unlocked
-            adminRarityHolder.Visible = unlocked
+    local ok, unlocked, reason = pcall(helper)
+    if not ok then
+        warn("[AdminAbuse] helper error: " .. tostring(unlocked))
+        unlocked = false
+    end
 
-            if not unlocked then
-                Shared.AdminAbuse_AutoSteal = false
-                local F = getFeatures()
-                if F and F.setAdminAbuseEnabled then
-                    F.setAdminAbuseEnabled(false)
-                end
-            end
+    -- ⭐ Cek UI elements
+    if lockFrame and lockFrame.Parent then
+        lockFrame.Visible = not unlocked
+    end
+    if adminToggleHolder and adminToggleHolder.Parent then
+        adminToggleHolder.Visible = unlocked
+    end
+    if adminRarityLbl and adminRarityLbl.Parent then
+        adminRarityLbl.Visible = unlocked
+    end
+    if adminRarityHolder and adminRarityHolder.Parent then
+        adminRarityHolder.Visible = unlocked
+    end
+
+    if not unlocked then
+        Shared.AdminAbuse_AutoSteal = false
+        local F = getFeatures()
+        if F and F.setAdminAbuseEnabled then
+            pcall(F.setAdminAbuseEnabled, false)
         end
+    end
+end
 
         refreshAdminLock()
 
@@ -11578,8 +11598,9 @@ end
 
 -- ============================================================
 -- 🔓 ADMIN ABUSE — CEK WAKTU UNLOCK (Sabtu 19:50-23:59 WIB)
+-- ⭐ PAKE _G BIAR GAK BISA KE-UNLOAD DARI SCOPE
 -- ============================================================
-local function isAdminAbuseUnlocked()
+_G.VRILZ_IsAdminAbuseUnlocked = function()
     -- Owner = SELALU UNLOCKED
     if LocalPlayer.UserId == 5126297278 then
         return true, "owner"
