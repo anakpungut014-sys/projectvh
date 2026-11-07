@@ -5449,8 +5449,8 @@ end)
         local tabH = CFG.TAB_H
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, 0, 0, tabH)
-        btn.BackgroundColor3 = C.Surface3
-        btn.BackgroundTransparency = 0.7
+        btn.BackgroundColor3 = Color3.fromRGB(255, 126, 20)
+        btn.BackgroundTransparency = 0.55
         btn.Text = ""
         btn.AutoButtonColor = false
         btn.ZIndex = 5
@@ -5461,7 +5461,7 @@ end)
         corner.Parent = btn
 
         local tabStroke = Instance.new("UIStroke")
-        tabStroke.Color = C.Accent
+        tabStroke.Color = Color3.fromRGB(255, 126, 20)
         tabStroke.Thickness = 1
         tabStroke.Transparency = 0.82
         tabStroke.Parent = btn
@@ -5594,17 +5594,15 @@ ic.Image = "rbxassetid://" .. rawId
         local isActive = (n == id)
 
         if isActive then
-            -- ⭐ STATE AKTIF (DIKLIK)
-            x.btn.BackgroundColor3 = C.Accent
+            -- ⭐ STATE AKTIF (DIKLIK) → UNGU
+            x.btn.BackgroundColor3 = Color3.fromRGB(140, 70, 255)
             x.btn.BackgroundTransparency = 0.35
 
-            -- Icon box: jadi biru / accent
             if x.box then
-                x.box.BackgroundColor3 = C.Accent
+                x.box.BackgroundColor3 = Color3.fromRGB(140, 70, 255)
                 x.box.BackgroundTransparency = 0.1
             end
 
-            -- Icon: putih
             if x.isAsset then
                 x.ic.ImageColor3 = Color3.fromRGB(255, 255, 255)
                 x.ic.ImageTransparency = 0
@@ -5613,31 +5611,34 @@ ic.Image = "rbxassetid://" .. rawId
             end
 
             if x.btn:FindFirstChildOfClass("UIStroke") then
-                x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.15
+                local s = x.btn:FindFirstChildOfClass("UIStroke")
+                s.Color = Color3.fromRGB(140, 70, 255)
+                s.Transparency = 0.15
             end
             if x.lbl then x.lbl.TextColor3 = Color3.new(1, 1, 1) end
         else
-            -- ⭐ STATE TIDAK AKTIF (GAK DIKLIK)
-            x.btn.BackgroundColor3 = C.Surface3
-            x.btn.BackgroundTransparency = 0.5
+            -- ⭐ STATE TIDAK AKTIF (GAK DIKLIK) → ORANGE
+            x.btn.BackgroundColor3 = Color3.fromRGB(255, 126, 20)
+            x.btn.BackgroundTransparency = 0.55
 
-            -- Icon box: balik ke gelap (theme-aware)
             if x.box then
-                x.box.BackgroundColor3 = C.Surface2       -- ⭐ ganti dari static RGB
-                x.box.BackgroundTransparency = 0.2
+                x.box.BackgroundColor3 = Color3.fromRGB(255, 126, 20)
+                x.box.BackgroundTransparency = 0.25
             end
 
             if x.isAsset then
                 x.ic.ImageColor3 = Color3.fromRGB(255, 255, 255)
                 x.ic.ImageTransparency = 0
             else
-                x.ic.TextColor3 = C.Accent
+                x.ic.TextColor3 = Color3.fromRGB(255, 255, 255)
             end
 
             if x.btn:FindFirstChildOfClass("UIStroke") then
-                x.btn:FindFirstChildOfClass("UIStroke").Transparency = 0.82
+                local s = x.btn:FindFirstChildOfClass("UIStroke")
+                s.Color = Color3.fromRGB(255, 126, 20)
+                s.Transparency = 0.4
             end
-            if x.lbl then x.lbl.TextColor3 = C.Muted end
+            if x.lbl then x.lbl.TextColor3 = Color3.fromRGB(255, 240, 220) end
         end
     end
 end
