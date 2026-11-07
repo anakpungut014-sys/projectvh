@@ -8092,7 +8092,7 @@ end
             local wrapCard, wrapContent = makeCard(liveChatPage, "💬 LIVE CHAT (GLOBAL)", 1)
             wrapCard.Size = UDim2.new(1, 0, 0, 520)
 
-            -- ═══ STATE 1: TOMBOL SHOW ═══
+                        -- ═══ STATE 1: TOMBOL SHOW (PREMIUM CARD) ═══
             local showFrame = Instance.new("Frame")
             showFrame.Name = "ShowFrame"
             showFrame.Size = UDim2.new(1, 0, 0, 0)
@@ -8103,60 +8103,272 @@ end
             showFrame.Parent = wrapContent
 
             local showLayout = Instance.new("UIListLayout")
-            showLayout.Padding = UDim.new(0, 14)
+            showLayout.Padding = UDim.new(0, 12)
             showLayout.SortOrder = Enum.SortOrder.LayoutOrder
             showLayout.Parent = showFrame
 
-            local showDesc = Instance.new("TextLabel")
-            showDesc.Size = UDim2.new(1, 0, 0, 56)
-            showDesc.BackgroundTransparency = 1
-            showDesc.Text = "🌐 Global chat — semua user VRILZHUB bisa ngobrol di sini.\nKlik tombol di bawah untuk buka window chat."
-            showDesc.TextColor3 = C.Muted
-            showDesc.Font = Enum.Font.GothamSemibold
-            showDesc.TextSize = CFG.FONT_LABEL
-            showDesc.TextWrapped = true
-            showDesc.TextXAlignment = Enum.TextXAlignment.Left
-            showDesc.TextYAlignment = Enum.TextYAlignment.Top
-            showDesc.LayoutOrder = 1
-            showDesc.ZIndex = 3
-            showDesc.Parent = showFrame
-            registerTheme(showDesc, "Muted", "TextColor3")
+            -- ═══ HERO PREVIEW CARD (compact, gak full-width) ═══
+            local heroCard = Instance.new("Frame")
+            heroCard.Name = "ChatHeroCard"
+            heroCard.Size = UDim2.new(1, 0, 0, 96)
+            heroCard.BackgroundColor3 = Color3.fromRGB(14, 16, 22)
+            heroCard.BorderSizePixel = 0
+            heroCard.ClipsDescendants = true
+            heroCard.LayoutOrder = 1
+            heroCard.ZIndex = 4
+            heroCard.Parent = showFrame
+            registerTheme(heroCard, "Surface", "BackgroundColor3")
 
+            local heroCorner = Instance.new("UICorner")
+            heroCorner.CornerRadius = UDim.new(0, 14)
+            heroCorner.Parent = heroCard
+
+            -- Gradient gelap elegan
+            local heroGrad = Instance.new("UIGradient")
+            heroGrad.Rotation = 135
+            heroGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, Color3.fromRGB(22, 24, 32)),
+                ColorSequenceKeypoint.new(0.5, Color3.fromRGB(14, 16, 22)),
+                ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 10, 14)),
+            })
+            heroGrad.Parent = heroCard
+
+            -- Stroke accent tipis
+            local heroStroke = Instance.new("UIStroke")
+            heroStroke.Color = C.Accent
+            heroStroke.Thickness = 1.2
+            heroStroke.Transparency = 0.55
+            heroStroke.Parent = heroCard
+            registerTheme(heroStroke, "Accent", "Color")
+
+            -- Shine sweep halus (animasi)
+            local heroShine = Instance.new("Frame")
+            heroShine.Size = UDim2.new(0, 60, 2, 0)
+            heroShine.Position = UDim2.new(-0.5, 0, -0.5, 0)
+            heroShine.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            heroShine.BackgroundTransparency = 0.92
+            heroShine.BorderSizePixel = 0
+            heroShine.Rotation = 20
+            heroShine.ZIndex = 5
+            heroShine.Parent = heroCard
+
+            task.spawn(function()
+                while heroShine.Parent do
+                    task.wait(5)
+                    if not heroShine.Parent then break end
+                    heroShine.Position = UDim2.new(-0.5, 0, -0.5, 0)
+                    TweenService:Create(heroShine, TweenInfo.new(1.6, Enum.EasingStyle.Quad), {
+                        Position = UDim2.new(1.5, 0, 1.5, 0),
+                    }):Play()
+                    task.wait(1.7)
+                end
+            end)
+
+            -- ═══ ICON CHAT (bulat dengan glow) ═══
+            local iconSize = 48
+            local iconHolder = Instance.new("Frame")
+            iconHolder.Size = UDim2.fromOffset(iconSize, iconSize)
+            iconHolder.Position = UDim2.new(0, 14, 0.5, 0)
+            iconHolder.AnchorPoint = Vector2.new(0, 0.5)
+            iconHolder.BackgroundColor3 = C.Accent
+            iconHolder.BorderSizePixel = 0
+            iconHolder.ZIndex = 6
+            iconHolder.Parent = heroCard
+            registerTheme(iconHolder, "Accent", "BackgroundColor3")
+
+            local ihCorner = Instance.new("UICorner")
+            ihCorner.CornerRadius = UDim.new(0, 14)
+            ihCorner.Parent = iconHolder
+
+            local ihGrad = Instance.new("UIGradient")
+            ihGrad.Rotation = 135
+            ihGrad.Color = ColorSequence.new({
+                ColorSequenceKeypoint.new(0, C.Accent2),
+                ColorSequenceKeypoint.new(1, C.Accent),
+            })
+            ihGrad.Parent = iconHolder
+
+            local ihStroke = Instance.new("UIStroke")
+            ihStroke.Color = C.Accent2
+            ihStroke.Thickness = 1.2
+            ihStroke.Transparency = 0.4
+            ihStroke.Parent = iconHolder
+            registerTheme(ihStroke, "Accent2", "Color")
+
+            -- Glow pulse di belakang icon
+            local iconGlow = Instance.new("Frame")
+            iconGlow.Size = UDim2.new(1, 10, 1, 10)
+            iconGlow.Position = UDim2.new(0.5, 0, 0.5, 0)
+            iconGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+            iconGlow.BackgroundColor3 = C.Accent
+            iconGlow.BackgroundTransparency = 0.75
+            iconGlow.BorderSizePixel = 0
+            iconGlow.ZIndex = 5
+            iconGlow.Parent = iconHolder
+            registerTheme(iconGlow, "Accent", "BackgroundColor3")
+
+            local igCorner = Instance.new("UICorner")
+            igCorner.CornerRadius = UDim.new(1, 0)
+            igCorner.Parent = iconGlow
+
+            task.spawn(function()
+                while iconGlow.Parent do
+                    TweenService:Create(iconGlow, TweenInfo.new(1.2, Enum.EasingStyle.Sine), {
+                        BackgroundTransparency = 0.9,
+                    }):Play()
+                    task.wait(1.2)
+                    if not iconGlow.Parent then break end
+                    TweenService:Create(iconGlow, TweenInfo.new(1.2, Enum.EasingStyle.Sine), {
+                        BackgroundTransparency = 0.75,
+                    }):Play()
+                    task.wait(1.2)
+                end
+            end)
+
+            -- Emoji chat di dalam icon
+            local chatEmoji = Instance.new("TextLabel")
+            chatEmoji.Size = UDim2.fromScale(1, 1)
+            chatEmoji.BackgroundTransparency = 1
+            chatEmoji.Text = "💬"
+            chatEmoji.TextSize = 22
+            chatEmoji.Font = Enum.Font.GothamBold
+            chatEmoji.TextColor3 = Color3.fromRGB(255, 255, 255)
+            chatEmoji.ZIndex = 7
+            chatEmoji.Parent = iconHolder
+
+            -- ═══ TITLE + SUBTITLE ═══
+            local titleLbl = Instance.new("TextLabel")
+            titleLbl.Size = UDim2.new(1, -(iconSize + 30), 0, 20)
+            titleLbl.Position = UDim2.fromOffset(iconSize + 26, 24)
+            titleLbl.BackgroundTransparency = 1
+            titleLbl.Text = "LIVE CHAT"
+            titleLbl.TextColor3 = Color3.fromRGB(245, 248, 255)
+            titleLbl.Font = Enum.Font.GothamBlack
+            titleLbl.TextSize = 14
+            titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+            titleLbl.ZIndex = 6
+            titleLbl.Parent = heroCard
+
+            local subLbl = Instance.new("TextLabel")
+            subLbl.Size = UDim2.new(1, -(iconSize + 30), 0, 16)
+            subLbl.Position = UDim2.fromOffset(iconSize + 26, 44)
+            subLbl.BackgroundTransparency = 1
+            subLbl.Text = "Click to open Live Chat"
+            subLbl.TextColor3 = C.Muted
+            subLbl.Font = Enum.Font.GothamSemibold
+            subLbl.TextSize = CFG.FONT_MUTED
+            subLbl.TextXAlignment = Enum.TextXAlignment.Left
+            subLbl.TextTruncate = Enum.TextTruncate.AtEnd
+            subLbl.ZIndex = 6
+            subLbl.Parent = heroCard
+            registerTheme(subLbl, "Muted", "TextColor3")
+
+            -- ═══ ONLINE CHIP (kanan bawah card) ═══
+            local onlineChip = Instance.new("Frame")
+            onlineChip.Size = UDim2.fromOffset(72, 18)
+            onlineChip.Position = UDim2.new(1, -14, 1, -26)
+            onlineChip.AnchorPoint = Vector2.new(1, 0)
+            onlineChip.BackgroundColor3 = Color3.fromRGB(20, 40, 28)
+            onlineChip.BackgroundTransparency = 0.2
+            onlineChip.BorderSizePixel = 0
+            onlineChip.ZIndex = 6
+            onlineChip.Parent = heroCard
+
+            local ocCorner = Instance.new("UICorner")
+            ocCorner.CornerRadius = UDim.new(1, 0)
+            ocCorner.Parent = onlineChip
+
+            local ocStroke = Instance.new("UIStroke")
+            ocStroke.Color = C.Success
+            ocStroke.Thickness = 1
+            ocStroke.Transparency = 0.6
+            ocStroke.Parent = onlineChip
+            registerTheme(ocStroke, "Success", "Color")
+
+            -- Dot hijau kecil
+            local onlineDot = Instance.new("Frame")
+            onlineDot.Size = UDim2.fromOffset(6, 6)
+            onlineDot.Position = UDim2.new(0, 6, 0.5, -3)
+            onlineDot.BackgroundColor3 = C.Success
+            onlineDot.BorderSizePixel = 0
+            onlineDot.ZIndex = 7
+            onlineDot.Parent = onlineChip
+            registerTheme(onlineDot, "Success", "BackgroundColor3")
+
+            local odCorner = Instance.new("UICorner")
+            odCorner.CornerRadius = UDim.new(1, 0)
+            odCorner.Parent = onlineDot
+
+            -- Pulse animation dot
+            task.spawn(function()
+                while onlineDot.Parent do
+                    TweenService:Create(onlineDot, TweenInfo.new(0.8, Enum.EasingStyle.Sine), {
+                        BackgroundTransparency = 0.5,
+                    }):Play()
+                    task.wait(0.8)
+                    if not onlineDot.Parent then break end
+                    TweenService:Create(onlineDot, TweenInfo.new(0.8, Enum.EasingStyle.Sine), {
+                        BackgroundTransparency = 0,
+                    }):Play()
+                    task.wait(0.8)
+                end
+            end)
+
+            local onlineLbl = Instance.new("TextLabel")
+            onlineLbl.Size = UDim2.new(1, -18, 1, 0)
+            onlineLbl.Position = UDim2.fromOffset(16, 0)
+            onlineLbl.BackgroundTransparency = 1
+            onlineLbl.Text = "ONLINE"
+            onlineLbl.TextColor3 = C.Success
+            onlineLbl.Font = Enum.Font.GothamBold
+            onlineLbl.TextSize = 9
+            onlineLbl.TextXAlignment = Enum.TextXAlignment.Left
+            onlineLbl.ZIndex = 7
+            onlineLbl.Parent = onlineChip
+            registerTheme(onlineLbl, "Success", "TextColor3")
+
+            -- ═══ CLICK BUTTON FULL CARD (invisible) ═══
             local showBtn = Instance.new("TextButton")
-            showBtn.Size = UDim2.new(1, 0, 0, 56)
-            showBtn.BackgroundColor3 = C.Accent
-            showBtn.Text = "💬  SHOW LIVE CHAT"
-            showBtn.TextColor3 = Color3.new(1, 1, 1)
-            showBtn.Font = Enum.Font.GothamBlack
-            showBtn.TextSize = CFG.FONT_LARGE
+            showBtn.Size = UDim2.fromScale(1, 1)
+            showBtn.BackgroundTransparency = 1
+            showBtn.Text = ""
             showBtn.AutoButtonColor = false
-            showBtn.BorderSizePixel = 0
-            showBtn.LayoutOrder = 2
-            showBtn.ZIndex = 4
-            showBtn.Parent = showFrame
-            registerTheme(showBtn, "Accent", "BackgroundColor3")
+            showBtn.ZIndex = 8
+            showBtn.Parent = heroCard
 
-            local showCorner = Instance.new("UICorner")
-            showCorner.CornerRadius = UDim.new(0, 12)
-            showCorner.Parent = showBtn
-
-            local showStroke = Instance.new("UIStroke")
-            showStroke.Color = C.Accent2
-            showStroke.Thickness = 1.5
-            showStroke.Transparency = 0.3
-            showStroke.Parent = showBtn
-            registerTheme(showStroke, "Accent2", "Color")
-
+            -- Hover glow effect
             showBtn.MouseEnter:Connect(function()
-                TweenService:Create(showBtn, TweenInfo.new(0.15), {
-                    BackgroundColor3 = C.Accent2
+                TweenService:Create(heroStroke, TweenInfo.new(0.2), {
+                    Transparency = 0.15,
+                    Thickness = 1.8,
+                }):Play()
+                TweenService:Create(iconHolder, TweenInfo.new(0.2), {
+                    Size = UDim2.fromOffset(iconSize + 2, iconSize + 2),
                 }):Play()
             end)
             showBtn.MouseLeave:Connect(function()
-                TweenService:Create(showBtn, TweenInfo.new(0.15), {
-                    BackgroundColor3 = C.Accent
+                TweenService:Create(heroStroke, TweenInfo.new(0.2), {
+                    Transparency = 0.55,
+                    Thickness = 1.2,
+                }):Play()
+                TweenService:Create(iconHolder, TweenInfo.new(0.2), {
+                    Size = UDim2.fromOffset(iconSize, iconSize),
                 }):Play()
             end)
+
+            -- ═══ HINT TEXT BAWAH (kecil, subtle) ═══
+            local hintLbl = Instance.new("TextLabel")
+            hintLbl.Size = UDim2.new(1, 0, 0, 14)
+            hintLbl.BackgroundTransparency = 1
+            hintLbl.Text = "💡 Tap card to start chatting with everyone"
+            hintLbl.TextColor3 = C.Muted
+            hintLbl.Font = Enum.Font.GothamSemibold
+            hintLbl.TextSize = 10
+            hintLbl.TextXAlignment = Enum.TextXAlignment.Center
+            hintLbl.LayoutOrder = 2
+            hintLbl.ZIndex = 4
+            hintLbl.Parent = showFrame
+            registerTheme(hintLbl, "Muted", "TextColor3")
 
             -- ═══ STATE 2: LIVE CHAT INLINE ═══
             local chatFrame = Instance.new("Frame")
@@ -8357,52 +8569,54 @@ end
                 end)
             end
 
-            local function renderMessage(msg)
+                        local function renderMessage(msg)
                 if emptyLbl.Parent then emptyLbl:Destroy() end
 
                 local isMe = (msg.userId == LocalPlayer.UserId)
                 local isOwner = (OWNER_IDS[msg.userId] == true)
 
-                local avatarSize = IS_MOBILE and 26 or 32
-                local avatarGap  = IS_MOBILE and 6 or 9
+                local avatarSize = IS_MOBILE and 26 or 30
+                local bubbleMaxW = IS_MOBILE and 0.74 or 0.70
 
+                -- ═══ ROW WRAPPER ═══
                 local row = Instance.new("Frame")
                 row.Size = UDim2.new(1, 0, 0, 0)
                 row.AutomaticSize = Enum.AutomaticSize.Y
-                row.BackgroundColor3 = isOwner and Color3.fromRGB(45, 20, 10)
-                    or (isMe and C.Surface3 or C.Surface)
-                row.BackgroundTransparency = 0.3
+                row.BackgroundTransparency = 1
                 row.BorderSizePixel = 0
                 msgCounter = msgCounter + 1
                 row.LayoutOrder = msgCounter
                 row.ZIndex = 5
                 row.Parent = listFrame
 
-                local rc = Instance.new("UICorner")
-                rc.CornerRadius = UDim.new(0, 8)
-                rc.Parent = row
+                -- ═══ BUBBLE CONTAINER (kiri/kanan) ═══
+                local bubbleWrap = Instance.new("Frame")
+                bubbleWrap.Name = "BubbleWrap"
+                bubbleWrap.Size = UDim2.new(1, 0, 0, 0)
+                bubbleWrap.AutomaticSize = Enum.AutomaticSize.Y
+                bubbleWrap.BackgroundTransparency = 1
+                bubbleWrap.ZIndex = 5
+                bubbleWrap.Parent = row
 
-                if isOwner then
-                    local ownerStroke = Instance.new("UIStroke")
-                    ownerStroke.Color = Color3.fromRGB(255, 200, 50)
-                    ownerStroke.Thickness = 1.5
-                    ownerStroke.Transparency = 0.2
-                    ownerStroke.Parent = row
-                end
+                local wrapLayout = Instance.new("UIListLayout")
+                wrapLayout.FillDirection = Enum.FillDirection.Horizontal
+                wrapLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+                wrapLayout.HorizontalAlignment = isMe
+                    and Enum.HorizontalAlignment.Right
+                    or Enum.HorizontalAlignment.Left
+                wrapLayout.Padding = UDim.new(0, 6)
+                wrapLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                wrapLayout.Parent = bubbleWrap
 
-                local rp = Instance.new("UIPadding")
-                rp.PaddingTop = UDim.new(0, 7)
-                rp.PaddingBottom = UDim.new(0, 7)
-                rp.PaddingLeft = UDim.new(0, IS_MOBILE and 8 or 10)
-                rp.PaddingRight = UDim.new(0, IS_MOBILE and 8 or 10)
-                rp.Parent = row
-
+                -- ═══ AVATAR (posisi menyesuaikan sisi) ═══
                 local avContainer = Instance.new("Frame")
+                avContainer.Name = "Avatar"
                 avContainer.Size = UDim2.fromOffset(avatarSize, avatarSize)
                 avContainer.BackgroundColor3 = C.Surface2
                 avContainer.BorderSizePixel = 0
                 avContainer.ZIndex = 6
-                avContainer.Parent = row
+                avContainer.LayoutOrder = isMe and 2 or 1
+                avContainer.Parent = bubbleWrap
 
                 local avCorner = Instance.new("UICorner")
                 avCorner.CornerRadius = UDim.new(1, 0)
@@ -8426,52 +8640,148 @@ end
                 avStroke.Color = isOwner and Color3.fromRGB(255, 200, 50)
                     or (isMe and C.Accent2 or C.Accent)
 
-                local hdr = Instance.new("Frame")
-                hdr.Size = UDim2.new(1, -(avatarSize + avatarGap), 0, IS_MOBILE and 16 or 18)
-                hdr.Position = UDim2.fromOffset(avatarSize + avatarGap, 0)
-                hdr.BackgroundTransparency = 1
-                hdr.ZIndex = 6
-                hdr.Parent = row
+                -- ═══ BUBBLE ═══
+                local bubble = Instance.new("Frame")
+                bubble.Name = "Bubble"
+                bubble.Size = UDim2.new(bubbleMaxW, 0, 0, 0)
+                bubble.AutomaticSize = Enum.AutomaticSize.Y
+                bubble.BackgroundColor3 = isOwner and Color3.fromRGB(60, 40, 15)
+                    or (isMe and C.Accent or C.Surface2)
+                bubble.BackgroundTransparency = isMe and 0.12 or 0.08
+                bubble.BorderSizePixel = 0
+                bubble.ZIndex = 6
+                bubble.LayoutOrder = isMe and 1 or 2
+                bubble.Parent = bubbleWrap
+
+                local bubbleCorner = Instance.new("UICorner")
+                bubbleCorner.CornerRadius = UDim.new(0, 12)
+                bubbleCorner.Parent = bubble
+
+                local bs = Instance.new("UIStroke")
+                bs.Thickness = 1.2
+                if isOwner then
+                    bs.Color = Color3.fromRGB(255, 200, 50)
+                    bs.Transparency = 0.3
+                elseif isMe then
+                    bs.Color = C.Accent2
+                    bs.Transparency = 0.5
+                else
+                    bs.Color = C.Surface3
+                    bs.Transparency = 0.5
+                end
+                bs.Parent = bubble
+
+                local bp = Instance.new("UIPadding")
+                bp.PaddingTop = UDim.new(0, 7)
+                bp.PaddingBottom = UDim.new(0, 7)
+                bp.PaddingLeft = UDim.new(0, 10)
+                bp.PaddingRight = UDim.new(0, 10)
+                bp.Parent = bubble
+
+                local bl = Instance.new("UIListLayout")
+                bl.Padding = UDim.new(0, 2)
+                bl.SortOrder = Enum.SortOrder.LayoutOrder
+                bl.Parent = bubble
+
+                -- ═══ NAME + OWNER BADGE ═══
+                local nameRow = Instance.new("Frame")
+                nameRow.Size = UDim2.new(1, 0, 0, 0)
+                nameRow.AutomaticSize = Enum.AutomaticSize.Y
+                nameRow.BackgroundTransparency = 1
+                nameRow.LayoutOrder = 1
+                nameRow.ZIndex = 7
+                nameRow.Parent = bubble
+
+                local nameRowLayout = Instance.new("UIListLayout")
+                nameRowLayout.FillDirection = Enum.FillDirection.Horizontal
+                nameRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+                nameRowLayout.HorizontalAlignment = isMe
+                    and Enum.HorizontalAlignment.Right
+                    or Enum.HorizontalAlignment.Left
+                nameRowLayout.Padding = UDim.new(0, 4)
+                nameRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                nameRowLayout.Parent = nameRow
 
                 local nameLbl = Instance.new("TextLabel")
-                nameLbl.Size = UDim2.new(1, -60, 1, 0)
+                nameLbl.Size = UDim2.new(0, 0, 0, IS_MOBILE and 14 or 15)
+                nameLbl.AutomaticSize = Enum.AutomaticSize.X
                 nameLbl.BackgroundTransparency = 1
-                nameLbl.Text = (isMe and "You" or msg.displayName) .. (isOwner and " 👑" or "")
-                nameLbl.TextColor3 = isOwner and Color3.fromRGB(255, 200, 50)
-                    or (isMe and C.Accent2 or C.Accent)
+                nameLbl.Text = isMe and "You" or msg.displayName
+                nameLbl.TextColor3 = isMe
+                    and Color3.fromRGB(255, 255, 255)
+                    or (isOwner and Color3.fromRGB(255, 220, 120) or C.Accent2)
                 nameLbl.Font = Enum.Font.GothamBold
                 nameLbl.TextSize = IS_MOBILE and 10 or 11
-                nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-                nameLbl.ZIndex = 7
-                nameLbl.Parent = hdr
+                nameLbl.TextXAlignment = isMe
+                    and Enum.TextXAlignment.Right
+                    or Enum.TextXAlignment.Left
+                nameLbl.LayoutOrder = 1
+                nameLbl.ZIndex = 8
+                nameLbl.Parent = nameRow
 
-                local timeLbl = Instance.new("TextLabel")
-                timeLbl.Size = UDim2.fromOffset(50, 16)
-                timeLbl.Position = UDim2.new(1, -50, 0, 0)
-                timeLbl.BackgroundTransparency = 1
-                timeLbl.Text = msg.time
-                timeLbl.TextColor3 = C.Muted
-                timeLbl.Font = Enum.Font.GothamSemibold
-                timeLbl.TextSize = IS_MOBILE and 9 or 10
-                timeLbl.TextXAlignment = Enum.TextXAlignment.Right
-                timeLbl.ZIndex = 7
-                timeLbl.Parent = hdr
+                if isOwner then
+                    local ownerBadge = Instance.new("Frame")
+                    ownerBadge.Size = UDim2.fromOffset(IS_MOBILE and 42 or 48, IS_MOBILE and 13 or 15)
+                    ownerBadge.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
+                    ownerBadge.BorderSizePixel = 0
+                    ownerBadge.LayoutOrder = 2
+                    ownerBadge.ZIndex = 8
+                    ownerBadge.Parent = nameRow
 
+                    local obCorner = Instance.new("UICorner")
+                    obCorner.CornerRadius = UDim.new(0, 4)
+                    obCorner.Parent = ownerBadge
+
+                    local obLbl = Instance.new("TextLabel")
+                    obLbl.Size = UDim2.fromScale(1, 1)
+                    obLbl.BackgroundTransparency = 1
+                    obLbl.Text = "👑 OWNER"
+                    obLbl.TextColor3 = Color3.fromRGB(30, 20, 0)
+                    obLbl.Font = Enum.Font.GothamBold
+                    obLbl.TextSize = IS_MOBILE and 7 or 8
+                    obLbl.ZIndex = 9
+                    obLbl.Parent = ownerBadge
+                end
+
+                -- ═══ BODY TEXT ═══
                 local bodyLbl = Instance.new("TextLabel")
-                bodyLbl.Size = UDim2.new(1, -(avatarSize + avatarGap), 0, 0)
+                bodyLbl.Size = UDim2.new(1, 0, 0, 0)
                 bodyLbl.AutomaticSize = Enum.AutomaticSize.Y
-                bodyLbl.Position = UDim2.fromOffset(avatarSize + avatarGap, IS_MOBILE and 18 or 20)
                 bodyLbl.BackgroundTransparency = 1
                 bodyLbl.Text = msg.text
-                bodyLbl.TextColor3 = C.Text
+                bodyLbl.TextColor3 = isMe
+                    and Color3.fromRGB(255, 255, 255)
+                    or C.Text
                 bodyLbl.Font = Enum.Font.GothamSemibold
                 bodyLbl.TextSize = CFG.CHAT_FONT
                 bodyLbl.TextWrapped = true
-                bodyLbl.TextXAlignment = Enum.TextXAlignment.Left
+                bodyLbl.TextXAlignment = isMe
+                    and Enum.TextXAlignment.Right
+                    or Enum.TextXAlignment.Left
                 bodyLbl.TextYAlignment = Enum.TextYAlignment.Top
-                bodyLbl.ZIndex = 6
-                bodyLbl.Parent = row
+                bodyLbl.LayoutOrder = 2
+                bodyLbl.ZIndex = 7
+                bodyLbl.Parent = bubble
                 registerTheme(bodyLbl, "Text", "TextColor3")
+
+                -- ═══ TIME ═══
+                local timeLbl = Instance.new("TextLabel")
+                timeLbl.Size = UDim2.new(1, 0, 0, 12)
+                timeLbl.BackgroundTransparency = 1
+                timeLbl.Text = msg.time
+                timeLbl.TextColor3 = isMe
+                    and Color3.fromRGB(255, 255, 255)
+                    or C.Muted
+                timeLbl.TextTransparency = isMe and 0.35 or 0.2
+                timeLbl.Font = Enum.Font.GothamSemibold
+                timeLbl.TextSize = IS_MOBILE and 8 or 9
+                timeLbl.TextXAlignment = isMe
+                    and Enum.TextXAlignment.Right
+                    or Enum.TextXAlignment.Left
+                timeLbl.LayoutOrder = 3
+                timeLbl.ZIndex = 7
+                timeLbl.Parent = bubble
+                registerTheme(timeLbl, "Muted", "TextColor3")
 
                 scrollBottom()
             end
