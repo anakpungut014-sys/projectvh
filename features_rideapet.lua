@@ -6124,6 +6124,11 @@ local function seStealVolcanicEgg(egg)
     return true, nil
 end
 
+-- ⭐ CAMERA MODE untuk steal executor
+Shared.StealCameraMode = Shared.StealCameraMode or "Lock Base"
+--   "Lock Base"   = kamera dikunci di plot (perilaku sekarang, DEFAULT)
+--   "Unlock Base" = kamera ikut karakter (steal biasa, tanpa lock)
+
 -- ⭐ MAIN ENTRY — dipanggil dari UI
 function Features.stealEgg(egg)
     if StealExecState.Busy then
@@ -6163,19 +6168,27 @@ function Features.stealEgg(egg)
     local isVolcanic = egg.Name:lower():find("volcan") ~= nil
     StealExecState.Status = isVolcanic and "🌋 Stealing volcanic..." or "🎯 Stealing..."
 
-                task.spawn(function()
-    -- 🎥 KUNCI KAMERA DI BASE (pake pcall biar gak crash)
+                                task.spawn(function()
+    -- 🎥 CAMERA MODE — cek dropdown, default "Lock Base"
     local camOk = false
-    pcall(function() camOk = cameraLockToBase() end)
+    local isUnlockMode = (Shared.StealCameraMode == "Unlock Base")
 
-    if camOk then
-        StealExecState.Status = "🎥 Kamera di base — mulai steal..."
-        task.wait(0.2)
+    if not isUnlockMode then
+        -- "Lock Base" = perilaku SEKARANG (kamera dikunci ke plot)
+        pcall(function() camOk = cameraLockToBase() end)
+        if camOk then
+            StealExecState.Status = "🎥 Kamera di base — mulai steal..."
+            task.wait(0.2)
+        else
+            warn("[Steal] Kamera gak bisa dikunci (plot gak ketemu), lanjut steal tanpa camera lock")
+        end
     else
-        warn("[Steal] Kamera gak bisa dikunci (plot gak ketemu), lanjut steal tanpa camera lock")
+        -- "Unlock Base" = kamera IKUT karakter, tetap steal biasa
+        StealExecState.Status = "🎥 Kamera ikut karakter — mulai steal..."
+        task.wait(0.1)
     end
 
-    -- ⭐⭐⭐ FIX #1: pcall biar error di seSteal* TIDAK bikin kamera stuck ⭐⭐⭐
+    -- ⭐ pcall biar error di seSteal* TIDAK bikin kamera stuck
     local ok, err
     if isVolcanic then
         ok, err = pcall(seStealVolcanicEgg, egg)
@@ -6183,12 +6196,12 @@ function Features.stealEgg(egg)
         ok, err = pcall(seStealNormalEgg, egg)
     end
 
-    -- ⭐⭐⭐ FIX #2: WAJIB — unlock di finally, PASTI jalan walau error ⭐⭐⭐
+    -- ⭐ Unlock cuma kalau tadi lock (Lock Base mode)
     if camOk then
         pcall(cameraUnlockToCharacter)
         task.wait(0.1)
     end
-
+    
     if not ok then
         if Shared.Notify then Shared.Notify("❌ Steal failed: " .. tostring(err), "error") end
         StealExecState.Status = "❌ " .. tostring(err)
