@@ -8170,7 +8170,7 @@ end
             updateSections(v)
         end)
 
-                local stealToggleHolder = Instance.new("Frame")
+        local stealToggleHolder = Instance.new("Frame")
         stealToggleHolder.Size = UDim2.new(1, 0, 0, CFG.TOGGLE_H)
         stealToggleHolder.BackgroundTransparency = 1
         stealToggleHolder.LayoutOrder = 3
@@ -8182,7 +8182,9 @@ end
             else notify("🎯 Steal: OFF", "info") end
         end, "MutationSteal_Enabled")
 
+        -- ═══════════════════════════════════════════════════════════
         -- ⭐ STEAL CAMERA MODE — Lock Base / Unlock Base
+        -- ═══════════════════════════════════════════════════════════
         local camModeLbl = Instance.new("TextLabel")
         camModeLbl.Size = UDim2.new(1, 0, 0, 16)
         camModeLbl.BackgroundTransparency = 1
@@ -8201,33 +8203,29 @@ end
         camModeHolder.LayoutOrder = 5
         camModeHolder.Parent = mutStealContent
 
-makeDropdownGlobal(camModeHolder, {"Lock Base", "Unlock Base"}, Shared.StealCameraMode or "Lock Base", function(v)
-    Shared.StealCameraMode = v
+        makeDropdownGlobal(camModeHolder, {"Lock Base", "Unlock Base"}, Shared.StealCameraMode or "Lock Base", function(v)
+            Shared.StealCameraMode = v
 
-    if v == "Unlock Base" then
-        -- ⭐ Force unlock kamera SEKARANG (bukan nunggu steal)
-        local cam = workspace.CurrentCamera
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if v == "Unlock Base" then
+                -- ⭐ Force unlock kamera SEKARANG (bukan nunggu steal)
+                local cam = workspace.CurrentCamera
+                local char = LocalPlayer.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
 
-        if _G.VRILZ_CameraLock and _G.VRILZ_CameraLock.Unlock then
-            pcall(function() _G.VRILZ_CameraLock.Unlock() end)
-        end
+                if _G.VRILZ_CameraLock and _G.VRILZ_CameraLock.Unlock then
+                    pcall(function() _G.VRILZ_CameraLock.Unlock() end)
+                end
 
-        if cam and hum then
-            cam.CameraType = Enum.CameraType.Custom
-            cam.CameraSubject = hum
-        end
+                if cam and hum then
+                    cam.CameraType = Enum.CameraType.Custom
+                    cam.CameraSubject = hum
+                end
 
-        notify("🎥 Camera: Unlock Base — kamera ikut karakter", "success")
-    else
-        -- Lock Base: kamera balik ke plot (langsung)
-        if _G.VRILZ_CameraLock and _G.VRILZ_CameraLock.Lock then
-            pcall(function() _G.VRILZ_CameraLock.Lock() end)
-        end
-        notify("🎥 Camera: Lock Base — kamera di plot", "info")
-    end
-end)
+                notify("🎥 Camera: Unlock Base — kamera ikut karakter", "success")
+            else
+                notify("🎥 Camera: Lock Base — kamera di plot", "info")
+            end
+        end)
 
         local rarityLbl = Instance.new("TextLabel")
         rarityLbl.Size = UDim2.new(1, 0, 0, 16)
