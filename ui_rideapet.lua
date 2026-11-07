@@ -8140,6 +8140,7 @@ end
             local cardHeader = Instance.new("Frame")
             cardHeader.Size = UDim2.new(1, 0, 0, CFG.CARD_HEADER)
             cardHeader.BackgroundColor3 = PC_BG_TOP
+            cardHeader.BackgroundTransparency = 1   -- ⭐ header transparan
             cardHeader.BorderSizePixel = 0
             cardHeader.ZIndex = 2
             cardHeader.Parent = wrapCard
@@ -8152,6 +8153,7 @@ end
             cardHeaderFix.Size = UDim2.new(1, 0, 0, 14)
             cardHeaderFix.Position = UDim2.new(0, 0, 1, -14)
             cardHeaderFix.BackgroundColor3 = PC_BG_TOP
+            cardHeaderFix.BackgroundTransparency = 1   -- ⭐ fix-nya juga transparan
             cardHeaderFix.BorderSizePixel = 0
             cardHeaderFix.ZIndex = 2
             cardHeaderFix.Parent = cardHeader
