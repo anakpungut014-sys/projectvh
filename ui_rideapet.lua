@@ -8633,7 +8633,7 @@ registerTab("Egg", "97796889305691", "Egg", true)
 registerTab("Visual", "108965719868153", "Visual", true)
 registerTab("Auto", "75410123129821", "Auto", true)
 registerTab("Event", "122875675034034", "Event", true)  
-registerTab("AdminAbuse", "120233387165012", "Admin Abuse", true)
+registerTab("AdminAbuse", "108708492155123", "Admin Abuse", true)
 registerTab("EggMutation", "85209430814229", "EggMutation", true)  
 registerTab("Webhook", "78129393420657", "Webhook", true)
 registerTab("Settings", "97834340359225", "Settings", true)
@@ -11734,7 +11734,7 @@ task.spawn(function()
         "rbxassetid://108965719868153",  -- Visual
         "rbxassetid://75410123129821",   -- Auto
         "rbxassetid://122875675034034",  -- Event
-        "rbxassetid://120233387165012",  -- AdminAbuse
+        "rbxassetid://108708492155123",  -- AdminAbuse
         "rbxassetid://85209430814229",  -- EggMutation
         "rbxassetid://78129393420657",   -- Webhook
         "rbxassetid://97834340359225",   -- Settings
