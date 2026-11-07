@@ -5781,42 +5781,51 @@ end
 -- ⭐ UNLOCK — balik ke character
 -- ══════════════════════════════════════════════════════════════
 local function cameraUnlockToCharacter()
-    warn("[CameraLock] 🔓 Unlock")
+    warn("[CameraLock] 🔓 Unlock — forcing camera back to character")
     CameraLock.Active = false
 
     local cam = workspace.CurrentCamera
     if not cam then return end
 
-    -- Balik CameraType ke asli
-    if CameraLock._origCameraType then
-        cam.CameraType = CameraLock._origCameraType
-    else
-        cam.CameraType = Enum.CameraType.Custom
-    end
+    -- ⭐ FORCE: balikin CameraType ke Custom (bukan Scriptable)
+    cam.CameraType = Enum.CameraType.Custom
 
-    -- Balik CameraSubject ke Humanoid character
+    -- ⭐ FORCE: balikin CameraSubject ke Humanoid
     local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
-
     if hum then
         cam.CameraSubject = hum
     else
-        -- Tunggu respawn
+        -- Karakter belum ada / respawn → tunggu
         local conn
         conn = LocalPlayer.CharacterAdded:Connect(function(newChar)
             local newHum = newChar:WaitForChild("Humanoid", 5)
             if newHum and cam then
+                cam.CameraType = Enum.CameraType.Custom
                 cam.CameraSubject = newHum
             end
             conn:Disconnect()
         end)
     end
 
+    -- ⭐ CLEAR STATE
     CameraLock._origCameraType = nil
     CameraLock._origCameraSubject = nil
     CameraLock._origCameraCFrame = nil
     CameraLock._origCameraFocus = nil
     CameraLock._basePart = nil
+
+    -- ⭐ FORCE UPDATE double-check (anti race condition)
+    task.defer(function()
+        local c = workspace.CurrentCamera
+        if c then
+            c.CameraType = Enum.CameraType.Custom
+            local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if h then
+                c.CameraSubject = h
+            end
+        end
+    end)
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -6168,38 +6177,53 @@ function Features.stealEgg(egg)
     StealExecState.Status = isVolcanic and "🌋 Stealing volcanic..." or "🎯 Stealing..."
 
                                 task.spawn(function()
-        -- 🎥 CAMERA MODE — cek dropdown, default "Lock Base"
-    local camOk = false
-    local isUnlockMode = (Shared.StealCameraMode == "Unlock Base")
+       -- 🎥 CAMERA MODE — cek dropdown, default "Lock Base"
+local camOk = false
+local isUnlockMode = (Shared.StealCameraMode == "Unlock Base")
 
-    if not isUnlockMode then
-        -- "Lock Base" = current behavior (camera locked to plot)
-        pcall(function() camOk = cameraLockToBase() end)
-        if camOk then
-            StealExecState.Status = "🎥 Camera at base — starting steal..."
-            task.wait(0.2)
-        else
-            warn("[Steal] Failed to lock camera (plot not found), continuing steal without camera lock")
-        end
+if not isUnlockMode then
+    -- "Lock Base" = kamera di plot
+    pcall(function() camOk = cameraLockToBase() end)
+    if camOk then
+        StealExecState.Status = "🎥 Camera locked to base — starting steal..."
+        task.wait(0.2)
     else
-        -- "Unlock Base" = camera FOLLOWS character, normal steal
-        StealExecState.Status = "🎥 Camera follows character — starting steal..."
-        
-        -- ⭐ FORCE UNLOCK CAMERA KALAU KEMAREN NYANGKUT DI BASE
-        pcall(cameraUnlockToCharacter)
-        
-        -- ⭐ PAKSA KAMERA BALIK KE KARAKTER (BIAR GAK NYANGKUT)
-        local cam = workspace.CurrentCamera
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if cam and hum then
-            cam.CameraType = Enum.CameraType.Custom
-            cam.CameraSubject = hum
-        end
-        
-        task.wait(0.1)
+        warn("[Steal] Failed to lock camera (plot not found), continuing without lock")
     end
-
+else
+    -- ⭐ "Unlock Base" = kamera ikut karakter (SKIP LOCK)
+    StealExecState.Status = "🎥 Camera follows character — starting steal..."
+    
+    -- Force unlock dulu (kalo sebelumnya ke-lock)
+    pcall(cameraUnlockToCharacter)
+    
+    local cam = workspace.CurrentCamera
+    local char = LocalPlayer.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if cam and hum then
+        cam.CameraType = Enum.CameraType.Custom
+        cam.CameraSubject = hum
+    end
+    
+    -- ⭐ Loop paksa 10x (anti script lain override)
+    task.spawn(function()
+        for i = 1, 10 do
+            task.wait(0.1)
+            local c = workspace.CurrentCamera
+            local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if c and h then
+                if c.CameraType ~= Enum.CameraType.Custom then
+                    c.CameraType = Enum.CameraType.Custom
+                end
+                if c.CameraSubject ~= h then
+                    c.CameraSubject = h
+                end
+            end
+        end
+    end)
+    
+    task.wait(0.15)
+end
     -- ⭐ pcall biar error di seSteal* TIDAK bikin kamera stuck
     local ok, err
     if isVolcanic then
