@@ -9066,7 +9066,7 @@ registerTab("Prediksi", "86552780174782", "Prediksi", true)
 registerTab("Egg", "97796889305691", "Egg", true)
 registerTab("Visual", "108965719868153", "Visual", true)
 registerTab("Auto", "75410123129821", "Auto", true)
-registerTab("LiveChat", "78129393420657", "Live Chat", true)
+registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Event", "122875675034034", "Event", true)  
 registerTab("AdminAbuse", "108708492155123", "Admin Abuse", true)
 registerTab("EggMutation", "85209430814229", "EggMutation", true)  
@@ -12168,7 +12168,7 @@ task.spawn(function()
         "rbxassetid://97796889305691",   -- Egg
         "rbxassetid://108965719868153",  -- Visual
         "rbxassetid://75410123129821",   -- Auto
-        "rbxassetid://78129393420657",   -- Live Chat
+        "rbxassetid://83047761221446",   -- Live Chat
         "rbxassetid://122875675034034",  -- Event
         "rbxassetid://108708492155123",  -- AdminAbuse
         "rbxassetid://85209430814229",  -- EggMutation
