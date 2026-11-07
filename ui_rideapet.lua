@@ -8203,26 +8203,28 @@ end
 
 makeDropdownGlobal(camModeHolder, {"Lock Base", "Unlock Base"}, Shared.StealCameraMode or "Lock Base", function(v)
     Shared.StealCameraMode = v
-    
+
     if v == "Unlock Base" then
-        -- ⭐ LANGSUNG UNLOCK KAMERA KE KARAKTER
+        -- ⭐ Force unlock kamera SEKARANG (bukan nunggu steal)
         local cam = workspace.CurrentCamera
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
-        
-        -- Force unlock dari base plot kalo lagi ke-lock
+
         if _G.VRILZ_CameraLock and _G.VRILZ_CameraLock.Unlock then
             pcall(function() _G.VRILZ_CameraLock.Unlock() end)
         end
-        
-        -- Force balik ke karakter
+
         if cam and hum then
             cam.CameraType = Enum.CameraType.Custom
             cam.CameraSubject = hum
         end
-        
+
         notify("🎥 Camera: Unlock Base — kamera ikut karakter", "success")
     else
+        -- Lock Base: kamera balik ke plot (langsung)
+        if _G.VRILZ_CameraLock and _G.VRILZ_CameraLock.Lock then
+            pcall(function() _G.VRILZ_CameraLock.Lock() end)
+        end
         notify("🎥 Camera: Lock Base — kamera di plot", "info")
     end
 end)
