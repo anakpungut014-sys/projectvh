@@ -5787,43 +5787,46 @@ local function cameraUnlockToCharacter()
     local cam = workspace.CurrentCamera
     if not cam then return end
 
-    -- ⭐ FORCE: balikin CameraType ke Custom (bukan Scriptable)
     cam.CameraType = Enum.CameraType.Custom
 
-    -- ⭐ FORCE: balikin CameraSubject ke Humanoid
+    -- ⭐ FIX: tunggu karakter max 5 detik
     local char = LocalPlayer.Character
+    if not char then
+        local t0 = os.clock()
+        while os.clock() - t0 < 5 do
+            char = LocalPlayer.Character
+            if char then break end
+            task.wait(0.1)
+        end
+    end
+
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if hum then
         cam.CameraSubject = hum
     else
-        -- Karakter belum ada / respawn → tunggu
-        local conn
-        conn = LocalPlayer.CharacterAdded:Connect(function(newChar)
+        -- Fallback
+        task.spawn(function()
+            local newChar = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
             local newHum = newChar:WaitForChild("Humanoid", 5)
-            if newHum and cam then
-                cam.CameraType = Enum.CameraType.Custom
-                cam.CameraSubject = newHum
+            if newHum and workspace.CurrentCamera then
+                workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
+                workspace.CurrentCamera.CameraSubject = newHum
             end
-            conn:Disconnect()
         end)
     end
 
-    -- ⭐ CLEAR STATE
     CameraLock._origCameraType = nil
     CameraLock._origCameraSubject = nil
     CameraLock._origCameraCFrame = nil
     CameraLock._origCameraFocus = nil
     CameraLock._basePart = nil
 
-    -- ⭐ FORCE UPDATE double-check (anti race condition)
     task.defer(function()
         local c = workspace.CurrentCamera
         if c then
             c.CameraType = Enum.CameraType.Custom
             local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if h then
-                c.CameraSubject = h
-            end
+            if h then c.CameraSubject = h end
         end
     end)
 end
@@ -6176,78 +6179,105 @@ function Features.stealEgg(egg)
     local isVolcanic = egg.Name:lower():find("volcan") ~= nil
     StealExecState.Status = isVolcanic and "🌋 Stealing volcanic..." or "🎯 Stealing..."
 
-                                task.spawn(function()
-       -- 🎥 CAMERA MODE — cek dropdown, default "Lock Base"
-local camOk = false
-local isUnlockMode = (Shared.StealCameraMode == "Unlock Base")
-
-if not isUnlockMode then
-    -- "Lock Base" = kamera di plot
-    pcall(function() camOk = cameraLockToBase() end)
-    if camOk then
-        StealExecState.Status = "🎥 Camera locked to base — starting steal..."
-        task.wait(0.2)
-    else
-        warn("[Steal] Failed to lock camera (plot not found), continuing without lock")
-    end
-else
-    -- ⭐ "Unlock Base" = kamera ikut karakter (SKIP LOCK)
-    StealExecState.Status = "🎥 Camera follows character — starting steal..."
-    
-    -- Force unlock dulu (kalo sebelumnya ke-lock)
-    pcall(cameraUnlockToCharacter)
-    
-    local cam = workspace.CurrentCamera
-    local char = LocalPlayer.Character
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if cam and hum then
-        cam.CameraType = Enum.CameraType.Custom
-        cam.CameraSubject = hum
-    end
-    
-    -- ⭐ Loop paksa 10x (anti script lain override)
     task.spawn(function()
-        for i = 1, 10 do
-            task.wait(0.1)
-            local c = workspace.CurrentCamera
-            local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if c and h then
-                if c.CameraType ~= Enum.CameraType.Custom then
-                    c.CameraType = Enum.CameraType.Custom
+        -- 🎥 CAMERA MODE — cek Shared.StealCameraMode
+        local camMode = Shared.StealCameraMode or "Lock Base"
+        local camOk = false
+
+        if camMode == "Unlock Base" then
+            -- ⭐ UNLOCK BASE = kamera ikut karakter (bawaan Roblox)
+            StealExecState.Status = "🎥 Camera follows character — starting steal..."
+
+            -- Force unlock dulu
+            pcall(cameraUnlockToCharacter)
+
+            -- Set langsung ke Humanoid
+            local cam = workspace.CurrentCamera
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if cam and hum then
+                cam.CameraType = Enum.CameraType.Custom
+                cam.CameraSubject = hum
+            end
+
+            -- ⭐ LOOP SAMPE STEAL SELESAI (bukan 10x doang)
+            -- biar kamera GAK balik ke base pas karakter di-TP
+            local forceConn = RunService.RenderStepped:Connect(function()
+                local c = workspace.CurrentCamera
+                local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                if c and h then
+                    if c.CameraType ~= Enum.CameraType.Custom then
+                        c.CameraType = Enum.CameraType.Custom
+                    end
+                    if c.CameraSubject ~= h then
+                        c.CameraSubject = h
+                    end
                 end
-                if c.CameraSubject ~= h then
-                    c.CameraSubject = h
-                end
+            end)
+
+            task.wait(0.15)
+
+            -- ⭐ Steal
+            local ok, err
+            if isVolcanic then
+                ok, err = pcall(seStealVolcanicEgg, egg)
+            else
+                ok, err = pcall(seStealNormalEgg, egg)
+            end
+
+            -- ⭐ CLEANUP — disconnect loop
+            forceConn:Disconnect()
+
+            -- Final unlock
+            local finalCam = workspace.CurrentCamera
+            local finalHum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if finalCam and finalHum then
+                finalCam.CameraType = Enum.CameraType.Custom
+                finalCam.CameraSubject = finalHum
+            end
+
+            if not ok then
+                if Shared.Notify then Shared.Notify("❌ Steal failed: " .. tostring(err), "error") end
+                StealExecState.Status = "❌ " .. tostring(err)
+            else
+                if Shared.Notify then Shared.Notify("✅ Steal complete!", "success") end
+            end
+
+        else
+            -- ⭐ LOCK BASE (default)
+            pcall(function() camOk = cameraLockToBase() end)
+            if camOk then
+                StealExecState.Status = "🎥 Camera locked to base — starting steal..."
+                task.wait(0.2)
+            else
+                warn("[Steal] Failed to lock camera (plot not found), continuing without lock")
+            end
+
+            -- ⭐ Steal
+            local ok, err
+            if isVolcanic then
+                ok, err = pcall(seStealVolcanicEgg, egg)
+            else
+                ok, err = pcall(seStealNormalEgg, egg)
+            end
+
+            -- ⭐ Unlock cuma kalau tadi lock
+            if camOk then
+                pcall(cameraUnlockToCharacter)
+                task.wait(0.1)
+            end
+
+            if not ok then
+                if Shared.Notify then Shared.Notify("❌ Steal failed: " .. tostring(err), "error") end
+                StealExecState.Status = "❌ " .. tostring(err)
+            else
+                if Shared.Notify then Shared.Notify("✅ Steal complete!", "success") end
             end
         end
+
+        StealExecState.Busy = false
+        StealExecState.CurrentEggName = nil
     end)
-    
-    task.wait(0.15)
-end
-    -- ⭐ pcall biar error di seSteal* TIDAK bikin kamera stuck
-    local ok, err
-    if isVolcanic then
-        ok, err = pcall(seStealVolcanicEgg, egg)
-    else
-        ok, err = pcall(seStealNormalEgg, egg)
-    end
-
-    -- ⭐ Unlock cuma kalau tadi lock (Lock Base mode)
-    if camOk then
-        pcall(cameraUnlockToCharacter)
-        task.wait(0.1)
-    end
-    
-    if not ok then
-        if Shared.Notify then Shared.Notify("❌ Steal failed: " .. tostring(err), "error") end
-        StealExecState.Status = "❌ " .. tostring(err)
-    else
-        if Shared.Notify then Shared.Notify("✅ Steal complete!", "success") end
-    end
-
-    StealExecState.Busy = false
-    StealExecState.CurrentEggName = nil
-end)
     return true, nil
 end
 function Features.getStealExecState()
