@@ -6168,22 +6168,35 @@ function Features.stealEgg(egg)
     StealExecState.Status = isVolcanic and "🌋 Stealing volcanic..." or "🎯 Stealing..."
 
                                 task.spawn(function()
-    -- 🎥 CAMERA MODE — cek dropdown, default "Lock Base"
+        -- 🎥 CAMERA MODE — cek dropdown, default "Lock Base"
     local camOk = false
     local isUnlockMode = (Shared.StealCameraMode == "Unlock Base")
 
     if not isUnlockMode then
-        -- "Lock Base" = perilaku SEKARANG (kamera dikunci ke plot)
+        -- "Lock Base" = current behavior (camera locked to plot)
         pcall(function() camOk = cameraLockToBase() end)
         if camOk then
-            StealExecState.Status = "🎥 Kamera di base — mulai steal..."
+            StealExecState.Status = "🎥 Camera at base — starting steal..."
             task.wait(0.2)
         else
-            warn("[Steal] Kamera gak bisa dikunci (plot gak ketemu), lanjut steal tanpa camera lock")
+            warn("[Steal] Failed to lock camera (plot not found), continuing steal without camera lock")
         end
     else
-        -- "Unlock Base" = kamera IKUT karakter, tetap steal biasa
-        StealExecState.Status = "🎥 Kamera ikut karakter — mulai steal..."
+        -- "Unlock Base" = camera FOLLOWS character, normal steal
+        StealExecState.Status = "🎥 Camera follows character — starting steal..."
+        
+        -- ⭐ FORCE UNLOCK CAMERA KALAU KEMAREN NYANGKUT DI BASE
+        pcall(cameraUnlockToCharacter)
+        
+        -- ⭐ PAKSA KAMERA BALIK KE KARAKTER (BIAR GAK NYANGKUT)
+        local cam = workspace.CurrentCamera
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if cam and hum then
+            cam.CameraType = Enum.CameraType.Custom
+            cam.CameraSubject = hum
+        end
+        
         task.wait(0.1)
     end
 
