@@ -8749,16 +8749,26 @@ end
                 bl.SortOrder = Enum.SortOrder.LayoutOrder
                 bl.Parent = bubble
 
-                -- Name + time
+                                -- Name + time (pakai UIListLayout biar owner tag nempel ke nama)
                 local nameRow = Instance.new("Frame")
-                nameRow.Size = UDim2.new(1, 0, 0, 14)
+                nameRow.Size = UDim2.new(1, 0, 0, 16)
                 nameRow.BackgroundTransparency = 1
                 nameRow.LayoutOrder = 1
                 nameRow.ZIndex = 7
                 nameRow.Parent = bubble
 
+                local nameRowLayout = Instance.new("UIListLayout")
+                nameRowLayout.FillDirection = Enum.FillDirection.Horizontal
+                nameRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+                nameRowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+                nameRowLayout.Padding = UDim.new(0, 6)
+                nameRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+                nameRowLayout.Parent = nameRow
+
+                -- Nama
                 local nameLbl = Instance.new("TextLabel")
-                nameLbl.Size = UDim2.new(1, -110, 1, 0)
+                nameLbl.Size = UDim2.new(0, 0, 1, 0)
+                nameLbl.AutomaticSize = Enum.AutomaticSize.X
                 nameLbl.BackgroundTransparency = 1
                 nameLbl.Text = (isMe and "You" or msg.displayName)
                 nameLbl.TextColor3 = isOwner
@@ -8769,13 +8779,15 @@ end
                 nameLbl.TextXAlignment = Enum.TextXAlignment.Left
                 nameLbl.TextYAlignment = Enum.TextYAlignment.Center
                 nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+                nameLbl.LayoutOrder = 1
                 nameLbl.ZIndex = 8
                 nameLbl.Parent = nameRow
 
+                -- Owner tag — NEMPEL PAS DI SAMPING NAMA
                 if isOwner then
                     local ownerTag = Instance.new("TextLabel")
-                    ownerTag.Size = UDim2.fromOffset(52, 14)
-                    ownerTag.Position = UDim2.new(1, -110, 0, 0)
+                    ownerTag.Size = UDim2.new(0, 0, 0, 14)
+                    ownerTag.AutomaticSize = Enum.AutomaticSize.X
                     ownerTag.BackgroundTransparency = 1
                     ownerTag.Text = "👑 OWNER"
                     ownerTag.TextColor3 = Color3.fromRGB(255, 200, 80)
@@ -8783,13 +8795,22 @@ end
                     ownerTag.TextSize = IS_MOBILE and 8 or 9
                     ownerTag.TextXAlignment = Enum.TextXAlignment.Left
                     ownerTag.TextYAlignment = Enum.TextYAlignment.Center
+                    ownerTag.LayoutOrder = 2
                     ownerTag.ZIndex = 8
                     ownerTag.Parent = nameRow
                 end
 
+                -- Time (dorong ke kanan pakai spacer)
+                local timeSpacer = Instance.new("Frame")
+                timeSpacer.Size = UDim2.new(1, 0, 1, 0)
+                timeSpacer.BackgroundTransparency = 1
+                timeSpacer.LayoutOrder = 3
+                timeSpacer.ZIndex = 7
+                timeSpacer.Parent = nameRow
+
                 local timeLbl = Instance.new("TextLabel")
-                timeLbl.Size = UDim2.fromOffset(48, 14)
-                timeLbl.Position = UDim2.new(1, -50, 0, 0)
+                timeLbl.Size = UDim2.new(0, 0, 1, 0)
+                timeLbl.AutomaticSize = Enum.AutomaticSize.X
                 timeLbl.BackgroundTransparency = 1
                 timeLbl.Text = msg.time
                 timeLbl.TextColor3 = Color3.fromRGB(140, 160, 190)
@@ -8797,6 +8818,7 @@ end
                 timeLbl.TextSize = IS_MOBILE and 8 or 9
                 timeLbl.TextXAlignment = Enum.TextXAlignment.Right
                 timeLbl.TextYAlignment = Enum.TextYAlignment.Center
+                timeLbl.LayoutOrder = 4
                 timeLbl.ZIndex = 8
                 timeLbl.Parent = nameRow
 
