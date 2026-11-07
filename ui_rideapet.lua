@@ -12276,7 +12276,7 @@ end
 _G.VRILZ_ArqelUI = ArqelUI
 
 -- ============================================================
--- ⭐ KEY/PREMIUM HELPERS — DIPISAH DARI UI.INIT (FIX COMPILE)
+-- ⭐ KEY/PREMIUM HELPERS
 -- ============================================================
 local function isRealPremiumKey(keyType)
     if not keyType then return false end
@@ -12284,13 +12284,15 @@ local function isRealPremiumKey(keyType)
     return kt == "PREMIUM" or kt == "OWNER" or kt == "VIP"
 end
 
+-- ⭐ SINKRONISASI JAM: Logic ini disamain persis sama Admin Abuse
 local function isPremiumTimeNow()
     if LocalPlayer.UserId == OWNER_USERID then
         return true
     end
     local ok, result = pcall(function()
-        local wibTime = os.time() + 7 * 3600
+        local wibTime = os.time() + (7 * 3600)
         local wibDate = os.date("!*t", wibTime)
+        -- 7 = Sabtu. 1190 = 19:50. 1439 = 23:59
         if wibDate.wday ~= 7 then return false end
         local totalMin = wibDate.hour * 60 + wibDate.min
         return totalMin >= 1190 and totalMin <= 1439
