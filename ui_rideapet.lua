@@ -8170,7 +8170,7 @@ end
             updateSections(v)
         end)
 
-        local stealToggleHolder = Instance.new("Frame")
+                local stealToggleHolder = Instance.new("Frame")
         stealToggleHolder.Size = UDim2.new(1, 0, 0, CFG.TOGGLE_H)
         stealToggleHolder.BackgroundTransparency = 1
         stealToggleHolder.LayoutOrder = 3
@@ -8181,6 +8181,34 @@ end
             if v then notify("🎯 Steal: ON", "success")
             else notify("🎯 Steal: OFF", "info") end
         end, "MutationSteal_Enabled")
+
+        -- ⭐ STEAL CAMERA MODE — Lock Base / Unlock Base
+        local camModeLbl = Instance.new("TextLabel")
+        camModeLbl.Size = UDim2.new(1, 0, 0, 16)
+        camModeLbl.BackgroundTransparency = 1
+        camModeLbl.Text = "Steal Camera:"
+        camModeLbl.TextColor3 = C.Muted
+        camModeLbl.Font = Enum.Font.GothamSemibold
+        camModeLbl.TextSize = CFG.FONT_MUTED
+        camModeLbl.TextXAlignment = Enum.TextXAlignment.Left
+        camModeLbl.LayoutOrder = 4
+        camModeLbl.Parent = mutStealContent
+        registerTheme(camModeLbl, "Muted", "TextColor3")
+
+        local camModeHolder = Instance.new("Frame")
+        camModeHolder.Size = UDim2.new(1, 0, 0, CFG.DROPDOWN_H)
+        camModeHolder.BackgroundTransparency = 1
+        camModeHolder.LayoutOrder = 5
+        camModeHolder.Parent = mutStealContent
+
+        makeDropdownGlobal(camModeHolder, {"Lock Base", "Unlock Base"}, Shared.StealCameraMode or "Lock Base", function(v)
+            Shared.StealCameraMode = v
+            if v == "Lock Base" then
+                notify("🎥 Camera: Lock Base (kamera di plot)", "info")
+            else
+                notify("🎥 Camera: Unlock Base (kamera ikut karakter)", "success")
+            end
+        end)
 
         local rarityLbl = Instance.new("TextLabel")
         rarityLbl.Size = UDim2.new(1, 0, 0, 16)
@@ -11395,7 +11423,8 @@ function UI.Init(sharedState)
     }
     Shared.AutoHatchLuck_Enabled = false
     Shared.HatchLuck_Mode = "Max"
-          Shared.StealMode = "TP"
+    Shared.StealMode = "TP"
+    Shared.StealCameraMode = "Lock Base"
     Shared.TP_Method = "TP100"
     Shared.ShowTitle = true
     Shared.RarityNotifThreshold = "Legendary"
