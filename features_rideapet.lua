@@ -6821,6 +6821,524 @@ function Features.getAutoBossState()
 end
 
 -- ============================================================
+-- 🔓 ADMIN ABUSE — AUTO STEAL (LOCKED 19:50 PREMIUM TIME)
+-- Flow: TP ke egg → pickup → fly ke magma → dip → tunggu balik → TP return (step studs)
+-- TANPA: camera mode, return mode, magma mode
+-- ============================================================
+local AdminAbuseState = {
+    Enabled = false,
+    Status = "⏸️ Idle",
+    Stealing = false,
+    CurrentEgg = nil,
+    ClaimedCount = 0,
+    LastEggName = nil,
+    Busy = false,
+}
+
+local AdminAbuseCfg = {
+    RETURN_STEP = 55,        -- TP return per 55 studs
+    RETURN_WAIT = 0.06,
+    MAGMA_FLY_HEIGHT = 250,  -- fly naik dulu sebelum magma
+    MAGMA_FLY_STEP = 75,
+    MAGMA_FLY_WAIT = 0.05,
+    DIP_TIMEOUT = 15,
+    RETURN_WAIT_EGG = 20,
+    PICKUP_TIMEOUT = 12,
+}
+
+-- ⭐ Helper: TP return ke plot by studs (pakai Spawn plot)
+local function adminAbuseReturnToPlot()
+    local char = LocalPlayer.Character
+    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+
+    -- ⭐ Konfirmasi egg di tangan dulu
+    local holding = isHoldingEggMutation()
+    if not holding then
+        local ok = confirmEggInHand(4)
+        if not ok then return false end
+    end
+
+    local spawnPart = getMyPlotSpawn()
+    if not spawnPart then return false end
+
+    -- ⭐ TP by studs
+    local startPos = myRoot.Position
+    local basePos = spawnPart.Position
+    local totalDist = (basePos - startPos).Magnitude
+    local steps = math.max(1, math.ceil(totalDist / AdminAbuseCfg.RETURN_STEP))
+
+    local dir = (basePos - startPos)
+    dir = Vector3.new(dir.X, 0, dir.Z)
+    if dir.Magnitude < 1 then
+        local ang = math.random() * math.pi * 2
+        dir = Vector3.new(math.cos(ang), 0, math.sin(ang))
+    else
+        dir = dir.Unit
+    end
+
+    for i = 1, steps do
+        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not r then return false end
+        if not isHoldingEggMutation() then return false end
+
+        local dist = math.min(AdminAbuseCfg.RETURN_STEP * i, totalDist)
+        local targetPos = startPos + dir * dist + Vector3.new(0, 5, 0)
+
+        clearForces(r)
+        r.CFrame = CFrame.new(targetPos)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+        task.wait(AdminAbuseCfg.RETURN_WAIT)
+    end
+
+    -- ⭐ Final TP ke plot + drop
+    local rFinal = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not rFinal then return false end
+
+    clearForces(rFinal)
+    rFinal.CFrame = spawnPart.CFrame + Vector3.new(0, 5, 0)
+    rFinal.Velocity = Vector3.zero
+    rFinal.AssemblyLinearVelocity = Vector3.zero
+    task.wait(0.3)
+
+    -- ⭐ Drop egg
+    if isHoldingEggMutation() then
+        local dropRemote = getDropRemoteLocal()
+        for _, d in ipairs(char:GetDescendants()) do
+            if d:IsA("ProximityPrompt") and d.Name:lower():find("drop") then
+                d.HoldDuration = 0
+                if typeof(fireproximityprompt) == "function" then
+                    pcall(fireproximityprompt, d)
+                end
+                break
+            end
+        end
+        if dropRemote then
+            pcall(function() dropRemote:FireServer() end)
+            task.wait(0.2)
+            if isHoldingEggMutation() then
+                pcall(function() dropRemote:FireServer() end)
+            end
+        end
+    end
+
+    task.wait(0.3)
+    return true
+end
+
+-- ⭐ Fly ke magma (naik dulu, glide, turun)
+local function adminAbuseFlyToMagma()
+    local char = LocalPlayer.Character
+    local myRoot = char and char:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return false end
+
+    local safePos = findSafeVolcanoPos()
+    if not safePos then return false end
+
+    -- ⭐ STEP 1: Naik ke atas (fly)
+    local startY = myRoot.Position.Y
+    local targetY = startY + AdminAbuseCfg.MAGMA_FLY_HEIGHT
+    local riseStart = os.clock()
+    while myRoot and myRoot.Parent and myRoot.Position.Y < targetY and (os.clock() - riseStart) < 4 do
+        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not r then return false end
+        r.CFrame = r.CFrame + Vector3.new(0, AdminAbuseCfg.MAGMA_FLY_STEP, 0)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+        task.wait(AdminAbuseCfg.MAGMA_FLY_WAIT)
+        myRoot = r
+    end
+
+    -- ⭐ STEP 2: Glide horizontal ke magma
+    local r2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not r2 then return false end
+
+    local targetPos = Vector3.new(safePos.X, r2.Position.Y, safePos.Z)
+    local startPos = r2.Position
+    local totalDist = (targetPos - startPos).Magnitude
+    local steps = math.max(1, math.ceil(totalDist / AdminAbuseCfg.MAGMA_FLY_STEP))
+    local dir = (targetPos - startPos)
+    if dir.Magnitude > 1 then dir = dir.Unit end
+
+    for i = 1, steps do
+        local r3 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not r3 then return false end
+        local dist = math.min(AdminAbuseCfg.MAGMA_FLY_STEP * i, totalDist)
+        local pos = startPos + dir * dist
+        r3.CFrame = CFrame.new(Vector3.new(pos.X, r3.Position.Y, pos.Z))
+        r3.Velocity = Vector3.zero
+        r3.AssemblyLinearVelocity = Vector3.zero
+        task.wait(AdminAbuseCfg.MAGMA_FLY_WAIT)
+    end
+
+    -- ⭐ STEP 3: Turun ke magma (step)
+    local r4 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not r4 then return false end
+
+    local dropDist = r4.Position.Y - (safePos.Y + 5)
+    if dropDist > 0 then
+        local dropSteps = math.max(1, math.ceil(dropDist / AdminAbuseCfg.MAGMA_FLY_STEP))
+        for i = 1, dropSteps do
+            local r5 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+            if not r5 then return false end
+            local newY = math.max(safePos.Y + 5, r5.Position.Y - AdminAbuseCfg.MAGMA_FLY_STEP)
+            r5.CFrame = CFrame.new(r5.Position.X, newY, r5.Position.Z)
+            r5.Velocity = Vector3.zero
+            r5.AssemblyLinearVelocity = Vector3.zero
+            task.wait(AdminAbuseCfg.MAGMA_FLY_WAIT)
+        end
+    end
+
+    -- Stick 1s
+    local stickStart = os.clock()
+    while os.clock() - stickStart < 1.0 do
+        local r6 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if not r6 then break end
+        r6.CFrame = CFrame.new(safePos + Vector3.new(0, 5, 0))
+        r6.Velocity = Vector3.zero
+        r6.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.08)
+    end
+
+    return true
+end
+
+-- ⭐ Scan egg by rarity filter (priority tertinggi)
+local function adminAbuseFindBestEgg()
+    local rendered = Workspace:FindFirstChild("RenderedEggs")
+    if not rendered then return nil end
+
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if not myRoot then return nil end
+
+    local selectedRarities = Shared.SelectedRarities
+    local best, bestRank, bestDist = nil, 0, math.huge
+
+    for _, egg in ipairs(rendered:GetChildren()) do
+        if egg:IsA("Model") then
+            local rarity = getEggRarity(egg.Name)
+            local rank = RARITY_ORDER[rarity] or 1
+
+            local pass = false
+            if selectedRarities and selectedRarities[rarity] == true then
+                pass = true
+            end
+
+            if pass then
+                local part = egg:FindFirstChildWhichIsA("BasePart", true)
+                if part then
+                    local d = (part.Position - myRoot.Position).Magnitude
+                    if rank > bestRank or (rank == bestRank and d < bestDist) then
+                        best = egg
+                        bestRank = rank
+                        bestDist = d
+                    end
+                end
+            end
+        end
+    end
+
+    return best
+end
+
+-- ⭐ MAIN STEAL LOOP
+function Features.startAdminAbuseSteal()
+    task.spawn(function()
+        while task.wait(0.5) do
+            if not AdminAbuseState.Enabled then
+                AdminAbuseState.Status = "⏸️ Idle"
+                AdminAbuseState.Stealing = false
+                continue
+            end
+
+            -- ⭐ Skip kalau fitur lain aktif
+            if Shared.AutoMutation_Enabled then
+                local ms = Features.getMutationState and Features.getMutationState()
+                if ms and (ms.Running or ms.EggLocked or ms.StealPaused) then
+                    AdminAbuseState.Status = "⏸️ Waiting Auto Mutation..."
+                    continue
+                end
+            end
+            if Shared.MutationSteal_Active and Shared.MutationSteal_Enabled then
+                AdminAbuseState.Status = "⏳ Waiting Mutation Steal..."
+                continue
+            end
+            if Shared.VolcanicHunt_Enabled then
+                AdminAbuseState.Status = "⏸️ Waiting Volcanic Hunt..."
+                continue
+            end
+            if _G.VRILZ_HalloweenBusy or _G.VRILZ_HalloweenLeaving then
+                AdminAbuseState.Status = "⏸️ Halloween busy"
+                continue
+            end
+            if LocalPlayer:GetAttribute("InHalloweenZone") == true then
+                AdminAbuseState.Status = "⏸️ In Halloween zone"
+                continue
+            end
+
+            -- ⭐ Skip kalau lagi pegang candy
+            if LocalPlayer:GetAttribute("CarriedCandyModel") ~= nil
+               or LocalPlayer:GetAttribute("CarryingCandy") == true
+               or LocalPlayer:GetAttribute("HeldCandy") ~= nil
+               or LocalPlayer:GetAttribute("CarriedCandy") ~= nil then
+                continue
+            end
+
+            -- ⭐ Skip kalau lagi hold egg (tunggu mutation selesai)
+            if isHoldingEggMutation() then
+                AdminAbuseState.Status = "✋ Holding egg — waiting mutation..."
+                task.wait(1)
+                continue
+            end
+
+            -- ⭐ Skip kalau basket full
+            local basket = LocalPlayer:FindFirstChild("Basket")
+            if basket and #basket:GetChildren() > 0 then
+                AdminAbuseState.Status = "🧺 Basket full"
+                task.wait(1)
+                continue
+            end
+
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if not hum or hum.Health <= 0 then
+                AdminAbuseState.Status = "⏳ Waiting character..."
+                task.wait(1)
+                continue
+            end
+
+            -- ⭐ Cari egg prioritas
+            local egg = adminAbuseFindBestEgg()
+            if not egg or not egg.Parent then
+                AdminAbuseState.Status = "⏳ Waiting egg spawn..."
+                task.wait(1)
+                continue
+            end
+
+            AdminAbuseState.Stealing = true
+            AdminAbuseState.CurrentEgg = egg.Name
+            AdminAbuseState.Status = "🎯 TP ke " .. egg.Name
+
+            local eggPart = egg:FindFirstChildWhichIsA("BasePart", true)
+            local prompt = egg:FindFirstChild("Pickup", true)
+            if not eggPart or not prompt then
+                AdminAbuseState.Stealing = false
+                task.wait(0.5)
+                continue
+            end
+
+            if prompt:IsA("ProximityPrompt") then
+                prompt.HoldDuration = 0
+                prompt.MaxActivationDistance = math.huge
+                prompt.RequiresLineOfSight = false
+            end
+
+            -- ═══════════════════════════════════════════════════════════
+            -- ⭐⭐⭐ DETEKSI VOLCANIC → WAYPOINT | LAINNYA → TP LANGSUNG ⭐⭐⭐
+            -- ═══════════════════════════════════════════════════════════
+            local isVolcanic = egg.Name:lower():find("volcan", 1, true) ~= nil
+                              or eggPart.Position.Y > 40800
+
+            if isVolcanic then
+                -- ───── VOLCANIC: WAYPOINT CAVE ─────
+                AdminAbuseState.Status = "🌋 Volcanic — masuk cave via waypoint..."
+
+                -- Step 1: TP ke Volcanic spawn (kalo jauh)
+                local spawnPart = getVolcanicSpawn()
+                if spawnPart then
+                    local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if curRoot then
+                        local d = (spawnPart.Position - curRoot.Position).Magnitude
+                        if d > 50 then
+                            curRoot.CFrame = spawnPart.CFrame + Vector3.new(0, 5, 0)
+                            curRoot.Velocity = Vector3.zero
+                            curRoot.AssemblyLinearVelocity = Vector3.zero
+                            task.wait(0.5)
+                        end
+                    end
+                end
+
+                -- Step 2: Masuk cave via waypoint (52 titik)
+                AdminAbuseState.Status = "🚶 Masuk cave (waypoint)..."
+                for i, wp in ipairs(VolcanicWaypoints) do
+                    if not AdminAbuseState.Enabled then break end
+                    tpWaypoint(wp)
+                    local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if curRoot and eggPart and eggPart.Parent then
+                        local d = (eggPart.Position - curRoot.Position).Magnitude
+                        if d <= 40 then break end
+                    end
+                end
+
+                -- Step 3: Final TP ke egg (setelah waypoint sync)
+                local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if curRoot and eggPart and eggPart.Parent then
+                    curRoot.CFrame = CFrame.lookAt(eggPart.Position + Vector3.new(0, 3, 0), eggPart.Position)
+                    curRoot.Velocity = Vector3.zero
+                    curRoot.AssemblyLinearVelocity = Vector3.zero
+                    task.wait(0.3)
+                end
+
+            else
+                -- ───── EGG BIASA: TP LANGSUNG ─────
+                AdminAbuseState.Status = "🎯 TP langsung ke " .. egg.Name
+                local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                if myRoot then
+                    myRoot.CFrame = CFrame.lookAt(eggPart.Position + Vector3.new(0, 3, 0), eggPart.Position)
+                    myRoot.Velocity = Vector3.zero
+                    myRoot.AssemblyLinearVelocity = Vector3.zero
+                    task.wait(0.1)
+                end
+            end
+
+            -- ═══════════════════════════════════════════════════════════
+            -- PICKUP LOOP
+            -- ═══════════════════════════════════════════════════════════
+            AdminAbuseState.Status = "🖐 Picking up " .. egg.Name
+            local picked = false
+            for i = 1, 15 do
+                if typeof(fireproximityprompt) == "function" then
+                    pcall(fireproximityprompt, prompt)
+                end
+                task.wait(0.25)
+
+                if not egg.Parent then picked = true; break end
+                if isHoldingEggMutation() then picked = true; break end
+
+                if eggPart and eggPart.Parent then
+                    local freshRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                    if freshRoot then
+                        freshRoot.CFrame = CFrame.lookAt(eggPart.Position + Vector3.new(0, 3, 0), eggPart.Position)
+                        freshRoot.Velocity = Vector3.zero
+                        freshRoot.AssemblyLinearVelocity = Vector3.zero
+                    end
+                    task.wait(0.1)
+                end
+            end
+
+            if not picked or not isHoldingEggMutation() then
+                AdminAbuseState.Status = "⚠️ Pickup gagal — retry"
+                AdminAbuseState.Stealing = false
+                task.wait(1)
+                continue
+            end
+
+            AdminAbuseState.LastEggName = egg.Name
+
+            -- ═══════════════════════════════════════════════════════════
+            -- ⭐ KALAU VOLCANIC: KELUAR CAVE DULU (reverse waypoint) ⭐
+            -- ═══════════════════════════════════════════════════════════
+            if isVolcanic then
+                AdminAbuseState.Status = "🚶 Keluar cave (reverse waypoint)..."
+                local exited = exitCave()
+                if not exited or not isHoldingEggMutation() then
+                    AdminAbuseState.Status = "⚠️ Gagal keluar cave — retry"
+                    AdminAbuseState.Stealing = false
+                    task.wait(2)
+                    continue
+                end
+                task.wait(0.5)
+            end
+
+            -- ═══════════════════════════════════════════════════════════
+            -- FLY KE MAGMA + DIP
+            -- ═══════════════════════════════════════════════════════════
+            AdminAbuseState.Status = "🌋 Fly ke magma..."
+            adminAbuseFlyToMagma()
+            task.wait(1)
+
+            AdminAbuseState.Status = "🔥 Dipping..."
+            local dropWaited = 0
+            local eggReleased = false
+            while dropWaited < AdminAbuseCfg.DIP_TIMEOUT do
+                if not AdminAbuseState.Enabled then break end
+                fireVolcanoDip()
+                task.wait(1.5)
+                dropWaited = dropWaited + 1.5
+                if not isHoldingEggMutation() then
+                    eggReleased = true
+                    break
+                end
+            end
+
+            if not eggReleased then
+                AdminAbuseState.Status = "⚠️ Dip timeout"
+                AdminAbuseState.Stealing = false
+                task.wait(1)
+                continue
+            end
+
+            -- ═══════════════════════════════════════════════════════════
+            -- TUNGGU EGG BALIK
+            -- ═══════════════════════════════════════════════════════════
+            AdminAbuseState.Status = "⏳ Waiting egg back..."
+            local waitStart = os.clock()
+            local eggBack = false
+            while os.clock() - waitStart < AdminAbuseCfg.RETURN_WAIT_EGG do
+                if not AdminAbuseState.Enabled then break end
+                task.wait(1)
+                if isHoldingEggMutation() then
+                    eggBack = true
+                    break
+                end
+            end
+
+            if not eggBack then
+                AdminAbuseState.Status = "⚠️ Egg didn't come back"
+                AdminAbuseState.Stealing = false
+                task.wait(1)
+                continue
+            end
+
+            -- ═══════════════════════════════════════════════════════════
+            -- RETURN KE PLOT (TP by studs)
+            -- ═══════════════════════════════════════════════════════════
+            AdminAbuseState.Status = "🏠 Return ke plot (TP studs)..."
+            adminAbuseReturnToPlot()
+
+            AdminAbuseState.ClaimedCount = AdminAbuseState.ClaimedCount + 1
+            AdminAbuseState.Status = "✅ Claimed #" .. AdminAbuseState.ClaimedCount
+            AdminAbuseState.Stealing = false
+
+            -- ⭐ Webhook notif
+            if _G.VRILZ_SendWebhook then
+                local cleanEggName = normalizeEggName(egg.Name)
+                local eggInfo = _G.VRILZ_GetEggInfo and _G.VRILZ_GetEggInfo(cleanEggName) or {}
+                _G.VRILZ_SendWebhook("mutation", {
+                    title = "ADMIN ABUSE STEAL",
+                    description = "Egg berhasil di-steal dan di-mutasi! 🔥",
+                    details = {
+                        { name = "🥚  **EGG**", value = "```yaml\n" .. tostring(cleanEggName or "?") .. "\n```", inline = true },
+                        { name = "⚖️  **WEIGHT**", value = "```yaml\n" .. (eggInfo.weight or "?") .. "\n```", inline = true },
+                        { name = "🍀  **LUCK**", value = "```yaml\n" .. (eggInfo.luck or "?") .. "\n```", inline = true },
+                        { name = "🔥  **SOURCE**", value = "```yaml\nAdmin Abuse Auto Steal\n```", inline = false },
+                    },
+                })
+            end
+
+            task.wait(2)
+        end
+    end)
+end
+
+-- ⭐ GET STATE (buat UI)
+function Features.getAdminAbuseState()
+    return AdminAbuseState
+end
+
+-- ⭐ SET ENABLED
+function Features.setAdminAbuseEnabled(v)
+    AdminAbuseState.Enabled = v
+    if v then
+        AdminAbuseState.Status = "▶️ Starting..."
+    else
+        AdminAbuseState.Status = "⏸️ Idle"
+        AdminAbuseState.Stealing = false
+    end
+end
+
+-- ============================================================
 -- FEATURES.INIT
 -- ============================================================
 function Features.Init(sharedState)
@@ -6859,6 +7377,7 @@ function Features.Init(sharedState)
     Features.startInfinityJump()
     Features.startStealExecutor() 
     Features.startAutoBoss()
+    Features.startAdminAbuseSteal()
 
            -- ⭐ AUTO-ENABLE AUTO RIDE PET — LANGSUNG ON
     Shared.AutoRidePet_Enabled = true
