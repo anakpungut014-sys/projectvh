@@ -4619,6 +4619,7 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
             end
         end
     end)
+end
 
 -- ============================================================
 -- BUILD MAIN WINDOW
