@@ -8157,17 +8157,17 @@ end
         lkTitle.ZIndex = 11
         lkTitle.Parent = lockFrame
 
-        local lkDesc = Instance.new("TextLabel")
-        lkDesc.Size = UDim2.new(1, -20, 0, 44)
-        lkDesc.Position = UDim2.fromOffset(10, 78)
-        lkDesc.BackgroundTransparency = 1
-        lkDesc.Text = "Unlock: Sabtu 19:50–23:59 WIB\n(Owner always unlocked)"
-        lkDesc.TextColor3 = Color3.fromRGB(200, 180, 180)
-        lkDesc.Font = Enum.Font.GothamSemibold
-        lkDesc.TextSize = 11
-        lkDesc.TextWrapped = true
-        lkDesc.ZIndex = 11
-        lkDesc.Parent = lockFrame
+local lkDesc = Instance.new("TextLabel")
+lkDesc.Size = UDim2.new(1, -20, 0, 44)
+lkDesc.Position = UDim2.fromOffset(10, 78)
+lkDesc.BackgroundTransparency = 1
+lkDesc.Text = "Unlock: Saturday 19:50–23:59 (WIB / GMT+7)"
+lkDesc.TextColor3 = Color3.fromRGB(200, 180, 180)
+lkDesc.Font = Enum.Font.GothamSemibold
+lkDesc.TextSize = 11
+lkDesc.TextWrapped = true
+lkDesc.ZIndex = 11
+lkDesc.Parent = lockFrame
 
         -- ═══ CONTENT (muncul kalo UNLOCKED) ═══
         local adminToggleHolder = Instance.new("Frame")
