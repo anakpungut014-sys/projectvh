@@ -3357,7 +3357,17 @@ function Features.startMutationSteal()
         end
 
         -- ⭐ Helper: lock kamera kalau belum
+                -- ⭐ Helper: lock kamera kalau belum — TAPI cek mode dulu
         local function lockCamIfNeeded()
+            -- ⭐ JANGAN lock kalau mode "Unlock Base"
+            if Shared.StealCameraMode == "Unlock Base" then
+                -- Pastiin gak ada lock dari sebelumnya
+                if _G.VRILZ_CameraLock and _G.VRILZ_CameraLock.IsActive() then
+                    pcall(function() _G.VRILZ_CameraLock.Unlock() end)
+                end
+                return  -- ⬅️ EXIT, jangan lock
+            end
+            -- Mode "Lock Base" — baru lock (perilaku lama)
             if _G.VRILZ_CameraLock and not _G.VRILZ_CameraLock.IsActive() then
                 _G.VRILZ_CameraLock.Lock()
             end
@@ -5781,37 +5791,34 @@ end
 -- ⭐ UNLOCK — balik ke character
 -- ══════════════════════════════════════════════════════════════
 local function cameraUnlockToCharacter()
-    warn("[CameraLock] 🔓 Unlock — forcing camera back to character")
+    warn("[CameraLock] 🔓 Unlock")
     CameraLock.Active = false
 
     local cam = workspace.CurrentCamera
     if not cam then return end
 
-    cam.CameraType = Enum.CameraType.Custom
-
-    -- ⭐ FIX: tunggu karakter max 5 detik
-    local char = LocalPlayer.Character
-    if not char then
-        local t0 = os.clock()
-        while os.clock() - t0 < 5 do
-            char = LocalPlayer.Character
-            if char then break end
-            task.wait(0.1)
-        end
+    -- Balik CameraType ke asli
+    if CameraLock._origCameraType then
+        cam.CameraType = CameraLock._origCameraType
+    else
+        cam.CameraType = Enum.CameraType.Custom
     end
 
+    -- Balik CameraSubject ke Humanoid character
+    local char = LocalPlayer.Character
     local hum = char and char:FindFirstChildOfClass("Humanoid")
+
     if hum then
         cam.CameraSubject = hum
     else
-        -- Fallback
-        task.spawn(function()
-            local newChar = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
+        -- Tunggu respawn
+        local conn
+        conn = LocalPlayer.CharacterAdded:Connect(function(newChar)
             local newHum = newChar:WaitForChild("Humanoid", 5)
-            if newHum and workspace.CurrentCamera then
-                workspace.CurrentCamera.CameraType = Enum.CameraType.Custom
-                workspace.CurrentCamera.CameraSubject = newHum
+            if newHum and cam then
+                cam.CameraSubject = newHum
             end
+            conn:Disconnect()
         end)
     end
 
@@ -5820,15 +5827,6 @@ local function cameraUnlockToCharacter()
     CameraLock._origCameraCFrame = nil
     CameraLock._origCameraFocus = nil
     CameraLock._basePart = nil
-
-    task.defer(function()
-        local c = workspace.CurrentCamera
-        if c then
-            c.CameraType = Enum.CameraType.Custom
-            local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if h then c.CameraSubject = h end
-        end
-    end)
 end
 
 -- ══════════════════════════════════════════════════════════════
@@ -6143,10 +6141,6 @@ function Features.stealEgg(egg)
         return false, "busy"
     end
 
-    -- ⬇️ TAMBAHKAN DI SINI ⬇️
-    Shared.StealCameraMode = Shared.StealCameraMode or "Lock Base"
-    -- ⬆️ SAMPAI SINI ⬆️
-
     -- ⭐⭐⭐ FIX: TOLAK kalau di Halloween zone / busy ⭐⭐⭐
     if LocalPlayer:GetAttribute("InHalloweenZone") == true then
         if Shared.Notify then Shared.Notify("❌ Gak bisa steal pas di Halloween area!", "error") end
@@ -6179,45 +6173,24 @@ function Features.stealEgg(egg)
     local isVolcanic = egg.Name:lower():find("volcan") ~= nil
     StealExecState.Status = isVolcanic and "🌋 Stealing volcanic..." or "🎯 Stealing..."
 
-    task.spawn(function()
-        -- 🎥 CAMERA MODE — cek Shared.StealCameraMode
+                    task.spawn(function()
+        -- ⭐ CEK MODE — pake Shared.StealCameraMode
         local camMode = Shared.StealCameraMode or "Lock Base"
-        local camOk = false
 
-        if camMode == "Unlock Base" then
-            -- ⭐ UNLOCK BASE = kamera ikut karakter (bawaan Roblox)
-            StealExecState.Status = "🎥 Camera follows character — starting steal..."
+        -- ═══════════════════════════════════════════════════════
+        -- ⭐ LOCK BASE — perilaku LAMA (gak diubah)
+        -- ═══════════════════════════════════════════════════════
+        if camMode == "Lock Base" then
+            local camOk = false
+            pcall(function() camOk = cameraLockToBase() end)
 
-            -- Force unlock dulu
-            pcall(cameraUnlockToCharacter)
-
-            -- Set langsung ke Humanoid
-            local cam = workspace.CurrentCamera
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if cam and hum then
-                cam.CameraType = Enum.CameraType.Custom
-                cam.CameraSubject = hum
+            if camOk then
+                StealExecState.Status = "🎥 Kamera di base — mulai steal..."
+                task.wait(0.2)
+            else
+                warn("[Steal] Kamera gak bisa dikunci (plot gak ketemu), lanjut tanpa lock")
             end
 
-            -- ⭐ LOOP SAMPE STEAL SELESAI (bukan 10x doang)
-            -- biar kamera GAK balik ke base pas karakter di-TP
-            local forceConn = RunService.RenderStepped:Connect(function()
-                local c = workspace.CurrentCamera
-                local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-                if c and h then
-                    if c.CameraType ~= Enum.CameraType.Custom then
-                        c.CameraType = Enum.CameraType.Custom
-                    end
-                    if c.CameraSubject ~= h then
-                        c.CameraSubject = h
-                    end
-                end
-            end)
-
-            task.wait(0.15)
-
-            -- ⭐ Steal
             local ok, err
             if isVolcanic then
                 ok, err = pcall(seStealVolcanicEgg, egg)
@@ -6225,15 +6198,9 @@ function Features.stealEgg(egg)
                 ok, err = pcall(seStealNormalEgg, egg)
             end
 
-            -- ⭐ CLEANUP — disconnect loop
-            forceConn:Disconnect()
-
-            -- Final unlock
-            local finalCam = workspace.CurrentCamera
-            local finalHum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-            if finalCam and finalHum then
-                finalCam.CameraType = Enum.CameraType.Custom
-                finalCam.CameraSubject = finalHum
+            if camOk then
+                pcall(cameraUnlockToCharacter)
+                task.wait(0.1)
             end
 
             if not ok then
@@ -6243,28 +6210,18 @@ function Features.stealEgg(egg)
                 if Shared.Notify then Shared.Notify("✅ Steal complete!", "success") end
             end
 
+        -- ═══════════════════════════════════════════════════════
+        -- ⭐ UNLOCK BASE — JANGAN SENTUH CAMERA SAMA SEKALI
+        -- ═══════════════════════════════════════════════════════
         else
-            -- ⭐ LOCK BASE (default)
-            pcall(function() camOk = cameraLockToBase() end)
-            if camOk then
-                StealExecState.Status = "🎥 Camera locked to base — starting steal..."
-                task.wait(0.2)
-            else
-                warn("[Steal] Failed to lock camera (plot not found), continuing without lock")
-            end
+            StealExecState.Status = "🎥 Camera follows character — mulai steal..."
+            task.wait(0.05)
 
-            -- ⭐ Steal
             local ok, err
             if isVolcanic then
                 ok, err = pcall(seStealVolcanicEgg, egg)
             else
                 ok, err = pcall(seStealNormalEgg, egg)
-            end
-
-            -- ⭐ Unlock cuma kalau tadi lock
-            if camOk then
-                pcall(cameraUnlockToCharacter)
-                task.wait(0.1)
             end
 
             if not ok then
