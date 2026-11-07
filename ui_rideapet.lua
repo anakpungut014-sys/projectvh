@@ -4603,8 +4603,9 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
         end)
     end)
 
-    -- Click outside = cancel (safe default)
+        -- Click outside = cancel (safe default)
     blocker.MouseButton1Click:Connect(function(input)
+        if not input then return end -- ⭐ FIX ERROR: cegah index nil
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
             local pos = input.Position
@@ -4618,7 +4619,6 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
             end
         end
     end)
-end
 
 -- ============================================================
 -- BUILD MAIN WINDOW
