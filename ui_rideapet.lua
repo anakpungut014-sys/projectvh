@@ -8074,39 +8074,34 @@ do
     end, "LightningEffect_Enabled")
 end
 
-               -- ============================================================
-        -- 💬 LIVE CHAT TAB — FULL HEIGHT (cuma list yang scroll)
+        -- ============================================================
+        -- 💬 LIVE CHAT TAB v2 — COMPACT TEXT + PREMIUM HERO CARD
+        -- FULL HEIGHT · NO PAGE SCROLL · SMOOTH EFFECTS
         -- ============================================================
         do
-            -- ⭐ Page: MATIKAN scroll halaman
-            local liveChatPage = Instance.new("ScrollingFrame")
+            -- ⭐ Page: Frame biasa (GAK BISA scroll halaman)
+            local liveChatPage = Instance.new("Frame")
             liveChatPage.Name = "LiveChat"
             liveChatPage.Size = UDim2.fromScale(1, 1)
             liveChatPage.BackgroundTransparency = 1
             liveChatPage.BorderSizePixel = 0
-            liveChatPage.ScrollBarThickness = 0
-            liveChatPage.ScrollingEnabled = false          -- ⭐ Halaman GAK bisa scroll
-            liveChatPage.ScrollingDirection = Enum.ScrollingDirection.Y
-            liveChatPage.CanvasSize = UDim2.new(0, 0, 0, 0)
-            liveChatPage.AutomaticCanvasSize = Enum.AutomaticSize.None
             liveChatPage.Visible = false
             liveChatPage.ZIndex = 7
             liveChatPage.Parent = pageHolder
             pages.LiveChat = liveChatPage
 
-            -- State
             local chatShown = false
             local msgCounter = 0
             local OWNER_IDS = {
                 [5126297278] = true,
             }
 
-            -- ═══════════════════════════════════════════════════════
-            -- WRAPPER CARD (full area, gak fixed height)
-            -- ═══════════════════════════════════════════════════════
+            -- ═══════════════════════════════════════════════════════════
+            -- WRAPPER CARD (full area, header global)
+            -- ═══════════════════════════════════════════════════════════
             local wrapCard = Instance.new("Frame")
             wrapCard.Name = "LiveChatCard"
-            wrapCard.Size = UDim2.fromScale(1, 1)          -- ⭐ FULL
+            wrapCard.Size = UDim2.fromScale(1, 1)
             wrapCard.BackgroundColor3 = C.Surface
             wrapCard.BackgroundTransparency = 0.55
             wrapCard.BorderSizePixel = 0
@@ -8125,7 +8120,7 @@ end
             wrapStroke.Parent = wrapCard
             registerTheme(wrapStroke, "Accent", "Color")
 
-            -- Header card (judul "LIVE CHAT (GLOBAL)")
+            -- Card header (judul global)
             local cardHeader = Instance.new("Frame")
             cardHeader.Size = UDim2.new(1, 0, 0, CFG.CARD_HEADER)
             cardHeader.BackgroundColor3 = C.Surface2
@@ -8165,9 +8160,7 @@ end
             hTitle.Parent = cardHeader
             registerTheme(hTitle, "Text", "TextColor3")
 
-            -- ═══════════════════════════════════════════════════════
-            -- CONTENT AREA (ngisi sisa card di bawah header)
-            -- ═══════════════════════════════════════════════════════
+            -- Content area (ngisi sisa card)
             local content = Instance.new("Frame")
             content.Size = UDim2.new(1, -16, 1, -(CFG.CARD_HEADER + 16))
             content.Position = UDim2.new(0, 8, 0, CFG.CARD_HEADER + 8)
@@ -8175,12 +8168,12 @@ end
             content.ZIndex = 2
             content.Parent = wrapCard
 
-            -- ═══════════════════════════════════════════════════════
-            -- STATE 1: HERO CARD (klik untuk buka chat)
-            -- ═══════════════════════════════════════════════════════
+            -- ═══════════════════════════════════════════════════════════
+            -- STATE 1: HERO CARD (premium + effect)
+            -- ═══════════════════════════════════════════════════════════
             local showFrame = Instance.new("Frame")
             showFrame.Name = "ShowFrame"
-            showFrame.Size = UDim2.new(1, 0, 0, 88)
+            showFrame.Size = UDim2.new(1, 0, 0, 84)
             showFrame.Position = UDim2.new(0, 0, 0, 0)
             showFrame.BackgroundTransparency = 1
             showFrame.ZIndex = 3
@@ -8218,7 +8211,31 @@ end
             heroStroke.Parent = heroCard
             registerTheme(heroStroke, "Accent", "Color")
 
-            local iconSize = 44
+            -- Shine sweep
+            local shineSweep = Instance.new("Frame")
+            shineSweep.Size = UDim2.new(0, 60, 2, 0)
+            shineSweep.Position = UDim2.new(-0.5, 0, -0.5, 0)
+            shineSweep.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            shineSweep.BackgroundTransparency = 0.92
+            shineSweep.BorderSizePixel = 0
+            shineSweep.Rotation = 20
+            shineSweep.ZIndex = 5
+            shineSweep.Parent = heroCard
+
+            task.spawn(function()
+                while shineSweep.Parent do
+                    task.wait(3)
+                    if not shineSweep.Parent then break end
+                    shineSweep.Position = UDim2.new(-0.5, 0, -0.5, 0)
+                    TweenService:Create(shineSweep, TweenInfo.new(1.4, Enum.EasingStyle.Quad), {
+                        Position = UDim2.new(1.5, 0, 1.5, 0),
+                    }):Play()
+                    task.wait(1.5)
+                end
+            end)
+
+            -- Icon dengan glow
+            local iconSize = 40
             local iconHolder = Instance.new("Frame")
             iconHolder.Size = UDim2.fromOffset(iconSize, iconSize)
             iconHolder.Position = UDim2.new(0, 12, 0.5, 0)
@@ -8230,7 +8247,7 @@ end
             registerTheme(iconHolder, "Accent", "BackgroundColor3")
 
             local ihCorner = Instance.new("UICorner")
-            ihCorner.CornerRadius = UDim.new(0, 12)
+            ihCorner.CornerRadius = UDim.new(0, 11)
             ihCorner.Parent = iconHolder
 
             local ihGrad = Instance.new("UIGradient")
@@ -8241,17 +8258,47 @@ end
             })
             ihGrad.Parent = iconHolder
 
+            local iconGlow = Instance.new("Frame")
+            iconGlow.Size = UDim2.new(1, 8, 1, 8)
+            iconGlow.Position = UDim2.new(0.5, 0, 0.5, 0)
+            iconGlow.AnchorPoint = Vector2.new(0.5, 0.5)
+            iconGlow.BackgroundColor3 = C.Accent
+            iconGlow.BackgroundTransparency = 0.7
+            iconGlow.BorderSizePixel = 0
+            iconGlow.ZIndex = 5
+            iconGlow.Parent = iconHolder
+            registerTheme(iconGlow, "Accent", "BackgroundColor3")
+
+            local igCorner = Instance.new("UICorner")
+            igCorner.CornerRadius = UDim.new(1, 0)
+            igCorner.Parent = iconGlow
+
+            task.spawn(function()
+                while iconGlow.Parent do
+                    TweenService:Create(iconGlow, TweenInfo.new(1.2, Enum.EasingStyle.Sine), {
+                        BackgroundTransparency = 0.9,
+                    }):Play()
+                    task.wait(1.2)
+                    if not iconGlow.Parent then break end
+                    TweenService:Create(iconGlow, TweenInfo.new(1.2, Enum.EasingStyle.Sine), {
+                        BackgroundTransparency = 0.7,
+                    }):Play()
+                    task.wait(1.2)
+                end
+            end)
+
             local chatEmoji = Instance.new("TextLabel")
             chatEmoji.Size = UDim2.fromScale(1, 1)
             chatEmoji.BackgroundTransparency = 1
             chatEmoji.Text = "💬"
-            chatEmoji.TextSize = 20
+            chatEmoji.TextSize = 18
             chatEmoji.Font = Enum.Font.GothamBold
             chatEmoji.ZIndex = 7
             chatEmoji.Parent = iconHolder
 
+            -- Title + subtitle
             local titleLbl = Instance.new("TextLabel")
-            titleLbl.Size = UDim2.new(1, -(iconSize + 30), 0, 18)
+            titleLbl.Size = UDim2.new(1, -(iconSize + 90), 0, 16)
             titleLbl.Position = UDim2.fromOffset(iconSize + 24, 22)
             titleLbl.BackgroundTransparency = 1
             titleLbl.Text = "LIVE CHAT"
@@ -8263,7 +8310,7 @@ end
             titleLbl.Parent = heroCard
 
             local subLbl = Instance.new("TextLabel")
-            subLbl.Size = UDim2.new(1, -(iconSize + 30), 0, 14)
+            subLbl.Size = UDim2.new(1, -(iconSize + 90), 0, 14)
             subLbl.Position = UDim2.fromOffset(iconSize + 24, 40)
             subLbl.BackgroundTransparency = 1
             subLbl.Text = "Tap to open"
@@ -8276,6 +8323,7 @@ end
             subLbl.Parent = heroCard
             registerTheme(subLbl, "Muted", "TextColor3")
 
+            -- ONLINE chip
             local onlineChip = Instance.new("Frame")
             onlineChip.Size = UDim2.fromOffset(64, 18)
             onlineChip.Position = UDim2.new(1, -12, 0.5, -9)
@@ -8309,6 +8357,20 @@ end
             odCorner.CornerRadius = UDim.new(1, 0)
             odCorner.Parent = onlineDot
 
+            task.spawn(function()
+                while onlineDot.Parent do
+                    TweenService:Create(onlineDot, TweenInfo.new(0.8, Enum.EasingStyle.Sine), {
+                        BackgroundTransparency = 0.5,
+                    }):Play()
+                    task.wait(0.8)
+                    if not onlineDot.Parent then break end
+                    TweenService:Create(onlineDot, TweenInfo.new(0.8, Enum.EasingStyle.Sine), {
+                        BackgroundTransparency = 0,
+                    }):Play()
+                    task.wait(0.8)
+                end
+            end)
+
             local onlineLbl = Instance.new("TextLabel")
             onlineLbl.Size = UDim2.new(1, -18, 1, 0)
             onlineLbl.Position = UDim2.fromOffset(15, 0)
@@ -8322,10 +8384,46 @@ end
             onlineLbl.Parent = onlineChip
             registerTheme(onlineLbl, "Success", "TextColor3")
 
+            -- Ripple layer
+            local rippleLayer = Instance.new("Frame")
+            rippleLayer.Size = UDim2.fromScale(1, 1)
+            rippleLayer.BackgroundTransparency = 1
+            rippleLayer.ClipsDescendants = true
+            rippleLayer.ZIndex = 9
+            rippleLayer.Parent = heroCard
+
+            local function spawnRipple(x, y)
+                local rp = Instance.new("Frame")
+                rp.AnchorPoint = Vector2.new(0.5, 0.5)
+                rp.Position = UDim2.fromOffset(x, y)
+                rp.Size = UDim2.fromOffset(0, 0)
+                rp.BackgroundColor3 = C.Accent2
+                rp.BackgroundTransparency = 0.6
+                rp.BorderSizePixel = 0
+                rp.ZIndex = 9
+                rp.Parent = rippleLayer
+
+                local rc = Instance.new("UICorner")
+                rc.CornerRadius = UDim.new(1, 0)
+                rc.Parent = rp
+
+                TweenService:Create(rp, TweenInfo.new(0.6, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+                    Size = UDim2.fromOffset(200, 200),
+                    BackgroundTransparency = 1,
+                }):Play()
+
+                task.delay(0.7, function()
+                    if rp then rp:Destroy() end
+                end)
+            end
+
             heroCard.MouseEnter:Connect(function()
                 TweenService:Create(heroStroke, TweenInfo.new(0.2), {
                     Transparency = 0.15,
                     Thickness = 1.8,
+                }):Play()
+                TweenService:Create(iconHolder, TweenInfo.new(0.2), {
+                    Size = UDim2.fromOffset(iconSize + 2, iconSize + 2),
                 }):Play()
             end)
             heroCard.MouseLeave:Connect(function()
@@ -8333,11 +8431,14 @@ end
                     Transparency = 0.55,
                     Thickness = 1.2,
                 }):Play()
+                TweenService:Create(iconHolder, TweenInfo.new(0.2), {
+                    Size = UDim2.fromOffset(iconSize, iconSize),
+                }):Play()
             end)
 
-            -- ═══════════════════════════════════════════════════════
-            -- STATE 2: LIVE CHAT (FULL AREA, cuma list yang scroll)
-            -- ═══════════════════════════════════════════════════════
+            -- ═══════════════════════════════════════════════════════════
+            -- STATE 2: LIVE CHAT (compact text)
+            -- ═══════════════════════════════════════════════════════════
             local chatFrame = Instance.new("Frame")
             chatFrame.Name = "ChatFrame"
             chatFrame.Size = UDim2.fromScale(1, 1)
@@ -8346,9 +8447,9 @@ end
             chatFrame.ZIndex = 3
             chatFrame.Parent = content
 
-            -- ─── Chat Header (FIXED di atas) ───
+            -- Chat Header (fixed)
             local chatHeader = Instance.new("Frame")
-            chatHeader.Size = UDim2.new(1, 0, 0, 32)
+            chatHeader.Size = UDim2.new(1, 0, 0, 28)
             chatHeader.Position = UDim2.new(0, 0, 0, 0)
             chatHeader.BackgroundColor3 = C.Surface2
             chatHeader.BackgroundTransparency = 0.4
@@ -8358,12 +8459,12 @@ end
             registerTheme(chatHeader, "Surface2", "BackgroundColor3")
 
             local chCorner = Instance.new("UICorner")
-            chCorner.CornerRadius = UDim.new(0, 8)
+            chCorner.CornerRadius = UDim.new(0, 7)
             chCorner.Parent = chatHeader
 
             local chDot = Instance.new("Frame")
-            chDot.Size = UDim2.fromOffset(8, 8)
-            chDot.Position = UDim2.new(0, 10, 0.5, -4)
+            chDot.Size = UDim2.fromOffset(7, 7)
+            chDot.Position = UDim2.new(0, 10, 0.5, -3.5)
             chDot.BackgroundColor3 = C.Accent
             chDot.BorderSizePixel = 0
             chDot.ZIndex = 5
@@ -8375,26 +8476,26 @@ end
             chDotCorner.Parent = chDot
 
             local chTitle = Instance.new("TextLabel")
-            chTitle.Size = UDim2.new(1, -110, 1, 0)
-            chTitle.Position = UDim2.fromOffset(26, 0)
+            chTitle.Size = UDim2.new(1, -100, 1, 0)
+            chTitle.Position = UDim2.fromOffset(24, 0)
             chTitle.BackgroundTransparency = 1
-            chTitle.Text = "LIVE CHAT  ·  GLOBAL"
+            chTitle.Text = "LIVE CHAT · GLOBAL"
             chTitle.TextColor3 = C.Text
             chTitle.Font = Enum.Font.GothamBold
-            chTitle.TextSize = CFG.FONT_LABEL
+            chTitle.TextSize = 10
             chTitle.TextXAlignment = Enum.TextXAlignment.Left
             chTitle.ZIndex = 5
             chTitle.Parent = chatHeader
             registerTheme(chTitle, "Text", "TextColor3")
 
             local chHide = Instance.new("TextButton")
-            chHide.Size = UDim2.fromOffset(64, 22)
-            chHide.Position = UDim2.new(1, -70, 0.5, -11)
+            chHide.Size = UDim2.fromOffset(58, 20)
+            chHide.Position = UDim2.new(1, -64, 0.5, -10)
             chHide.BackgroundColor3 = C.Surface3
             chHide.Text = "▼ HIDE"
             chHide.TextColor3 = C.Muted
             chHide.Font = Enum.Font.GothamBold
-            chHide.TextSize = 10
+            chHide.TextSize = 9
             chHide.BorderSizePixel = 0
             chHide.AutoButtonColor = false
             chHide.ZIndex = 5
@@ -8403,7 +8504,7 @@ end
             registerTheme(chHide, "Muted", "TextColor3")
 
             local chHideCorner = Instance.new("UICorner")
-            chHideCorner.CornerRadius = UDim.new(0, 6)
+            chHideCorner.CornerRadius = UDim.new(0, 5)
             chHideCorner.Parent = chHide
 
             chHide.MouseEnter:Connect(function()
@@ -8419,15 +8520,15 @@ end
                 chHide.TextColor3 = C.Muted
             end)
 
-            -- ─── List Pesan (FLEXIBLE — ngisi sisa area) ───
+            -- List Pesan (flexible — ngisi sisa area)
             local listFrame = Instance.new("ScrollingFrame")
             listFrame.Name = "ChatList"
-            listFrame.Size = UDim2.new(1, 0, 1, -(32 + 40 + 12))     -- sisa setelah header & input
-            listFrame.Position = UDim2.new(0, 0, 0, 32 + 6)
+            listFrame.Size = UDim2.new(1, 0, 1, -(28 + 36 + 12))
+            listFrame.Position = UDim2.new(0, 0, 0, 28 + 6)
             listFrame.BackgroundColor3 = C.Surface2
             listFrame.BackgroundTransparency = 0.4
             listFrame.BorderSizePixel = 0
-            listFrame.ScrollBarThickness = 4
+            listFrame.ScrollBarThickness = 3
             listFrame.ScrollBarImageColor3 = C.Accent
             listFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
             listFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
@@ -8439,7 +8540,7 @@ end
             registerTheme(listFrame, "Surface2", "BackgroundColor3")
 
             local lc = Instance.new("UICorner")
-            lc.CornerRadius = UDim.new(0, 10)
+            lc.CornerRadius = UDim.new(0, 9)
             lc.Parent = listFrame
 
             local ls = Instance.new("UIStroke")
@@ -8450,14 +8551,14 @@ end
             registerTheme(ls, "Accent", "Color")
 
             local lp = Instance.new("UIPadding")
-            lp.PaddingTop = UDim.new(0, 6)
-            lp.PaddingBottom = UDim.new(0, 6)
-            lp.PaddingLeft = UDim.new(0, 6)
-            lp.PaddingRight = UDim.new(0, 6)
+            lp.PaddingTop = UDim.new(0, 5)
+            lp.PaddingBottom = UDim.new(0, 5)
+            lp.PaddingLeft = UDim.new(0, 5)
+            lp.PaddingRight = UDim.new(0, 5)
             lp.Parent = listFrame
 
             local ll = Instance.new("UIListLayout")
-            ll.Padding = UDim.new(0, 6)
+            ll.Padding = UDim.new(0, 4)
             ll.SortOrder = Enum.SortOrder.LayoutOrder
             ll.Parent = listFrame
 
@@ -8467,15 +8568,15 @@ end
             emptyLbl.Text = "No messages yet... say hi! 👋"
             emptyLbl.TextColor3 = C.Muted
             emptyLbl.Font = Enum.Font.GothamSemibold
-            emptyLbl.TextSize = CFG.FONT_LABEL
+            emptyLbl.TextSize = 10
             emptyLbl.ZIndex = 5
             emptyLbl.Parent = listFrame
             registerTheme(emptyLbl, "Muted", "TextColor3")
 
-            -- ─── Input Row (FIXED di bawah) ───
+            -- Input (compact)
             local inputBg = Instance.new("Frame")
-            inputBg.Size = UDim2.new(1, 0, 0, 40)
-            inputBg.Position = UDim2.new(0, 0, 1, -40)
+            inputBg.Size = UDim2.new(1, 0, 0, 36)
+            inputBg.Position = UDim2.new(0, 0, 1, -36)
             inputBg.BackgroundColor3 = C.Surface3
             inputBg.BorderSizePixel = 0
             inputBg.ZIndex = 4
@@ -8483,7 +8584,7 @@ end
             registerTheme(inputBg, "Surface3", "BackgroundColor3")
 
             local ic = Instance.new("UICorner")
-            ic.CornerRadius = UDim.new(0, 10)
+            ic.CornerRadius = UDim.new(0, 9)
             ic.Parent = inputBg
 
             local is = Instance.new("UIStroke")
@@ -8494,15 +8595,15 @@ end
             registerTheme(is, "Accent", "Color")
 
             local box = Instance.new("TextBox")
-            box.Size = UDim2.new(1, -76, 1, 0)
-            box.Position = UDim2.fromOffset(12, 0)
+            box.Size = UDim2.new(1, -70, 1, 0)
+            box.Position = UDim2.fromOffset(10, 0)
             box.BackgroundTransparency = 1
             box.Text = ""
             box.PlaceholderText = "Type message..."
             box.PlaceholderColor3 = C.Muted
             box.TextColor3 = C.Text
             box.Font = Enum.Font.GothamSemibold
-            box.TextSize = CFG.FONT_LABEL
+            box.TextSize = 11
             box.TextXAlignment = Enum.TextXAlignment.Left
             box.ClearTextOnFocus = false
             box.ZIndex = 5
@@ -8510,13 +8611,13 @@ end
             registerTheme(box, "Text", "TextColor3")
 
             local sendBtn = Instance.new("TextButton")
-            sendBtn.Size = UDim2.fromOffset(60, 30)
-            sendBtn.Position = UDim2.new(1, -66, 0.5, -15)
+            sendBtn.Size = UDim2.fromOffset(56, 26)
+            sendBtn.Position = UDim2.new(1, -60, 0.5, -13)
             sendBtn.BackgroundColor3 = C.Accent
             sendBtn.Text = IS_MOBILE and "▶" or "SEND"
             sendBtn.TextColor3 = Color3.new(1, 1, 1)
             sendBtn.Font = Enum.Font.GothamBold
-            sendBtn.TextSize = IS_MOBILE and 14 or 11
+            sendBtn.TextSize = IS_MOBILE and 12 or 10
             sendBtn.AutoButtonColor = false
             sendBtn.BorderSizePixel = 0
             sendBtn.ZIndex = 5
@@ -8524,10 +8625,12 @@ end
             registerTheme(sendBtn, "Accent", "BackgroundColor3")
 
             local sc = Instance.new("UICorner")
-            sc.CornerRadius = UDim.new(0, 8)
+            sc.CornerRadius = UDim.new(0, 7)
             sc.Parent = sendBtn
 
-            -- Render message
+            -- ═══════════════════════════════════════════════════════════
+            -- RENDER MESSAGE — COMPACT
+            -- ═══════════════════════════════════════════════════════════
             local function scrollBottom()
                 task.defer(function()
                     listFrame.CanvasPosition = Vector2.new(0, listFrame.AbsoluteCanvasSize.Y)
@@ -8540,8 +8643,8 @@ end
                 local isMe = (msg.userId == LocalPlayer.UserId)
                 local isOwner = (OWNER_IDS[msg.userId] == true)
 
-                local avatarSize = IS_MOBILE and 24 or 28
-                local bubbleMaxW = IS_MOBILE and 0.74 or 0.70
+                local avatarSize = IS_MOBILE and 20 or 24
+                local bubbleMaxW = IS_MOBILE and 0.76 or 0.72
 
                 local row = Instance.new("Frame")
                 row.Size = UDim2.new(1, 0, 0, 0)
@@ -8567,7 +8670,7 @@ end
                 wrapLayout.HorizontalAlignment = isMe
                     and Enum.HorizontalAlignment.Right
                     or Enum.HorizontalAlignment.Left
-                wrapLayout.Padding = UDim.new(0, 5)
+                wrapLayout.Padding = UDim.new(0, 4)
                 wrapLayout.SortOrder = Enum.SortOrder.LayoutOrder
                 wrapLayout.Parent = bubbleWrap
 
@@ -8596,7 +8699,7 @@ end
                 avImgCorner.Parent = avImg
 
                 local avStroke = Instance.new("UIStroke")
-                avStroke.Thickness = 1.2
+                avStroke.Thickness = 1
                 avStroke.Transparency = 0.2
                 avStroke.Parent = avContainer
                 avStroke.Color = isOwner and Color3.fromRGB(255, 200, 50)
@@ -8615,11 +8718,11 @@ end
                 bubble.Parent = bubbleWrap
 
                 local bubbleCorner = Instance.new("UICorner")
-                bubbleCorner.CornerRadius = UDim.new(0, 12)
+                bubbleCorner.CornerRadius = UDim.new(0, 10)
                 bubbleCorner.Parent = bubble
 
                 local bs = Instance.new("UIStroke")
-                bs.Thickness = 1.2
+                bs.Thickness = 1
                 if isOwner then
                     bs.Color = Color3.fromRGB(255, 200, 50)
                     bs.Transparency = 0.3
@@ -8633,17 +8736,18 @@ end
                 bs.Parent = bubble
 
                 local bp = Instance.new("UIPadding")
-                bp.PaddingTop = UDim.new(0, 6)
-                bp.PaddingBottom = UDim.new(0, 6)
-                bp.PaddingLeft = UDim.new(0, 10)
-                bp.PaddingRight = UDim.new(0, 10)
+                bp.PaddingTop = UDim.new(0, 5)
+                bp.PaddingBottom = UDim.new(0, 5)
+                bp.PaddingLeft = UDim.new(0, 8)
+                bp.PaddingRight = UDim.new(0, 8)
                 bp.Parent = bubble
 
                 local bl = Instance.new("UIListLayout")
-                bl.Padding = UDim.new(0, 2)
+                bl.Padding = UDim.new(0, 1)
                 bl.SortOrder = Enum.SortOrder.LayoutOrder
                 bl.Parent = bubble
 
+                -- Name row
                 local nameRow = Instance.new("Frame")
                 nameRow.Size = UDim2.new(1, 0, 0, 0)
                 nameRow.AutomaticSize = Enum.AutomaticSize.Y
@@ -8658,12 +8762,12 @@ end
                 nameRowLayout.HorizontalAlignment = isMe
                     and Enum.HorizontalAlignment.Right
                     or Enum.HorizontalAlignment.Left
-                nameRowLayout.Padding = UDim.new(0, 4)
+                nameRowLayout.Padding = UDim.new(0, 3)
                 nameRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
                 nameRowLayout.Parent = nameRow
 
                 local nameLbl = Instance.new("TextLabel")
-                nameLbl.Size = UDim2.new(0, 0, 0, IS_MOBILE and 13 or 14)
+                nameLbl.Size = UDim2.new(0, 0, 0, IS_MOBILE and 11 or 12)
                 nameLbl.AutomaticSize = Enum.AutomaticSize.X
                 nameLbl.BackgroundTransparency = 1
                 nameLbl.Text = isMe and "You" or msg.displayName
@@ -8671,7 +8775,7 @@ end
                     and Color3.fromRGB(255, 255, 255)
                     or (isOwner and Color3.fromRGB(255, 220, 120) or C.Accent2)
                 nameLbl.Font = Enum.Font.GothamBold
-                nameLbl.TextSize = IS_MOBILE and 10 or 11
+                nameLbl.TextSize = IS_MOBILE and 9 or 10
                 nameLbl.TextXAlignment = isMe
                     and Enum.TextXAlignment.Right
                     or Enum.TextXAlignment.Left
@@ -8681,7 +8785,7 @@ end
 
                 if isOwner then
                     local ownerBadge = Instance.new("Frame")
-                    ownerBadge.Size = UDim2.fromOffset(IS_MOBILE and 42 or 48, IS_MOBILE and 13 or 15)
+                    ownerBadge.Size = UDim2.fromOffset(IS_MOBILE and 38 or 42, IS_MOBILE and 11 or 13)
                     ownerBadge.BackgroundColor3 = Color3.fromRGB(255, 200, 50)
                     ownerBadge.BorderSizePixel = 0
                     ownerBadge.LayoutOrder = 2
@@ -8689,7 +8793,7 @@ end
                     ownerBadge.Parent = nameRow
 
                     local obCorner = Instance.new("UICorner")
-                    obCorner.CornerRadius = UDim.new(0, 4)
+                    obCorner.CornerRadius = UDim.new(0, 3)
                     obCorner.Parent = ownerBadge
 
                     local obLbl = Instance.new("TextLabel")
@@ -8698,11 +8802,12 @@ end
                     obLbl.Text = "👑 OWNER"
                     obLbl.TextColor3 = Color3.fromRGB(30, 20, 0)
                     obLbl.Font = Enum.Font.GothamBold
-                    obLbl.TextSize = IS_MOBILE and 7 or 8
+                    obLbl.TextSize = IS_MOBILE and 6 or 7
                     obLbl.ZIndex = 9
                     obLbl.Parent = ownerBadge
                 end
 
+                -- Body text
                 local bodyLbl = Instance.new("TextLabel")
                 bodyLbl.Size = UDim2.new(1, 0, 0, 0)
                 bodyLbl.AutomaticSize = Enum.AutomaticSize.Y
@@ -8712,7 +8817,7 @@ end
                     and Color3.fromRGB(255, 255, 255)
                     or C.Text
                 bodyLbl.Font = Enum.Font.GothamSemibold
-                bodyLbl.TextSize = CFG.CHAT_FONT
+                bodyLbl.TextSize = IS_MOBILE and 10 or 11
                 bodyLbl.TextWrapped = true
                 bodyLbl.TextXAlignment = isMe
                     and Enum.TextXAlignment.Right
@@ -8723,16 +8828,17 @@ end
                 bodyLbl.Parent = bubble
                 registerTheme(bodyLbl, "Text", "TextColor3")
 
+                -- Time
                 local timeLbl = Instance.new("TextLabel")
-                timeLbl.Size = UDim2.new(1, 0, 0, 11)
+                timeLbl.Size = UDim2.new(1, 0, 0, 9)
                 timeLbl.BackgroundTransparency = 1
                 timeLbl.Text = msg.time
                 timeLbl.TextColor3 = isMe
                     and Color3.fromRGB(255, 255, 255)
                     or C.Muted
-                timeLbl.TextTransparency = isMe and 0.35 or 0.2
+                timeLbl.TextTransparency = isMe and 0.4 or 0.25
                 timeLbl.Font = Enum.Font.GothamSemibold
-                timeLbl.TextSize = IS_MOBILE and 8 or 9
+                timeLbl.TextSize = IS_MOBILE and 7 or 8
                 timeLbl.TextXAlignment = isMe
                     and Enum.TextXAlignment.Right
                     or Enum.TextXAlignment.Left
@@ -8744,7 +8850,7 @@ end
                 scrollBottom()
             end
 
-            -- Hydrate existing messages
+            -- Hydrate
             for _, m in ipairs(Shared.LiveChat_Messages) do
                 renderMessage(m)
             end
@@ -8755,6 +8861,7 @@ end
                 end
             end)
 
+            -- Send
             local function doSend()
                 local text = box.Text
                 if text == "" then return end
@@ -8775,9 +8882,9 @@ end
                 if enter then doSend() end
             end)
 
-            -- ═══════════════════════════════════════════════════════
-            -- OPEN / CLOSE LOGIC
-            -- ═══════════════════════════════════════════════════════
+            -- ═══════════════════════════════════════════════════════════
+            -- OPEN / CLOSE
+            -- ═══════════════════════════════════════════════════════════
             local function openChat()
                 if chatShown then return end
                 chatShown = true
@@ -8797,7 +8904,28 @@ end
                 notify("💬 Live Chat ditutup — tap card untuk buka lagi", "info")
             end
 
-            heroCard.MouseButton1Click:Connect(openChat)
+            -- Klik dengan ripple
+            heroCard.MouseButton1Click:Connect(function()
+                local mouse = UserInputService:GetMouseLocation()
+                local relX = mouse.X - heroCard.AbsolutePosition.X
+                local relY = mouse.Y - heroCard.AbsolutePosition.Y
+
+                spawnRipple(relX, relY)
+
+                TweenService:Create(iconHolder, TweenInfo.new(0.15), {
+                    Size = UDim2.fromOffset(iconSize + 6, iconSize + 6),
+                }):Play()
+                task.delay(0.15, function()
+                    TweenService:Create(iconHolder, TweenInfo.new(0.2), {
+                        Size = UDim2.fromOffset(iconSize, iconSize),
+                    }):Play()
+                end)
+
+                task.delay(0.18, function()
+                    openChat()
+                end)
+            end)
+
             chHide.MouseButton1Click:Connect(closeChat)
         end
 
