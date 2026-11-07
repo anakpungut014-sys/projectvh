@@ -7135,62 +7135,86 @@ function Features.startAdminAbuseSteal()
             end
 
             -- ═══════════════════════════════════════════════════════════
-            -- ⭐⭐⭐ DETEKSI VOLCANIC → WAYPOINT | LAINNYA → TP LANGSUNG ⭐⭐⭐
-            -- ═══════════════════════════════════════════════════════════
-            local isVolcanic = egg.Name:lower():find("volcan", 1, true) ~= nil
-                              or eggPart.Position.Y > 40800
+-- ⭐⭐⭐ DETEKSI VOLCANIC → WAYPOINT | LAINNYA → TP LANGSUNG ⭐⭐⭐
+-- ═══════════════════════════════════════════════════════════
+local isVolcanic = egg.Name:lower():find("volcan", 1, true) ~= nil
+                  or eggPart.Position.Y > 40800
 
-            if isVolcanic then
-                -- ───── VOLCANIC: WAYPOINT CAVE ─────
-                AdminAbuseState.Status = "🌋 Volcanic — masuk cave via waypoint..."
+if isVolcanic then
+    -- ───── VOLCANIC: WAYPOINT CAVE ─────
 
-                -- Step 1: TP ke Volcanic spawn (kalo jauh)
-                local spawnPart = getVolcanicSpawn()
-                if spawnPart then
-                    local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    if curRoot then
-                        local d = (spawnPart.Position - curRoot.Position).Magnitude
-                        if d > 50 then
-                            curRoot.CFrame = spawnPart.CFrame + Vector3.new(0, 5, 0)
-                            curRoot.Velocity = Vector3.zero
-                            curRoot.AssemblyLinearVelocity = Vector3.zero
-                            task.wait(0.5)
-                        end
-                    end
-                end
+    -- ⭐ GUARD #1: cek egg MASIH ADA sebelum masuk waypoint
+    if not egg.Parent or not eggPart.Parent then
+        AdminAbuseState.Status = "⚠️ Volcanic egg hilang — skip"
+        AdminAbuseState.Stealing = false
+        task.wait(1)
+        continue
+    end
 
-                -- Step 2: Masuk cave via waypoint (52 titik)
-                AdminAbuseState.Status = "🚶 Masuk cave (waypoint)..."
-                for i, wp in ipairs(VolcanicWaypoints) do
-                    if not AdminAbuseState.Enabled then break end
-                    tpWaypoint(wp)
-                    local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                    if curRoot and eggPart and eggPart.Parent then
-                        local d = (eggPart.Position - curRoot.Position).Magnitude
-                        if d <= 40 then break end
-                    end
-                end
+    AdminAbuseState.Status = "🌋 Volcanic — masuk cave via waypoint..."
 
-                -- Step 3: Final TP ke egg (setelah waypoint sync)
-                local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if curRoot and eggPart and eggPart.Parent then
-                    curRoot.CFrame = CFrame.lookAt(eggPart.Position + Vector3.new(0, 3, 0), eggPart.Position)
-                    curRoot.Velocity = Vector3.zero
-                    curRoot.AssemblyLinearVelocity = Vector3.zero
-                    task.wait(0.3)
-                end
-
-            else
-                -- ───── EGG BIASA: TP LANGSUNG ─────
-                AdminAbuseState.Status = "🎯 TP langsung ke " .. egg.Name
-                local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                if myRoot then
-                    myRoot.CFrame = CFrame.lookAt(eggPart.Position + Vector3.new(0, 3, 0), eggPart.Position)
-                    myRoot.Velocity = Vector3.zero
-                    myRoot.AssemblyLinearVelocity = Vector3.zero
-                    task.wait(0.1)
-                end
+    -- Step 1: TP ke Volcanic spawn (kalo jauh)
+    local spawnPart = getVolcanicSpawn()
+    if spawnPart then
+        local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if curRoot then
+            local d = (spawnPart.Position - curRoot.Position).Magnitude
+            if d > 50 then
+                curRoot.CFrame = spawnPart.CFrame + Vector3.new(0, 5, 0)
+                curRoot.Velocity = Vector3.zero
+                curRoot.AssemblyLinearVelocity = Vector3.zero
+                task.wait(0.5)
             end
+        end
+    end
+
+    -- Step 2: Masuk cave via waypoint — ⭐ GUARD di dalam loop
+    AdminAbuseState.Status = "🚶 Masuk cave (waypoint)..."
+    for i, wp in ipairs(VolcanicWaypoints) do
+        if not AdminAbuseState.Enabled then break end
+
+        -- ⭐ GUARD #2: egg hilang di tengah jalan? STOP
+        if not egg.Parent or not eggPart.Parent then
+            AdminAbuseState.Status = "⚠️ Egg hilang mid-waypoint"
+            break
+        end
+
+        tpWaypoint(wp)
+        local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if curRoot and eggPart and eggPart.Parent then
+            local d = (eggPart.Position - curRoot.Position).Magnitude
+            if d <= 40 then break end
+        end
+    end
+
+    -- ⭐ GUARD #3: kalau egg hilang / gak reach — ABORT
+    if not egg.Parent or not eggPart.Parent then
+        AdminAbuseState.Status = "⚠️ Volcanic egg hilang — abort"
+        AdminAbuseState.Stealing = false
+        task.wait(1)
+        continue
+    end
+
+    -- Step 3: Final TP ke egg (setelah waypoint sync)
+    local curRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if curRoot and eggPart and eggPart.Parent then
+        curRoot.CFrame = CFrame.lookAt(eggPart.Position + Vector3.new(0, 3, 0), eggPart.Position)
+        curRoot.Velocity = Vector3.zero
+        curRoot.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.3)
+    end
+
+else
+    -- ───── EGG BIASA: TP LANGSUNG (TIDAK BERUBAH) ─────
+    AdminAbuseState.Status = "🎯 TP langsung ke " .. egg.Name
+    local myRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if myRoot then
+        myRoot.CFrame = CFrame.lookAt(eggPart.Position + Vector3.new(0, 3, 0), eggPart.Position)
+        myRoot.Velocity = Vector3.zero
+        myRoot.AssemblyLinearVelocity = Vector3.zero
+        task.wait(0.1)
+    end
+end
 
             -- ═══════════════════════════════════════════════════════════
             -- PICKUP LOOP
