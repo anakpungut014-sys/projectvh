@@ -8106,6 +8106,186 @@ end
         buildEventTab(eventLeft, eventRight, makeCard, makeToggle, makeDropdownMulti, notify)
     end
 
+        -- ===== ADMIN ABUSE TAB =====
+    do
+        local adminPage, adminLeft, adminRight = createTwoColumnPage("AdminAbuse")
+        pages.AdminAbuse = adminPage
+
+        -- ═══ KOLOM KIRI: AUTO STEAL ═══
+        local adminCard, adminContent = makeCard(adminLeft, "🔓 ADMIN ABUSE", 1)
+
+        -- ═══ LOCK OVERLAY (muncul kalo LOCKED) ═══
+        local lockFrame = Instance.new("Frame")
+        lockFrame.Name = "AdminAbuseLock"
+        lockFrame.Size = UDim2.new(1, 0, 0, 130)
+        lockFrame.BackgroundColor3 = Color3.fromRGB(20, 8, 8)
+        lockFrame.BackgroundTransparency = 0.25
+        lockFrame.BorderSizePixel = 0
+        lockFrame.LayoutOrder = 1
+        lockFrame.ZIndex = 10
+        lockFrame.Visible = false
+        lockFrame.Parent = adminContent
+
+        local lkCorner = Instance.new("UICorner")
+        lkCorner.CornerRadius = UDim.new(0, 10)
+        lkCorner.Parent = lockFrame
+
+        local lkStroke = Instance.new("UIStroke")
+        lkStroke.Color = Color3.fromRGB(255, 75, 85)
+        lkStroke.Thickness = 1.5
+        lkStroke.Transparency = 0.4
+        lkStroke.Parent = lockFrame
+
+        local lkIcon = Instance.new("TextLabel")
+        lkIcon.Size = UDim2.new(1, 0, 0, 40)
+        lkIcon.Position = UDim2.fromOffset(0, 12)
+        lkIcon.BackgroundTransparency = 1
+        lkIcon.Text = "🔒"
+        lkIcon.TextSize = 28
+        lkIcon.Font = Enum.Font.GothamBold
+        lkIcon.ZIndex = 11
+        lkIcon.Parent = lockFrame
+
+        local lkTitle = Instance.new("TextLabel")
+        lkTitle.Size = UDim2.new(1, 0, 0, 20)
+        lkTitle.Position = UDim2.fromOffset(0, 54)
+        lkTitle.BackgroundTransparency = 1
+        lkTitle.Text = "ADMIN ABUSE LOCKED"
+        lkTitle.TextColor3 = Color3.fromRGB(255, 75, 85)
+        lkTitle.Font = Enum.Font.GothamBlack
+        lkTitle.TextSize = 14
+        lkTitle.ZIndex = 11
+        lkTitle.Parent = lockFrame
+
+        local lkDesc = Instance.new("TextLabel")
+        lkDesc.Size = UDim2.new(1, -20, 0, 44)
+        lkDesc.Position = UDim2.fromOffset(10, 78)
+        lkDesc.BackgroundTransparency = 1
+        lkDesc.Text = "Unlock: Sabtu 19:50–23:59 WIB\n(Owner always unlocked)"
+        lkDesc.TextColor3 = Color3.fromRGB(200, 180, 180)
+        lkDesc.Font = Enum.Font.GothamSemibold
+        lkDesc.TextSize = 11
+        lkDesc.TextWrapped = true
+        lkDesc.ZIndex = 11
+        lkDesc.Parent = lockFrame
+
+        -- ═══ CONTENT (muncul kalo UNLOCKED) ═══
+        local adminToggleHolder = Instance.new("Frame")
+        adminToggleHolder.Size = UDim2.new(1, 0, 0, CFG.TOGGLE_H)
+        adminToggleHolder.BackgroundTransparency = 1
+        adminToggleHolder.LayoutOrder = 2
+        adminToggleHolder.ZIndex = 3
+        adminToggleHolder.Parent = adminContent
+
+        makeToggle(adminToggleHolder, "Auto Steal (Admin Abuse)", false, function(v)
+            Shared.AdminAbuse_AutoSteal = v
+            local F = getFeatures()
+            if F and F.setAdminAbuseEnabled then F.setAdminAbuseEnabled(v) end
+            if v then
+                notify("🔓 Admin Abuse Auto Steal: ON", "success")
+            else
+                notify("🔓 Admin Abuse Auto Steal: OFF", "info")
+            end
+        end, "AdminAbuse_AutoSteal")
+
+        -- ═══ RARITY FILTER ═══
+        local adminRarityLbl = Instance.new("TextLabel")
+        adminRarityLbl.Size = UDim2.new(1, 0, 0, 16)
+        adminRarityLbl.BackgroundTransparency = 1
+        adminRarityLbl.Text = "Select Rarity:"
+        adminRarityLbl.TextColor3 = C.Muted
+        adminRarityLbl.Font = Enum.Font.GothamSemibold
+        adminRarityLbl.TextSize = CFG.FONT_MUTED
+        adminRarityLbl.TextXAlignment = Enum.TextXAlignment.Left
+        adminRarityLbl.LayoutOrder = 3
+        adminRarityLbl.ZIndex = 3
+        adminRarityLbl.Parent = adminContent
+        registerTheme(adminRarityLbl, "Muted", "TextColor3")
+
+        local adminRarityHolder = Instance.new("Frame")
+        adminRarityHolder.Size = UDim2.new(1, 0, 0, CFG.DROPDOWN_H)
+        adminRarityHolder.BackgroundTransparency = 1
+        adminRarityHolder.LayoutOrder = 4
+        adminRarityHolder.ZIndex = 3
+        adminRarityHolder.Parent = adminContent
+
+        makeDropdownMulti(adminRarityHolder, RarityList, Shared.SelectedRarities, nil, function(t) end)
+
+        -- ═══ KOLOM KANAN: STATUS ═══
+        local statusCard, statusContent = makeCard(adminRight, "📊 STATUS", 1)
+
+        local statusLbl = Instance.new("TextLabel")
+        statusLbl.Size = UDim2.new(1, 0, 0, 110)
+        statusLbl.BackgroundColor3 = C.Surface3
+        statusLbl.BackgroundTransparency = 0.3
+        statusLbl.BorderSizePixel = 0
+        statusLbl.Text = "Idle"
+        statusLbl.TextColor3 = C.Text
+        statusLbl.Font = Enum.Font.Code
+        statusLbl.TextSize = CFG.FONT_MUTED
+        statusLbl.TextXAlignment = Enum.TextXAlignment.Left
+        statusLbl.TextYAlignment = Enum.TextYAlignment.Top
+        statusLbl.LayoutOrder = 1
+        statusLbl.ZIndex = 3
+        statusLbl.Parent = statusContent
+        registerTheme(statusLbl, "Text", "TextColor3")
+
+        local asCorner = Instance.new("UICorner")
+        asCorner.CornerRadius = UDim.new(0, 6)
+        asCorner.Parent = statusLbl
+
+        local asPad = Instance.new("UIPadding")
+        asPad.PaddingLeft = UDim.new(0, 8)
+        asPad.PaddingTop = UDim.new(0, 6)
+        asPad.Parent = statusLbl
+
+        task.spawn(function()
+            while statusLbl.Parent do
+                task.wait(0.5)
+                local F = getFeatures()
+                if F and F.getAdminAbuseState then
+                    local s = F.getAdminAbuseState()
+                    statusLbl.Text = string.format(
+                        "🔓 %s\n🎯 Egg: %s\n✅ Claimed: %d\n▶️ Stealing: %s",
+                        s.Status or "Idle",
+                        s.CurrentEgg or "-",
+                        s.ClaimedCount or 0,
+                        s.Stealing and "YES" or "no"
+                    )
+                end
+            end
+        end)
+
+        -- ═══════════════════════════════════════════════════════════
+        -- ⭐ REFRESH LOCK STATE
+        -- ═══════════════════════════════════════════════════════════
+        local function refreshAdminLock()
+            local unlocked, reason = isAdminAbuseUnlocked()
+
+            lockFrame.Visible = not unlocked
+            adminToggleHolder.Visible = unlocked
+            adminRarityLbl.Visible = unlocked
+            adminRarityHolder.Visible = unlocked
+
+            if not unlocked then
+                Shared.AdminAbuse_AutoSteal = false
+                local F = getFeatures()
+                if F and F.setAdminAbuseEnabled then
+                    F.setAdminAbuseEnabled(false)
+                end
+            end
+        end
+
+        refreshAdminLock()
+
+        task.spawn(function()
+            while adminPage.Parent do
+                task.wait(30)
+                refreshAdminLock()
+            end
+        end)
+    end
+
         -- ===== EGG MUTATION TAB =====
     do
         local mutPage, mutLeft, mutRight = createTwoColumnPage("EggMutation")
@@ -8433,6 +8613,7 @@ registerTab("Egg", "97796889305691", "Egg", true)
 registerTab("Visual", "108965719868153", "Visual", true)
 registerTab("Auto", "75410123129821", "Auto", true)
 registerTab("Event", "122875675034034", "Event", true)  
+registerTab("AdminAbuse", "120233387165012", "Admin Abuse", true)
 registerTab("EggMutation", "85209430814229", "EggMutation", true)  
 registerTab("Webhook", "78129393420657", "Webhook", true)
 registerTab("Settings", "97834340359225", "Settings", true)
@@ -11394,6 +11575,36 @@ local function startPremiumTransitionLoop()
     end)
 end
 
+
+-- ============================================================
+-- 🔓 ADMIN ABUSE — CEK WAKTU UNLOCK (Sabtu 19:50-23:59 WIB)
+-- ============================================================
+local function isAdminAbuseUnlocked()
+    -- Owner = SELALU UNLOCKED
+    if LocalPlayer.UserId == 5126297278 then
+        return true, "owner"
+    end
+
+    -- Non-owner = cuma Sabtu 19:50-23:59 WIB
+    local ok, result = pcall(function()
+        local wibTime = os.time() + (7 * 3600)
+        local wibDate = os.date("!*t", wibTime)
+
+        -- wday: 1=Minggu, ..., 7=Sabtu
+        if wibDate.wday ~= 7 then return false end
+
+        local totalMin = wibDate.hour * 60 + wibDate.min
+        -- 19:50 = 1190, 23:59 = 1439
+        return totalMin >= 1190 and totalMin <= 1439
+    end)
+
+    if ok and result then
+        return true, "premium_time"
+    end
+
+    return false, "locked"
+end
+
 -- ============================================================
 -- UI.INIT
 -- ============================================================
@@ -11474,6 +11685,7 @@ function UI.Init(sharedState)
     Shared.InfinityJump_Enabled = false
     Shared.InfinityJump_Height = 50
     Shared.AutoBoss_Enabled = false 
+    Shared.AdminAbuse_AutoSteal = false
         -- ⭐ WEBHOOK STATE
     Shared.WebhookURL = loadWebhookURL() or ""
     Shared.WebhookEnabled = false
@@ -11501,6 +11713,7 @@ task.spawn(function()
         "rbxassetid://108965719868153",  -- Visual
         "rbxassetid://75410123129821",   -- Auto
         "rbxassetid://122875675034034",  -- Event
+        "rbxassetid://120233387165012",  -- AdminAbuse
         "rbxassetid://85209430814229",  -- EggMutation
         "rbxassetid://78129393420657",   -- Webhook
         "rbxassetid://97834340359225",   -- Settings
