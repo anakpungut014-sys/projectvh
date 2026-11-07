@@ -8214,6 +8214,7 @@ end
             heroCard.Name = "ChatHeroCard"
             heroCard.Size = UDim2.new(1, 0, 1, 0)
             heroCard.BackgroundColor3 = PC_BG_TOP
+            heroCard.BackgroundTransparency = 1 -- ⭐ FIX: BIKIN TRANSPARAN
             heroCard.BorderSizePixel = 0
             heroCard.Text = ""
             heroCard.AutoButtonColor = false
