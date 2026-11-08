@@ -12053,6 +12053,14 @@ task.spawn(function()
     local premiumNow = isPremiumTimeNow()
     Shared._PremiumAutoUnlock = premiumNow
 
+    -- ⚡ SKIP KEY SYSTEM — hapus blok ini kalau mau balik ke key system
+    Shared.KeyType = "FREE"
+    Shared.KeyExpiresAt = 0
+    print("[KEY] ⚡ SKIP KEY aktif → langsung loading")
+    startLoading()
+    task.spawn(startPremiumTransitionLoop)
+    return
+
     local hasRealPremium = isRealPremiumKey(Shared._RealKeyType)
     local savedKeyNow = loadSavedKey()
     local hasValidSavedKey = savedKeyNow ~= nil
