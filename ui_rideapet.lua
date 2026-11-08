@@ -4068,11 +4068,11 @@ local function buildMainWindow(parent)
     local screenGui = parent
     local viewport = (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize) or Vector2.new(1280, 720)
 
-    local winW, winH
+local winW, winH
 if IS_MOBILE then
-    -- Samakan dengan SenaHub: ~88% x 78% viewport
-    winW = math.floor(math.clamp(viewport.X * 0.88, 280, 400))
-    winH = math.floor(math.clamp(viewport.Y * 0.78, 340, 620))
+    -- Mobile: target 400 x 520 (pakai math biar aman di layar kecil)
+    winW = math.min(400, math.floor(viewport.X * 0.88))
+    winH = math.min(520, math.floor(viewport.Y * 0.78))
 else
     -- Samakan dengan SenaHub: 720 x 480
     winW = math.min(720, math.floor(viewport.X * 0.90))
