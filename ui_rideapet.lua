@@ -8104,103 +8104,16 @@ end
             local PC_ROW_BOT     = Color3.fromRGB(18, 22, 32)
             local PC_BORDER      = Color3.fromRGB(70, 90, 130)
 
-            -- ═══════════════════════════════════════════════════════════
-            -- OUTER CARD
-            -- ═══════════════════════════════════════════════════════════
-            local wrapCard = Instance.new("Frame")
-            wrapCard.Name = "LiveChatCard"
-            wrapCard.Size = UDim2.fromScale(1, 1)
-            wrapCard.BackgroundColor3 = PC_BG_BOT
-            wrapCard.BorderSizePixel = 0
-            wrapCard.ClipsDescendants = true
-            wrapCard.ZIndex = 1
-            wrapCard.Parent = liveChatPage
-
-            local wrapCorner = Instance.new("UICorner")
-            wrapCorner.CornerRadius = UDim.new(0, 14)
-            wrapCorner.Parent = wrapCard
-
-            local wrapGrad = Instance.new("UIGradient")
-            wrapGrad.Rotation = 135
-            wrapGrad.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, PC_BG_TOP),
-                ColorSequenceKeypoint.new(1, PC_BG_BOT),
-            })
-            wrapGrad.Parent = wrapCard
-
-            local wrapStroke = Instance.new("UIStroke")
-            wrapStroke.Color = PC_BORDER
-            wrapStroke.Thickness = 1
-            wrapStroke.Transparency = 0.4
-            wrapStroke.Parent = wrapCard
-
-            -- ═══════════════════════════════════════════════════════════
-            -- HEADER — gradient halus + accent bar kiri
-            -- ═══════════════════════════════════════════════════════════
-            local cardHeader = Instance.new("Frame")
-            cardHeader.Size = UDim2.new(1, 0, 0, CFG.CARD_HEADER)
-            cardHeader.BackgroundColor3 = PC_BG_TOP
-            cardHeader.BackgroundTransparency = 1   -- ⭐ header transparan
-            cardHeader.BorderSizePixel = 0
-            cardHeader.ZIndex = 2
-            cardHeader.Parent = wrapCard
-
-            local cardHeaderCorner = Instance.new("UICorner")
-            cardHeaderCorner.CornerRadius = UDim.new(0, 14)
-            cardHeaderCorner.Parent = cardHeader
-
-            local cardHeaderFix = Instance.new("Frame")
-            cardHeaderFix.Size = UDim2.new(1, 0, 0, 14)
-            cardHeaderFix.Position = UDim2.new(0, 0, 1, -14)
-            cardHeaderFix.BackgroundColor3 = PC_BG_TOP
-            cardHeaderFix.BackgroundTransparency = 1   -- ⭐ fix-nya juga transparan
-            cardHeaderFix.BorderSizePixel = 0
-            cardHeaderFix.ZIndex = 2
-            cardHeaderFix.Parent = cardHeader
-
-            -- Accent bar kiri tipis
-            local accentBar = Instance.new("Frame")
-            accentBar.Size = UDim2.new(0, 3, 1, -16)
-            accentBar.Position = UDim2.new(0, 0, 0, 8)
-            accentBar.BackgroundColor3 = PC_ACCENT
-            accentBar.BorderSizePixel = 0
-            accentBar.ZIndex = 4
-            accentBar.Parent = cardHeader
-
-            local accentBarCorner = Instance.new("UICorner")
-            accentBarCorner.CornerRadius = UDim.new(0, 2)
-            accentBarCorner.Parent = accentBar
-
-            local accentBarGrad = Instance.new("UIGradient")
-            accentBarGrad.Rotation = 90
-            accentBarGrad.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, PC_ACCENT),
-                ColorSequenceKeypoint.new(1, PC_ACCENT2),
-            })
-            accentBarGrad.Parent = accentBar
-
-            local hTitle = Instance.new("TextLabel")
-            hTitle.Size = UDim2.new(1, -24, 1, 0)
-            hTitle.Position = UDim2.fromOffset(14, 0)
-            hTitle.BackgroundTransparency = 1
-            hTitle.Text = "LIVE CHAT (GLOBAL)"
-            hTitle.TextColor3 = Color3.fromRGB(230, 240, 255)
-            hTitle.Font = Enum.Font.GothamBold
-            hTitle.TextSize = CFG.FONT_TITLE
-            hTitle.TextXAlignment = Enum.TextXAlignment.Left
-            hTitle.TextYAlignment = Enum.TextYAlignment.Center
-            hTitle.ZIndex = 3
-            hTitle.Parent = cardHeader
-
+            
             -- ═══════════════════════════════════════════════════════════
             -- CONTENT
             -- ═══════════════════════════════════════════════════════════
             local content = Instance.new("Frame")
-            content.Size = UDim2.new(1, -16, 1, -(CFG.CARD_HEADER + 16))
-            content.Position = UDim2.new(0, 8, 0, CFG.CARD_HEADER + 8)
+            content.Size = UDim2.fromScale(1, 1)
+            content.Position = UDim2.new(0, 0, 0, 0)
             content.BackgroundTransparency = 1
             content.ZIndex = 2
-            content.Parent = wrapCard
+            content.Parent = liveChatPage
 
             -- ═══════════════════════════════════════════════════════════
             -- STATE 1: HERO "TAP TO OPEN" — PREMIUM CARD
@@ -8213,17 +8126,16 @@ end
             showFrame.ZIndex = 3
             showFrame.Parent = content
 
-            local heroCard = Instance.new("TextButton")
-            heroCard.Name = "ChatHeroCard"
-            heroCard.Size = UDim2.new(1, 0, 1, 0)
-            heroCard.BackgroundColor3 = PC_BG_TOP
-            heroCard.BackgroundTransparency = 1 -- ⭐ FIX: BIKIN TRANSPARAN
-            heroCard.BorderSizePixel = 0
-            heroCard.Text = ""
-            heroCard.AutoButtonColor = false
-            heroCard.ClipsDescendants = true
-            heroCard.ZIndex = 4
-            heroCard.Parent = showFrame
+local heroCard = Instance.new("TextButton")
+heroCard.Name = "ChatHeroCard"
+heroCard.Size = UDim2.new(1, 0, 1, 0)
+heroCard.BackgroundTransparency = 1
+heroCard.BorderSizePixel = 0
+heroCard.Text = ""
+heroCard.AutoButtonColor = false
+heroCard.ClipsDescendants = true
+heroCard.ZIndex = 4
+heroCard.Parent = showFrame
 
             local heroCorner = Instance.new("UICorner")
             heroCorner.CornerRadius = UDim.new(0, 14)
@@ -8372,15 +8284,6 @@ end
             chevron.Parent = heroCard
 
             -- Hover: border lebih terang
-            heroCard.MouseEnter:Connect(function()
-                TweenService:Create(heroStroke, TweenInfo.new(0.2), {
-                    Transparency = 0.25,
-                }):Play()
-                TweenService:Create(chevron, TweenInfo.new(0.2), {
-                    TextTransparency = 0,
-                    Position = UDim2.new(1, -26, 0.5, -12),
-                }):Play()
-            end)
             heroCard.MouseLeave:Connect(function()
                 TweenService:Create(heroStroke, TweenInfo.new(0.2), {
                     Transparency = 0.55,
