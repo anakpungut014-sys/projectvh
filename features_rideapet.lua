@@ -1528,16 +1528,31 @@ local function isBossFlyingPet(petName)
     return false
 end
 
+-- ═══════════════════════════════════════════════════════════════
+-- FIX v3 — isFlyingPet() HARD BLOCK
+-- Di luar boss = SEMUA pet terbang DILARANG (termasuk Phoenix/Dragon/Griffin/Hydra)
+-- Di dalam boss = cuma Phoenix/Griffin/Dragon/Hydra yang boleh
+-- ═══════════════════════════════════════════════════════════════
 local function isFlyingPet(petName)
-    -- ⭐ DI AREA BOSS: Phoenix/Griffin/Dragon/Hydra BUKAN flying (boleh dipake)
-    if isInBossArea() and isBossFlyingPet(petName) then
-        return false
+    if not petName then return true end
+    local n = string.lower(tostring(petName))
+
+    local inBoss = isInBossArea()
+
+    if inBoss then
+        -- ⭐ DI BOSS: cuma Phoenix/Griffin/Dragon/Hydra yang BOLEH
+        -- Semua pet terbang lain (bat, owl, raven, dll) DILARANG
+        return not isBossFlyingPet(petName)
     end
-    -- ⭐ DI LUAR AREA BOSS: semua blacklist normal
-    local n = string.lower(petName)
+
+    -- ⭐ DI LUAR BOSS: SEMUA pet terbang DILARANG (termasuk Phoenix/Dragon/Griffin/Hydra)
+    -- Cek blacklist normal
     for _, kw in ipairs(FLYING_BLACKLIST) do
         if string.find(n, kw, 1, true) then return true end
     end
+    -- ⭐ EXTRA: kalo ini boss pet (Phoenix/Dragon/Griffin/Hydra) di luar boss → TETEP DILARANG
+    if isBossFlyingPet(petName) then return true end
+
     return false
 end
 
@@ -1605,20 +1620,25 @@ local function getPetKG(tool)
     return 0
 end
 
--- ⭐ CARI PET DENGAN KG TERTINGGI (gak peduli rarity)
+-- ═══════════════════════════════════════════════════════════════
+-- FIX v3 — findBestPetForRide() GUARANTEE
+-- Di luar boss = WAJIB pet darat (kalo gak ada, return nil — JANGAN fallback ke flying)
+-- Di dalam boss = prioritas Phoenix/Griffin/Dragon/Hydra
+-- ═══════════════════════════════════════════════════════════════
 local function findBestPetForRide()
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if not backpack then return nil end
 
-    local inBossArea = isInBossArea()
+    local inBoss = isInBossArea()
 
-    -- ⭐ DI AREA BOSS: PRIORITAS 4 PET TERBANG
-    if inBossArea then
+    -- ⭐ DI AREA BOSS: PRIORITAS 4 PET BOSS
+    if inBoss then
         local best, bestKG = nil, -1
         for _, tool in ipairs(backpack:GetChildren()) do
             if tool:IsA("Tool") then
                 local pname = tool:GetAttribute("PetName") or tool.Name
-                if isBossFlyingPet(pname) then
+                -- ⭐ WAJIB ada PetName attribute (filter egg)
+                if tool:GetAttribute("PetName") and isBossFlyingPet(pname) then
                     local kg = getPetKG(tool) or 0
                     if kg > bestKG then
                         bestKG = kg
@@ -1627,25 +1647,29 @@ local function findBestPetForRide()
                 end
             end
         end
-        -- ⭐ Kalo ada Phoenix/Griffin/Dragon/Hydra → langsung pake itu
         if best then return best end
-        -- ⭐ Kalo gak ada 4 itu → fallback ke best KG pet darat
+        -- Fallback: pet darat terbaik
     end
 
-    -- ⭐ DI WORKSPACE UTAMA / FALLBACK: best KG pet darat
+    -- ⭐ DI LUAR BOSS / FALLBACK: WAJIB PET DARAT
     local best, bestKG = nil, -1
     for _, tool in ipairs(backpack:GetChildren()) do
         if tool:IsA("Tool") then
-            local pname = tool:GetAttribute("PetName") or tool.Name
-            if not isFlyingPet(pname) then
-                local kg = getPetKG(tool) or 0
-                if kg > bestKG then
-                    bestKG = kg
-                    best = tool
+            -- ⭐ WAJIB ada PetName attribute (filter egg)
+            local pname = tool:GetAttribute("PetName")
+            if pname then
+                -- ⭐ HARD GUARD: skip SEMUA pet terbang (termasuk Phoenix/Dragon di luar boss)
+                if not isFlyingPet(pname) then
+                    local kg = getPetKG(tool) or 0
+                    if kg > bestKG then
+                        bestKG = kg
+                        best = tool
+                    end
                 end
             end
         end
     end
+    -- ⭐ KALO GAK ADA PET DARAT: return nil (JANGAN fallback ke flying!)
     return best
 end
 
@@ -1762,16 +1786,44 @@ function Features.startAutoRidePet()
             -- ═══════════════════════════════════════════════════════
             local best
 
-           if AutoRideState.SelectedPet and AutoRideState.SelectedPet ~= "Auto (Best KG)" then
-    if not isFlyingPet(AutoRideState.SelectedPet) then
+-- ⭐ MODE MANUAL (user pilih pet spesifik)
+if AutoRideState.SelectedPet and AutoRideState.SelectedPet ~= "Auto (Best KG)" then
+    local selName = AutoRideState.SelectedPet
+    local inBoss = isInBossArea()
+
+    -- ⭐ VALIDASI: di luar boss, kalo user pilih flying pet → REJECT
+    local blocked = false
+    if not inBoss then
+        -- Cek apakah pet yang dipilih adalah flying
+        local n = string.lower(tostring(selName))
+        for _, kw in ipairs(FLYING_BLACKLIST) do
+            if string.find(n, kw, 1, true) then blocked = true; break end
+        end
+        if isBossFlyingPet(selName) then blocked = true end
+    else
+        -- Di boss: cek apakah boss pet
+        if not isBossFlyingPet(selName) then
+            -- Kalo bukan boss pet DAN flying → block
+            local n = string.lower(tostring(selName))
+            for _, kw in ipairs(FLYING_BLACKLIST) do
+                if string.find(n, kw, 1, true) then blocked = true; break end
+            end
+        end
+    end
+
+    if blocked then
+        AutoRideState.Status = "❌ Blocked: " .. selName .. " (flying, " .. (inBoss and "boss" or "base") .. " mode)"
+        -- Fallback ke auto
+        AutoRideState.SelectedPet = "Auto (Best KG)"
+    else
         local backpack = LocalPlayer:FindFirstChild("Backpack")
         local bestKG = -1
         if backpack then
             for _, tool in ipairs(backpack:GetChildren()) do
                 if tool:IsA("Tool") then
-                    local pname = tool:GetAttribute("PetName") or tool.Name   -- ⭐ FIX
-                    if pname == AutoRideState.SelectedPet then
-                        local kg = getPetKG(tool) or 0                        -- ⭐ FIX
+                    local pname = tool:GetAttribute("PetName") or tool.Name
+                    if pname == selName then
+                        local kg = getPetKG(tool) or 0
                         if kg > bestKG then
                             bestKG = kg
                             best = tool
@@ -1782,9 +1834,26 @@ function Features.startAutoRidePet()
         end
     end
 end
-            if not best then
-                best = findBestPetForRide()
-            end
+
+-- ⭐ AUTO MODE / FALLBACK
+if not best then
+    best = findBestPetForRide()
+end
+
+-- ⭐ FINAL HARD GUARD: kalo best ternyata flying di luar boss → REJECT
+if best then
+    local pname = best:GetAttribute("PetName") or best.Name
+    if isFlyingPet(pname) and not isInBossArea() then
+        AutoRideState.Status = "❌ HARD BLOCK: " .. pname .. " (flying di luar boss)"
+        best = nil
+    end
+end
+
+if not best then
+    AutoRideState.Status = "⏳ Nunggu pet darat di backpack..."
+    task.wait(1)
+    continue
+end
 
             if not best then
                 AutoRideState.Status = "Gak ada pet darat di backpack"
