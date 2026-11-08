@@ -8066,23 +8066,21 @@ local function renderMessage(msg)
     row.ZIndex = 5
     row.Parent = listFrame
 
-    -- ═══ LAYOUT: kiri (avatar) + bubble fleksibel (kanan/kiri) ═══
     local rowLayout = Instance.new("UIListLayout")
     rowLayout.FillDirection = Enum.FillDirection.Horizontal
     rowLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-    rowLayout.HorizontalAlignment = isMe and Enum.HorizontalAlignment.Right
-        or Enum.HorizontalAlignment.Left
+    rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
     rowLayout.Padding = UDim.new(0, 8)
     rowLayout.SortOrder = Enum.SortOrder.LayoutOrder
     rowLayout.Parent = row
 
-    -- ═══════════════ AVATAR ═══════════════
+    -- Avatar dengan ring tipis
     local avContainer = Instance.new("Frame")
     avContainer.Size = UDim2.fromOffset(avatarSize, avatarSize)
     avContainer.BackgroundColor3 = PC_BG_TOP
     avContainer.BorderSizePixel = 0
     avContainer.ZIndex = 6
-    avContainer.LayoutOrder = isMe and 2 or 1   -- avatar di kiri kalau bukan kita
+    avContainer.LayoutOrder = 1
     avContainer.Parent = row
 
     local avCorner = Instance.new("UICorner")
@@ -8112,11 +8110,10 @@ local function renderMessage(msg)
         avStroke.Color = PC_ACCENT
     end
 
-    -- ═══════════════ BUBBLE ═══════════════
+    -- Bubble tipis
     local bubble = Instance.new("Frame")
     bubble.Name = "Bubble"
-    -- ⭐ 78% width biar gak full, jadi bisa kelihatan rata kiri/kanan
-    bubble.Size = UDim2.new(0.78, -(avatarSize + 8), 0, 0)
+    bubble.Size = UDim2.new(1, -(avatarSize + 8), 0, 0)
     bubble.AutomaticSize = Enum.AutomaticSize.Y
     bubble.BackgroundColor3 = isOwner
         and Color3.fromRGB(40, 34, 20)
@@ -8124,7 +8121,7 @@ local function renderMessage(msg)
     bubble.BackgroundTransparency = 0.15
     bubble.BorderSizePixel = 0
     bubble.ZIndex = 6
-    bubble.LayoutOrder = isMe and 1 or 2   -- bubble di kanan kalau kita
+    bubble.LayoutOrder = 2
     bubble.Parent = row
 
     local bubbleCorner = Instance.new("UICorner")
@@ -8175,7 +8172,7 @@ local function renderMessage(msg)
     bl.SortOrder = Enum.SortOrder.LayoutOrder
     bl.Parent = bubble
 
-    -- ═══════════════ NAME + TIME ROW ═══════════════
+    -- Name + time (pakai UIListLayout biar owner tag nempel ke nama)
     local nameRow = Instance.new("Frame")
     nameRow.Size = UDim2.new(1, 0, 0, 16)
     nameRow.BackgroundTransparency = 1
@@ -8226,7 +8223,7 @@ local function renderMessage(msg)
         ownerTag.Parent = nameRow
     end
 
-    -- Spacer + time
+    -- Time
     local timeSpacer = Instance.new("Frame")
     timeSpacer.Size = UDim2.new(1, 0, 1, 0)
     timeSpacer.BackgroundTransparency = 1
