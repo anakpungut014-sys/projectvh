@@ -8910,7 +8910,8 @@ do
     end)
 end
 
-return main
+   return main
+end
 -- ============================================================
 -- KEY SYSTEM GATE
 -- Only adds a window before the existing loading screen.
