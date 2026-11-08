@@ -1872,6 +1872,10 @@ function Features.startAutoRidePet()
             end
 
             local petKey = best:GetAttribute("PetKey")
+            or best:GetAttribute("PetName")
+            or best:GetAttribute("Key")
+            or best:GetAttribute("ID")
+            or best.Name
             local petName = best:GetAttribute("PetName") or best.Name
             if isFlyingPet(petName) then
                 AutoRideState.Status = "Skip flying pet: " .. petName
@@ -1886,40 +1890,73 @@ function Features.startAutoRidePet()
             pcall(function() hum:EquipTool(best) end)
             task.wait(0.5)
 
-            -- Fire remote dengan MULTIPLE payload (biar salah satu kena)
+                        -- ═══════════════════════════════════════════════════════
+            -- FIX: Fire remote HANYA pake petKey (JANGAN tanpa argumen)
+            -- ═══════════════════════════════════════════════════════
             local remotes = game:GetService("ReplicatedStorage"):FindFirstChild("Remotes")
             local gameR = remotes and remotes:FindFirstChild("Game")
             local rideRemote = gameR and gameR:FindFirstChild("PetRideMode")
             local mountingRemote = gameR and gameR:FindFirstChild("Mounting")
 
-            -- Coba sampe 6x dengan delay
-            for attempt = 1, 6 do
+            -- ⭐ WAJIB ada petKey — kalo gak ada, gak bisa ride
+            if not petKey then
+                AutoRideState.Status = "❌ Gak ada PetKey — skip"
+                task.wait(1)
+                continue
+            end
+
+            -- ⭐ Coba sampe 8x — TAPI CUMA pake petKey
+            for attempt = 1, 8 do
+                -- PetRideMode — WAJIB pake petKey
                 if rideRemote then
-                    pcall(function() rideRemote:FireServer() end)
-                    task.wait(0.1)
                     pcall(function() rideRemote:FireServer(petKey) end)
-                    task.wait(0.1)
-                    pcall(function() rideRemote:FireServer(petKey, true) end)
-                    task.wait(0.1)
-                    pcall(function() rideRemote:FireServer(true) end)
-                    task.wait(0.1)
+                    task.wait(0.15)
                 end
 
+                -- Mounting — WAJIB pake petKey
                 if mountingRemote then
                     pcall(function() mountingRemote:FireServer(petKey) end)
-                    task.wait(0.1)
-                    pcall(function() mountingRemote:FireServer() end)
-                    task.wait(0.1)
+                    task.wait(0.15)
                 end
 
                 task.wait(0.3)
 
-                -- Cek apakah udah naik
+                -- ⭐ Cek: udah naik DAN pet yang naik = pet darat yang kita pilih?
                 if isRidingPetAuto() then
-                    break
+                    -- ⭐ Verifikasi: pet yang naik harus BUKAN flying
+                    local hum2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                    if hum2 and hum2.SeatPart then
+                        local petModel = hum2.SeatPart:FindFirstAncestorOfClass("Model")
+                        if petModel then
+                            local ridingName = petModel.Name
+                            local ridingIsFly = false
+                            local rn = string.lower(tostring(ridingName))
+                            for _, kw in ipairs(FLYING_BLACKLIST) do
+                                if string.find(rn, kw, 1, true) then ridingIsFly = true; break end
+                            end
+                            if isBossFlyingPet(ridingName) then ridingIsFly = true end
+
+                            -- ⭐ Kalo yang naik = flying di luar boss → SALAH, turun dulu
+                            if not inBoss and ridingIsFly then
+                                AutoRideState.Status = "⚠️ Salah pet! Dismount: " .. ridingName
+                                -- Turun dari pet
+                                local dismountRemote = gameR and gameR:FindFirstChild("PetDismount")
+                                if dismountRemote then
+                                    pcall(function() dismountRemote:FireServer() end)
+                                end
+                                pcall(function() hum2.Sit = false end)
+                                pcall(function() hum2.Jump = true end)
+                                task.wait(0.5)
+                                break
+                            else
+                                -- ✅ Bener — pet darat yang naik
+                                break
+                            end
+                        end
+                    end
                 end
             end
-
+                
             AutoRideState.LastRideTime = os.clock()
             AutoRideState.LastPetName = petName
 
