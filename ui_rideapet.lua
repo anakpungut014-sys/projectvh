@@ -12096,7 +12096,8 @@ else
 
     task.spawn(function()
         startPremiumTransitionLoop()
-    end)
+      end)
+   end
 end
 
 return UI
