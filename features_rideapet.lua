@@ -1956,20 +1956,51 @@ function Features.getPetListForDropdown()
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if not backpack then return {} end
 
+    local inBoss = isInBossArea()
     local map = {}
+
     for _, tool in ipairs(backpack:GetChildren()) do
         if tool:IsA("Tool") then
-            -- ⭐ FLEKSIBEL: fallback ke tool.Name
+            -- ⭐ FALLBACK: kalo gak ada PetName attribute, pake tool.Name
             local pname = tool:GetAttribute("PetName") or tool.Name
-            if pname and not isFlyingPet(pname) then
-                local kg = getPetKG(tool) or 0   -- ⭐ guard nil
-                if not map[pname] then
-                    map[pname] = { name = pname, kg = kg, tool = tool, count = 0 }
+
+            -- ⭐ SKIP EGG (bukan pet)
+            -- Egg biasanya punya nama "Xxx Egg" dan gak ada attribute PetName
+            local isEgg = false
+            if not tool:GetAttribute("PetName") then
+                if pname:lower():find("egg", 1, true) then
+                    isEgg = true
                 end
-                map[pname].count = map[pname].count + 1
-                if kg > map[pname].kg then
-                    map[pname].kg = kg
-                    map[pname].tool = tool
+            end
+
+            if pname and not isEgg then
+                -- ⭐ Cek flying (HANYA berdasarkan nama)
+                local isFly = false
+                local n = string.lower(tostring(pname))
+                for _, kw in ipairs(FLYING_BLACKLIST) do
+                    if string.find(n, kw, 1, true) then isFly = true; break end
+                end
+                if isBossFlyingPet(pname) then isFly = true end
+
+                -- ⭐ Filter sesuai area:
+                -- DI LUAR BOSS → HANYA pet darat
+                -- DI DALAM BOSS → semua (boss pet + pet darat fallback)
+                local show = true
+                if not inBoss and isFly then
+                    show = false  -- di luar boss: flying gak muncul
+                end
+                -- di boss: semua muncul
+
+                if show then
+                    local kg = getPetKG(tool) or 0
+                    if not map[pname] then
+                        map[pname] = { name = pname, kg = kg, tool = tool, count = 0 }
+                    end
+                    map[pname].count = map[pname].count + 1
+                    if kg > map[pname].kg then
+                        map[pname].kg = kg
+                        map[pname].tool = tool
+                    end
                 end
             end
         end
@@ -1982,12 +2013,35 @@ function Features.getPetListForDropdown()
 end
 
 function Features.setAutoRidePet(petName)
-    AutoRideState.SelectedPet = petName or "Auto (Best KG)"
+    petName = petName or "Auto (Best KG)"
+
+    -- ⭐ VALIDASI: kalo di luar boss dan petName flying → reject
+    if petName ~= "Auto (Best KG)" then
+        local inBoss = isInBossArea()
+        local isFly = false
+        local n = string.lower(tostring(petName))
+        for _, kw in ipairs(FLYING_BLACKLIST) do
+            if string.find(n, kw, 1, true) then isFly = true; break end
+        end
+        if isBossFlyingPet(petName) then isFly = true end
+
+        if not inBoss and isFly then
+            if Shared.Notify then
+                Shared.Notify("❌ " .. petName .. " flying — gak bisa di luar boss", "error")
+            end
+            AutoRideState.SelectedPet = "Auto (Best KG)"
+        else
+            AutoRideState.SelectedPet = petName
+        end
+    else
+        AutoRideState.SelectedPet = "Auto (Best KG)"
+    end
+
     AutoRideState.HasRiddenOnce = false
     AutoRideState.LastRideTime = 0
     AutoRideState.DismountTime = 0
     AutoRideState.ForceAction = true
-    AutoRideState.LastPetName = nil   -- ⭐ tambah baris ini
+    AutoRideState.LastPetName = nil
 end
 
 -- ⬆️ SAMPAI SINI ⬆️
