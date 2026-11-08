@@ -8048,221 +8048,224 @@ heroCard.Parent = showFrame
                 end)
             end
 
-            local function renderMessage(msg)
-                if emptyLbl.Parent then emptyLbl:Destroy() end
+local function renderMessage(msg)
+    if emptyLbl.Parent then emptyLbl:Destroy() end
 
-                local isMe = (msg.userId == LocalPlayer.UserId)
-                local isOwner = (OWNER_IDS[msg.userId] == true)
+    local isMe = (msg.userId == LocalPlayer.UserId)
+    local isOwner = (OWNER_IDS[msg.userId] == true)
 
-                local avatarSize = IS_MOBILE and 24 or 28
+    local avatarSize = IS_MOBILE and 24 or 28
 
-                local row = Instance.new("Frame")
-                row.Size = UDim2.new(1, 0, 0, 0)
-                row.AutomaticSize = Enum.AutomaticSize.Y
-                row.BackgroundTransparency = 1
-                row.BorderSizePixel = 0
-                msgCounter = msgCounter + 1
-                row.LayoutOrder = msgCounter
-                row.ZIndex = 5
-                row.Parent = listFrame
+    local row = Instance.new("Frame")
+    row.Size = UDim2.new(1, 0, 0, 0)
+    row.AutomaticSize = Enum.AutomaticSize.Y
+    row.BackgroundTransparency = 1
+    row.BorderSizePixel = 0
+    msgCounter = msgCounter + 1
+    row.LayoutOrder = msgCounter
+    row.ZIndex = 5
+    row.Parent = listFrame
 
-                local rowLayout = Instance.new("UIListLayout")
-                rowLayout.FillDirection = Enum.FillDirection.Horizontal
-                rowLayout.VerticalAlignment = Enum.VerticalAlignment.Top
-                rowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-                rowLayout.Padding = UDim.new(0, 8)
-                rowLayout.SortOrder = Enum.SortOrder.LayoutOrder
-                rowLayout.Parent = row
+    -- ═══ LAYOUT: kiri (avatar) + bubble fleksibel (kanan/kiri) ═══
+    local rowLayout = Instance.new("UIListLayout")
+    rowLayout.FillDirection = Enum.FillDirection.Horizontal
+    rowLayout.VerticalAlignment = Enum.VerticalAlignment.Top
+    rowLayout.HorizontalAlignment = isMe and Enum.HorizontalAlignment.Right
+        or Enum.HorizontalAlignment.Left
+    rowLayout.Padding = UDim.new(0, 8)
+    rowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    rowLayout.Parent = row
 
-                -- Avatar dengan ring tipis
-                local avContainer = Instance.new("Frame")
-                avContainer.Size = UDim2.fromOffset(avatarSize, avatarSize)
-                avContainer.BackgroundColor3 = PC_BG_TOP
-                avContainer.BorderSizePixel = 0
-                avContainer.ZIndex = 6
-                avContainer.LayoutOrder = 1
-                avContainer.Parent = row
+    -- ═══════════════ AVATAR ═══════════════
+    local avContainer = Instance.new("Frame")
+    avContainer.Size = UDim2.fromOffset(avatarSize, avatarSize)
+    avContainer.BackgroundColor3 = PC_BG_TOP
+    avContainer.BorderSizePixel = 0
+    avContainer.ZIndex = 6
+    avContainer.LayoutOrder = isMe and 2 or 1   -- avatar di kiri kalau bukan kita
+    avContainer.Parent = row
 
-                local avCorner = Instance.new("UICorner")
-                avCorner.CornerRadius = UDim.new(1, 0)
-                avCorner.Parent = avContainer
+    local avCorner = Instance.new("UICorner")
+    avCorner.CornerRadius = UDim.new(1, 0)
+    avCorner.Parent = avContainer
 
-                local avImg = Instance.new("ImageLabel")
-                avImg.Size = UDim2.fromScale(1, 1)
-                avImg.BackgroundTransparency = 1
-                avImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(msg.userId) .. "&w=100&h=100"
-                avImg.ZIndex = 7
-                avImg.Parent = avContainer
+    local avImg = Instance.new("ImageLabel")
+    avImg.Size = UDim2.fromScale(1, 1)
+    avImg.BackgroundTransparency = 1
+    avImg.Image = "rbxthumb://type=AvatarHeadShot&id=" .. tostring(msg.userId) .. "&w=100&h=100"
+    avImg.ZIndex = 7
+    avImg.Parent = avContainer
 
-                local avImgCorner = Instance.new("UICorner")
-                avImgCorner.CornerRadius = UDim.new(1, 0)
-                avImgCorner.Parent = avImg
+    local avImgCorner = Instance.new("UICorner")
+    avImgCorner.CornerRadius = UDim.new(1, 0)
+    avImgCorner.Parent = avImg
 
-                local avStroke = Instance.new("UIStroke")
-                avStroke.Thickness = 1.2
-                avStroke.Transparency = 0.3
-                avStroke.Parent = avContainer
-                if isOwner then
-                    avStroke.Color = Color3.fromRGB(255, 200, 80)
-                elseif isMe then
-                    avStroke.Color = PC_ACCENT2
-                else
-                    avStroke.Color = PC_ACCENT
-                end
+    local avStroke = Instance.new("UIStroke")
+    avStroke.Thickness = 1.2
+    avStroke.Transparency = 0.3
+    avStroke.Parent = avContainer
+    if isOwner then
+        avStroke.Color = Color3.fromRGB(255, 200, 80)
+    elseif isMe then
+        avStroke.Color = PC_ACCENT2
+    else
+        avStroke.Color = PC_ACCENT
+    end
 
-                -- Bubble tipis
-                local bubble = Instance.new("Frame")
-                bubble.Name = "Bubble"
-                bubble.Size = UDim2.new(1, -(avatarSize + 8), 0, 0)
-                bubble.AutomaticSize = Enum.AutomaticSize.Y
-                bubble.BackgroundColor3 = isOwner
-                    and Color3.fromRGB(40, 34, 20)
-                    or (isMe and Color3.fromRGB(30, 40, 60) or PC_ROW_TOP)
-                bubble.BackgroundTransparency = 0.15
-                bubble.BorderSizePixel = 0
-                bubble.ZIndex = 6
-                bubble.LayoutOrder = 2
-                bubble.Parent = row
+    -- ═══════════════ BUBBLE ═══════════════
+    local bubble = Instance.new("Frame")
+    bubble.Name = "Bubble"
+    -- ⭐ 78% width biar gak full, jadi bisa kelihatan rata kiri/kanan
+    bubble.Size = UDim2.new(0.78, -(avatarSize + 8), 0, 0)
+    bubble.AutomaticSize = Enum.AutomaticSize.Y
+    bubble.BackgroundColor3 = isOwner
+        and Color3.fromRGB(40, 34, 20)
+        or (isMe and Color3.fromRGB(30, 40, 60) or PC_ROW_TOP)
+    bubble.BackgroundTransparency = 0.15
+    bubble.BorderSizePixel = 0
+    bubble.ZIndex = 6
+    bubble.LayoutOrder = isMe and 1 or 2   -- bubble di kanan kalau kita
+    bubble.Parent = row
 
-                local bubbleCorner = Instance.new("UICorner")
-                bubbleCorner.CornerRadius = UDim.new(0, 10)
-                bubbleCorner.Parent = bubble
+    local bubbleCorner = Instance.new("UICorner")
+    bubbleCorner.CornerRadius = UDim.new(0, 10)
+    bubbleCorner.Parent = bubble
 
-                local bubbleGrad = Instance.new("UIGradient")
-                bubbleGrad.Rotation = 90
-                if isOwner then
-                    bubbleGrad.Color = ColorSequence.new({
-                        ColorSequenceKeypoint.new(0, Color3.fromRGB(46, 40, 24)),
-                        ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 24, 14)),
-                    })
-                elseif isMe then
-                    bubbleGrad.Color = ColorSequence.new({
-                        ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 44, 68)),
-                        ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 28, 44)),
-                    })
-                else
-                    bubbleGrad.Color = ColorSequence.new({
-                        ColorSequenceKeypoint.new(0, PC_ROW_TOP),
-                        ColorSequenceKeypoint.new(1, PC_ROW_BOT),
-                    })
-                end
-                bubbleGrad.Parent = bubble
+    local bubbleGrad = Instance.new("UIGradient")
+    bubbleGrad.Rotation = 90
+    if isOwner then
+        bubbleGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(46, 40, 24)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(28, 24, 14)),
+        })
+    elseif isMe then
+        bubbleGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 44, 68)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 28, 44)),
+        })
+    else
+        bubbleGrad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, PC_ROW_TOP),
+            ColorSequenceKeypoint.new(1, PC_ROW_BOT),
+        })
+    end
+    bubbleGrad.Parent = bubble
 
-                local bubbleStroke = Instance.new("UIStroke")
-                bubbleStroke.Thickness = 1
-                bubbleStroke.Transparency = 0.6
-                if isOwner then
-                    bubbleStroke.Color = Color3.fromRGB(255, 200, 80)
-                elseif isMe then
-                    bubbleStroke.Color = PC_ACCENT2
-                else
-                    bubbleStroke.Color = PC_BORDER
-                end
-                bubbleStroke.Parent = bubble
+    local bubbleStroke = Instance.new("UIStroke")
+    bubbleStroke.Thickness = 1
+    bubbleStroke.Transparency = 0.6
+    if isOwner then
+        bubbleStroke.Color = Color3.fromRGB(255, 200, 80)
+    elseif isMe then
+        bubbleStroke.Color = PC_ACCENT2
+    else
+        bubbleStroke.Color = PC_BORDER
+    end
+    bubbleStroke.Parent = bubble
 
-                local bp = Instance.new("UIPadding")
-                bp.PaddingTop = UDim.new(0, 6)
-                bp.PaddingBottom = UDim.new(0, 6)
-                bp.PaddingLeft = UDim.new(0, 10)
-                bp.PaddingRight = UDim.new(0, 10)
-                bp.Parent = bubble
+    local bp = Instance.new("UIPadding")
+    bp.PaddingTop = UDim.new(0, 6)
+    bp.PaddingBottom = UDim.new(0, 6)
+    bp.PaddingLeft = UDim.new(0, 10)
+    bp.PaddingRight = UDim.new(0, 10)
+    bp.Parent = bubble
 
-                local bl = Instance.new("UIListLayout")
-                bl.Padding = UDim.new(0, 2)
-                bl.SortOrder = Enum.SortOrder.LayoutOrder
-                bl.Parent = bubble
+    local bl = Instance.new("UIListLayout")
+    bl.Padding = UDim.new(0, 2)
+    bl.SortOrder = Enum.SortOrder.LayoutOrder
+    bl.Parent = bubble
 
-                                -- Name + time (pakai UIListLayout biar owner tag nempel ke nama)
-                local nameRow = Instance.new("Frame")
-                nameRow.Size = UDim2.new(1, 0, 0, 16)
-                nameRow.BackgroundTransparency = 1
-                nameRow.LayoutOrder = 1
-                nameRow.ZIndex = 7
-                nameRow.Parent = bubble
+    -- ═══════════════ NAME + TIME ROW ═══════════════
+    local nameRow = Instance.new("Frame")
+    nameRow.Size = UDim2.new(1, 0, 0, 16)
+    nameRow.BackgroundTransparency = 1
+    nameRow.LayoutOrder = 1
+    nameRow.ZIndex = 7
+    nameRow.Parent = bubble
 
-                local nameRowLayout = Instance.new("UIListLayout")
-                nameRowLayout.FillDirection = Enum.FillDirection.Horizontal
-                nameRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
-                nameRowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
-                nameRowLayout.Padding = UDim.new(0, 6)
-                nameRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
-                nameRowLayout.Parent = nameRow
+    local nameRowLayout = Instance.new("UIListLayout")
+    nameRowLayout.FillDirection = Enum.FillDirection.Horizontal
+    nameRowLayout.VerticalAlignment = Enum.VerticalAlignment.Center
+    nameRowLayout.HorizontalAlignment = Enum.HorizontalAlignment.Left
+    nameRowLayout.Padding = UDim.new(0, 6)
+    nameRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    nameRowLayout.Parent = nameRow
 
-                -- Nama
-                local nameLbl = Instance.new("TextLabel")
-                nameLbl.Size = UDim2.new(0, 0, 1, 0)
-                nameLbl.AutomaticSize = Enum.AutomaticSize.X
-                nameLbl.BackgroundTransparency = 1
-                nameLbl.Text = (isMe and "You" or msg.displayName)
-                nameLbl.TextColor3 = isOwner
-                    and Color3.fromRGB(255, 210, 100)
-                    or (isMe and PC_ACCENT2 or PC_ACCENT)
-                nameLbl.Font = Enum.Font.GothamBold
-                nameLbl.TextSize = IS_MOBILE and 10 or 11
-                nameLbl.TextXAlignment = Enum.TextXAlignment.Left
-                nameLbl.TextYAlignment = Enum.TextYAlignment.Center
-                nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
-                nameLbl.LayoutOrder = 1
-                nameLbl.ZIndex = 8
-                nameLbl.Parent = nameRow
+    -- Nama
+    local nameLbl = Instance.new("TextLabel")
+    nameLbl.Size = UDim2.new(0, 0, 1, 0)
+    nameLbl.AutomaticSize = Enum.AutomaticSize.X
+    nameLbl.BackgroundTransparency = 1
+    nameLbl.Text = (isMe and "You" or msg.displayName)
+    nameLbl.TextColor3 = isOwner
+        and Color3.fromRGB(255, 210, 100)
+        or (isMe and PC_ACCENT2 or PC_ACCENT)
+    nameLbl.Font = Enum.Font.GothamBold
+    nameLbl.TextSize = IS_MOBILE and 10 or 11
+    nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+    nameLbl.TextYAlignment = Enum.TextYAlignment.Center
+    nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+    nameLbl.LayoutOrder = 1
+    nameLbl.ZIndex = 8
+    nameLbl.Parent = nameRow
 
-                -- Owner tag — NEMPEL PAS DI SAMPING NAMA
-                if isOwner then
-                    local ownerTag = Instance.new("TextLabel")
-                    ownerTag.Size = UDim2.new(0, 0, 0, 14)
-                    ownerTag.AutomaticSize = Enum.AutomaticSize.X
-                    ownerTag.BackgroundTransparency = 1
-                    ownerTag.Text = "👑 OWNER"
-                    ownerTag.TextColor3 = Color3.fromRGB(255, 200, 80)
-                    ownerTag.Font = Enum.Font.GothamBold
-                    ownerTag.TextSize = IS_MOBILE and 8 or 9
-                    ownerTag.TextXAlignment = Enum.TextXAlignment.Left
-                    ownerTag.TextYAlignment = Enum.TextYAlignment.Center
-                    ownerTag.LayoutOrder = 2
-                    ownerTag.ZIndex = 8
-                    ownerTag.Parent = nameRow
-                end
+    -- Owner tag
+    if isOwner then
+        local ownerTag = Instance.new("TextLabel")
+        ownerTag.Size = UDim2.new(0, 0, 0, 14)
+        ownerTag.AutomaticSize = Enum.AutomaticSize.X
+        ownerTag.BackgroundTransparency = 1
+        ownerTag.Text = "👑 OWNER"
+        ownerTag.TextColor3 = Color3.fromRGB(255, 200, 80)
+        ownerTag.Font = Enum.Font.GothamBold
+        ownerTag.TextSize = IS_MOBILE and 8 or 9
+        ownerTag.TextXAlignment = Enum.TextXAlignment.Left
+        ownerTag.TextYAlignment = Enum.TextYAlignment.Center
+        ownerTag.LayoutOrder = 2
+        ownerTag.ZIndex = 8
+        ownerTag.Parent = nameRow
+    end
 
-                -- Time (dorong ke kanan pakai spacer)
-                local timeSpacer = Instance.new("Frame")
-                timeSpacer.Size = UDim2.new(1, 0, 1, 0)
-                timeSpacer.BackgroundTransparency = 1
-                timeSpacer.LayoutOrder = 3
-                timeSpacer.ZIndex = 7
-                timeSpacer.Parent = nameRow
+    -- Spacer + time
+    local timeSpacer = Instance.new("Frame")
+    timeSpacer.Size = UDim2.new(1, 0, 1, 0)
+    timeSpacer.BackgroundTransparency = 1
+    timeSpacer.LayoutOrder = 3
+    timeSpacer.ZIndex = 7
+    timeSpacer.Parent = nameRow
 
-                local timeLbl = Instance.new("TextLabel")
-                timeLbl.Size = UDim2.new(0, 0, 1, 0)
-                timeLbl.AutomaticSize = Enum.AutomaticSize.X
-                timeLbl.BackgroundTransparency = 1
-                timeLbl.Text = msg.time
-                timeLbl.TextColor3 = Color3.fromRGB(140, 160, 190)
-                timeLbl.Font = Enum.Font.GothamSemibold
-                timeLbl.TextSize = IS_MOBILE and 8 or 9
-                timeLbl.TextXAlignment = Enum.TextXAlignment.Right
-                timeLbl.TextYAlignment = Enum.TextYAlignment.Center
-                timeLbl.LayoutOrder = 4
-                timeLbl.ZIndex = 8
-                timeLbl.Parent = nameRow
+    local timeLbl = Instance.new("TextLabel")
+    timeLbl.Size = UDim2.new(0, 0, 1, 0)
+    timeLbl.AutomaticSize = Enum.AutomaticSize.X
+    timeLbl.BackgroundTransparency = 1
+    timeLbl.Text = msg.time
+    timeLbl.TextColor3 = Color3.fromRGB(140, 160, 190)
+    timeLbl.Font = Enum.Font.GothamSemibold
+    timeLbl.TextSize = IS_MOBILE and 8 or 9
+    timeLbl.TextXAlignment = Enum.TextXAlignment.Right
+    timeLbl.TextYAlignment = Enum.TextYAlignment.Center
+    timeLbl.LayoutOrder = 4
+    timeLbl.ZIndex = 8
+    timeLbl.Parent = nameRow
 
-                -- Body
-                local bodyLbl = Instance.new("TextLabel")
-                bodyLbl.Size = UDim2.new(1, 0, 0, 0)
-                bodyLbl.AutomaticSize = Enum.AutomaticSize.Y
-                bodyLbl.BackgroundTransparency = 1
-                bodyLbl.Text = msg.text
-                bodyLbl.TextColor3 = Color3.fromRGB(230, 240, 255)
-                bodyLbl.Font = Enum.Font.GothamSemibold
-                bodyLbl.TextSize = IS_MOBILE and 10 or 11
-                bodyLbl.TextWrapped = true
-                bodyLbl.TextXAlignment = Enum.TextXAlignment.Left
-                bodyLbl.TextYAlignment = Enum.TextYAlignment.Top
-                bodyLbl.LayoutOrder = 2
-                bodyLbl.ZIndex = 7
-                bodyLbl.Parent = bubble
+    -- Body
+    local bodyLbl = Instance.new("TextLabel")
+    bodyLbl.Size = UDim2.new(1, 0, 0, 0)
+    bodyLbl.AutomaticSize = Enum.AutomaticSize.Y
+    bodyLbl.BackgroundTransparency = 1
+    bodyLbl.Text = msg.text
+    bodyLbl.TextColor3 = Color3.fromRGB(230, 240, 255)
+    bodyLbl.Font = Enum.Font.GothamSemibold
+    bodyLbl.TextSize = IS_MOBILE and 10 or 11
+    bodyLbl.TextWrapped = true
+    bodyLbl.TextXAlignment = Enum.TextXAlignment.Left
+    bodyLbl.TextYAlignment = Enum.TextYAlignment.Top
+    bodyLbl.LayoutOrder = 2
+    bodyLbl.ZIndex = 7
+    bodyLbl.Parent = bubble
 
-                scrollBottom()
-            end
+    scrollBottom()
+end
 
             -- Hydrate
             for _, m in ipairs(Shared.LiveChat_Messages) do
