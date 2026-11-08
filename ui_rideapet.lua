@@ -1,5 +1,5 @@
 -- ============================================================
--- VRILZHUB UI — RIDE A PET v3.0 (AUTO-DETECT PC & MOBILE)
+-- VRILZHUB UI — RIDE A PET v3.1 (AUTO-DETECT PC & MOBILE)
 -- PC: 800x580 | Mobile: 88% x 78% viewport
 -- ============================================================
 
@@ -4906,7 +4906,7 @@ end)
     subtitle.Size = UDim2.new(0, 300, 0, 14)
     subtitle.Position = UDim2.fromOffset(IS_MOBILE and 48 or 58, IS_MOBILE and 26 or 28)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "Ride a Pet · v3.0"
+    subtitle.Text = "Ride a Pet · v3.1"
     subtitle.TextColor3 = C.Muted
     subtitle.Font = Enum.Font.GothamSemibold
     subtitle.TextSize = IS_MOBILE and 9 or 10
@@ -5931,7 +5931,7 @@ do
     local updateCard, updateContent = makeCard(infoLeft, "📢 UPDATE INFORMATION", 2)
 
     local infoLines = {
-        "Version        : 3.0",
+        "Version        : 3.1",
         "Last Update    : 02 Nov 2026",
         "Status         : Online ✅",
         "Changelog      : Fly Chard, Webhook, Auto Crash",
@@ -6016,9 +6016,27 @@ do
     discordBtnCorner.CornerRadius = UDim.new(0, 8)
     discordBtnCorner.Parent = discordBtn
 
+        local discordResetThread = nil
+
     discordBtn.MouseButton1Click:Connect(function()
         pcall(function() setclipboard(DISCORD_LINK) end)
-        notify("✓ Discord link copied!", "success")
+
+        -- Ubah teks tombol jadi COPIED!
+        discordBtn.Text = "[ COPIED! ]"
+
+        -- Kalau spam klik → reset timer dulu, biar 3 detik dihitung dari klik terakhir
+        if discordResetThread then
+            task.cancel(discordResetThread)
+            discordResetThread = nil
+        end
+
+        -- 3 detik lagi balik ke CLICK TO JOIN
+        discordResetThread = task.delay(3, function()
+            if discordBtn and discordBtn.Parent then
+                discordBtn.Text = "[ CLICK TO JOIN ]"
+            end
+            discordResetThread = nil
+        end)
     end)
 end
 
@@ -7673,7 +7691,7 @@ end, "WebhookMentionEveryone")
                             },
                         },
                                 footer = {
-                        text = "🏆 VRILZHUB PLATINUM  •  v3.0",
+                        text = "🏆 VRILZHUB PLATINUM  •  v3.1",
                         },
                         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
                     }}
@@ -10367,7 +10385,7 @@ local A_Links = {
 -- Changelog VRILZHUB
 local A_Changelog = {
     {
-        Version = "v3.0",
+        Version = "v3.1",
         Date = "19 Okt 2026",
         Changes = {
             "Fly Chard (Character Fly)",
