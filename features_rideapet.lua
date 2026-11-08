@@ -1461,7 +1461,34 @@ local FLYING_BLACKLIST = {
     "hydra", "skeletal", "headless", "volkaris",
 }
 
+-- ⭐ Khusus area Dark Spirit / Boss
+local BOSS_FLYING_PETS = { "phoenix", "griffin", "dragon", "hydra" }
+
+local function isInBossArea()
+    if Workspace:FindFirstChild("BossFight") then return true end
+    if Workspace:FindFirstChild("DarkSpiritScene") then return true end
+    local map = Workspace:FindFirstChild("Map")
+    if map and map:FindFirstChild("Heaven") then
+        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if r and r.Position.Y > 5000 then return true end
+    end
+    return false
+end
+
+local function isBossFlyingPet(petName)
+    local n = string.lower(petName)
+    for _, kw in ipairs(BOSS_FLYING_PETS) do
+        if string.find(n, kw, 1, true) then return true end
+    end
+    return false
+end
+
 local function isFlyingPet(petName)
+    -- ⭐ DI AREA BOSS: Phoenix/Griffin/Dragon/Hydra BUKAN flying (boleh dipake)
+    if isInBossArea() and isBossFlyingPet(petName) then
+        return false
+    end
+    -- ⭐ DI LUAR AREA BOSS: semua blacklist normal
     local n = string.lower(petName)
     for _, kw in ipairs(FLYING_BLACKLIST) do
         if string.find(n, kw, 1, true) then return true end
@@ -1478,9 +1505,10 @@ local AutoRideState = {
     Status = "Idle",
     SelectedPet = "Auto (Best KG)",
     HasRiddenOnce = false,
-    DismountTime = 0,           -- ⭐ BARU: waktu terakhir detect turun
-    DismountGrace = 1.5,        -- ⭐ BARU: grace period konfirmasi turun
-    ForceAction = false,        -- ⭐ BARU: trigger langsung eksekusi
+    DismountTime = 0,
+    DismountGrace = 1.5,
+    ForceAction = false,
+    _wasInBossArea = false,
 }
 
 -- ⭐ SAFE getPetKG — handle kalo fungsi asli gak ada
@@ -1537,15 +1565,35 @@ local function findBestPetForRide()
     local backpack = LocalPlayer:FindFirstChild("Backpack")
     if not backpack then return nil end
 
+    local inBossArea = isInBossArea()
+
+    -- ⭐ DI AREA BOSS: PRIORITAS 4 PET TERBANG
+    if inBossArea then
+        local best, bestKG = nil, -1
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") then
+                local pname = tool:GetAttribute("PetName") or tool.Name
+                if isBossFlyingPet(pname) then
+                    local kg = getPetKG(tool) or 0
+                    if kg > bestKG then
+                        bestKG = kg
+                        best = tool
+                    end
+                end
+            end
+        end
+        -- ⭐ Kalo ada Phoenix/Griffin/Dragon/Hydra → langsung pake itu
+        if best then return best end
+        -- ⭐ Kalo gak ada 4 itu → fallback ke best KG pet darat
+    end
+
+    -- ⭐ DI WORKSPACE UTAMA / FALLBACK: best KG pet darat
     local best, bestKG = nil, -1
     for _, tool in ipairs(backpack:GetChildren()) do
         if tool:IsA("Tool") then
-            -- ⭐ FLEKSIBEL: pake PetName kalo ada, fallback ke Name
             local pname = tool:GetAttribute("PetName") or tool.Name
-
-            -- ⭐ Skip flying pet
             if not isFlyingPet(pname) then
-                local kg = getPetKG(tool) or 0   -- ⭐ guard nil
+                local kg = getPetKG(tool) or 0
                 if kg > bestKG then
                     bestKG = kg
                     best = tool
@@ -1553,7 +1601,6 @@ local function findBestPetForRide()
             end
         end
     end
-
     return best
 end
 
@@ -1592,6 +1639,23 @@ function Features.startAutoRidePet()
                 continue
             end
 
+            -- ⭐ DETEKSI AREA BOSS — PAKSA RE-RIDE KALO DI AREA DARK SPIRIT
+            local inBossNow = isInBossArea()
+            if inBossNow ~= AutoRideState._wasInBossArea then
+                AutoRideState._wasInBossArea = inBossNow
+                AutoRideState.HasRiddenOnce = false
+                AutoRideState.DismountTime = 0
+                AutoRideState.LastRideTime = 0
+                AutoRideState.ForceAction = true
+                if Shared.Notify then
+                    if inBossNow then
+                        Shared.Notify("⚔️ Area Boss — auto re-ride pet terbang", "info")
+                    else
+                        Shared.Notify("🏠 Balik base — auto re-ride pet darat", "info")
+                    end
+                end
+            end
+                
             -- ═══════════════════════════════════════════════════════
             -- FORCE ACTION — skip semua cek, langsung eksekusi
             -- ═══════════════════════════════════════════════════════
@@ -6791,15 +6855,6 @@ end
 function Features.setAutoBossEnabled(v)
     AutoBossState.Enabled = v
     if v then
-        pcall(function()
-            print("=== AUTO BOSS DEBUG ===")
-            print("[DateTime]:", DateTime.now():FormatLocalTime("%H:%M:%S %d/%m/%Y", "en-us"))
-            print("[os.date()]:", os.date("%H:%M:%S %d/%m/%Y"))
-            local _, _, _, h, mi = ab_GetComponents(ab_Now())
-            print("[Hour:Minute Component]:", h, mi)
-            print("======================")
-        end)
-
         AutoBossState.Status = "▶️ Starting..."
         AutoBossState.Phase = "idle"
         AutoBossState.ExecuteAt = 0
@@ -7874,6 +7929,5 @@ end
     _G.VRILZ_Features = Features
 _G.VRILZ_Shared = Shared
 _G.VRILZ_UI_Shared = Shared
-print("[VRILZHUB] Ride a Pet Features v3.8 loaded")
 
 return Features
