@@ -1464,14 +1464,59 @@ local FLYING_BLACKLIST = {
 -- ⭐ Khusus area Dark Spirit / Boss
 local BOSS_FLYING_PETS = { "phoenix", "griffin", "dragon", "hydra" }
 
+-- ═══════════════════════════════════════════════════════════
+-- FIX: isInBossArea() — akurat, ANTI false positive
+-- TRUE cuma kalau BENER-BENER di area Dark Spirit boss
+-- ═══════════════════════════════════════════════════════════
 local function isInBossArea()
+    -- ⭐ Check 1: BossFight folder — PALING AKURAT (cuma ada pas boss aktif)
     if Workspace:FindFirstChild("BossFight") then return true end
-    if Workspace:FindFirstChild("DarkSpiritScene") then return true end
-    local map = Workspace:FindFirstChild("Map")
-    if map and map:FindFirstChild("Heaven") then
-        local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-        if r and r.Position.Y > 5000 then return true end
+
+    -- ⭐ Check 2: DarkSpiritScene — cuma valid kalau ada ring hardnorth di dalamnya
+    -- (folder sering preload di base, jadi gak bisa langsung percaya)
+    local dss = Workspace:FindFirstChild("DarkSpiritScene")
+    if dss then
+        -- Cek apakah ada ring hardnorth DI DALAM DarkSpiritScene
+        for _, c in ipairs(dss:GetChildren()) do
+            if c:IsA("Model") and c.Name:lower():find("hardnorth", 1, true) then
+                return true
+            end
+        end
+        -- Cek juga descendant (1 level aja, jangan full descendants)
+        for _, c in ipairs(dss:GetChildren()) do
+            if c:IsA("Folder") or c:IsA("Model") then
+                for _, cc in ipairs(c:GetChildren()) do
+                    if cc:IsA("Model") and cc.Name:lower():find("hardnorth", 1, true) then
+                        return true
+                    end
+                end
+            end
+        end
     end
+
+    -- ⭐ Check 3: Player attribute — kalau game set attribute khusus
+    if LocalPlayer:GetAttribute("InDarkSpirit") == true then return true end
+    if LocalPlayer:GetAttribute("InBossArea") == true then return true end
+    if LocalPlayer:GetAttribute("InBossFight") == true then return true end
+
+    -- ⭐ Check 4: Posisi — harus deket ring boss (radius 500 studs)
+    -- BUKAN cuma Y > 5000 (itu false positive di Heaven base)
+    local r = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+    if r then
+        -- Scan ring hardnorth di Workspace.Rings (kalo ada folder khusus)
+        local ringsFolder = Workspace:FindFirstChild("Rings")
+        if ringsFolder then
+            for _, c in ipairs(ringsFolder:GetChildren()) do
+                if c:IsA("Model") and c.Name:lower():find("hardnorth", 1, true) then
+                    local ok, pivot = pcall(function() return c:GetPivot() end)
+                    if ok and (pivot.Position - r.Position).Magnitude < 500 then
+                        return true
+                    end
+                end
+            end
+        end
+    end
+
     return false
 end
 
