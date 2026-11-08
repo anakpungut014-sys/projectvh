@@ -7568,8 +7568,8 @@ end
             -- ═══════════════════════════════════════════════════════════
 
             local content = Instance.new("Frame")
-            content.Size = UDim2.new(1, 0, 1, -lcHeaderH - 8)
-            content.Position = UDim2.new(0, 0, 0, lcHeaderH + 8)
+            content.Size = UDim2.fromScale(1, 1)
+            content.Position = UDim2.new(0, 0, 0, 0)
             content.BackgroundTransparency = 1
             content.ZIndex = 2
             content.Parent = liveChatPage
