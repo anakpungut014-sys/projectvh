@@ -7991,6 +7991,31 @@ heroCard.Parent = showFrame
             sendBtn.ZIndex = 5
             sendBtn.Parent = inputBg
 
+            -- ⭐ COOLDOWN 10 DETIK + TIMER HITUNG MUNDUR
+            local CHAT_COOLDOWN = 10
+            local cooldownUntil = 0
+            local cooldownRunning = false
+
+            -- Timer label — tepat di kiri tombol SEND, selaras, gak rebutan
+            local cooldownLbl = Instance.new("TextLabel")
+            cooldownLbl.Name = "CooldownTimer"
+            cooldownLbl.AnchorPoint = Vector2.new(1, 0.5)
+            cooldownLbl.Position = UDim2.new(1, -62 - 6, 0.5, 0)  -- 62 = lebar SEND, gap 6px
+            cooldownLbl.Size = UDim2.fromOffset(44, 20)
+            cooldownLbl.BackgroundTransparency = 1
+            cooldownLbl.Text = ""
+            cooldownLbl.TextColor3 = Color3.fromRGB(255, 180, 80)
+            cooldownLbl.Font = Enum.Font.GothamBold
+            cooldownLbl.TextSize = IS_MOBILE and 11 or 10
+            cooldownLbl.TextXAlignment = Enum.TextXAlignment.Right
+            cooldownLbl.TextYAlignment = Enum.TextYAlignment.Center
+            cooldownLbl.Visible = false
+            cooldownLbl.ZIndex = 6
+            cooldownLbl.Parent = inputBg
+
+            -- Geser box biar gak ketiban timer
+            box.Size = UDim2.new(1, -(72 + 50), 1, 0)  -- 72 = SEND + gap, 50 = timer + gap
+
             local sc = Instance.new("UICorner")
             sc.CornerRadius = UDim.new(0, 7)
             sc.Parent = sendBtn
@@ -8251,16 +8276,48 @@ heroCard.Parent = showFrame
             end)
 
             -- Send
-            local function doSend()
+                        local function doSend()
+                local now = os.clock()
+                if now < cooldownUntil then
+                    local left = math.ceil(cooldownUntil - now)
+                    notify("⏳ Tunggu " .. left .. " detik lagi", "warning")
+                    return
+                end
+
                 local text = box.Text
                 if text == "" then return end
+
                 sendBtn.Text = "..."
+                sendBtn.Active = false
+
                 task.spawn(function()
                     local ok, err = ChatClient.send(text)
                     if ok then
                         box.Text = ""
+
+                        -- Mulai cooldown 10 detik
+                        cooldownUntil = os.clock() + CHAT_COOLDOWN
+                        cooldownRunning = true
+                        cooldownLbl.Visible = true
+
+                        -- Timer hitung mundur
+                        task.spawn(function()
+                            while cooldownRunning do
+                                local left = math.ceil(cooldownUntil - os.clock())
+                                if left <= 0 then
+                                    cooldownLbl.Visible = false
+                                    cooldownLbl.Text = ""
+                                    cooldownRunning = false
+                                    sendBtn.Active = true
+                                    break
+                                end
+                                cooldownLbl.Text = tostring(left) .. "s"
+                                task.wait(0.2)
+                            end
+                        end)
                     else
                         notify("Chat: " .. tostring(err), "error")
+                        sendBtn.Active = true
                     end
                     sendBtn.Text = IS_MOBILE and "▶" or "SEND"
                 end)
