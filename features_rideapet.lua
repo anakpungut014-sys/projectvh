@@ -356,16 +356,14 @@ function Features.startAntiAFK()
     Features._antiAFKStarted = true
 
     local VirtualUser = game:GetService("VirtualUser")
+    local UserInputService = game:GetService("UserInputService")
     if not Shared then Shared = {} end
     if Shared.AntiAFK_Enabled == nil then Shared.AntiAFK_Enabled = true end
 
-    local hasMouseMove = (type(mousemoverel) == "function")
-
-    -- ⭐ GUARD: cegah anti-AFK action dobel (race condition)
+    -- ⭐ State lokal, aman dari race condition
     local _actionBusy = false
-    local _lastActionTime = 0
 
-    -- ⭐ Cek fitur lain yang lagi aktif
+    -- ⭐ Helper: cek fitur lain
     local function isAnyFeatureBusy()
         if Shared.AutoFarm_Enabled then return true end
         if Shared.AutoSteal_Enabled then return true end
@@ -385,84 +383,87 @@ function Features.startAntiAFK()
         return false
     end
 
-    -- ⭐ ACTION (TANPA task.wait block di dalam event handler)
+    -- ⭐ ACTION: NGASIH INPUT BENERAN (movement + jump + mouse)
     local function doAntiAFKAction()
         if Shared.AntiAFK_Enabled == false then return end
-        if _actionBusy then return end          -- ⭐ anti-double-fire
+        if _actionBusy then return end
         _actionBusy = true
 
-        -- throttle: minimal 30s antar action (biar gak spam server)
-        if os.clock() - _lastActionTime < 30 then
-            _actionBusy = false
-            return
-        end
-        _lastActionTime = os.clock()
-
-        -- 1) Capture + Button2 (jalan synchronously, tanpa wait)
+        -- ⭐ 1) VirtualUser capture (wajib, biar Roblox detect activity)
         pcall(function()
             VirtualUser:CaptureController()
             VirtualUser:Button2Down(Vector2.new(0, 0))
+            task.wait(0.05)
             VirtualUser:Button2Up(Vector2.new(0, 0))
         end)
 
-        -- 2) Gerak karakter (HANYA kalau aman)
+        -- ⭐ 2) MOVEMENT BENERAN — gerak karakter, BUKAN cuma mouse
         if not isAnyFeatureBusy() then
             local char = LocalPlayer.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
             if hum and hum.Health > 0 and not hum.SeatPart and not hum.PlatformStand then
-                pcall(function()
-                    hum:Move(Vector3.new(0, 0, -1), false)
-                end)
-                -- Reset gerak setelah 0.1s (task.spawn biar gak block)
-                task.delay(0.1, function()
+                -- Gerak ke 4 arah bergantian biar server detect movement
+                local dirs = {
+                    Vector3.new(0, 0, -1),
+                    Vector3.new(1, 0, 0),
+                    Vector3.new(0, 0, 1),
+                    Vector3.new(-1, 0, 0),
+                }
+                for _, d in ipairs(dirs) do
                     local h = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-                    if h and not h.SeatPart then
-                        pcall(function() h:Move(Vector3.new(0, 0, 0), false) end)
-                    end
-                end)
+                    if not h or h.SeatPart or h.PlatformStand then break end
+                    pcall(function() h:Move(d, false) end)
+                    task.wait(0.15)
+                end
+                -- Reset movement
+                local h2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                if h2 and not h2.SeatPart then
+                    pcall(function() h2:Move(Vector3.new(0,0,0), false) end)
+                end
             end
         end
 
-        -- 3) Mouse move (cuma kalau ada + gak busuk)
-        if hasMouseMove then
-            task.spawn(function()
-                pcall(function() mousemoverel(5, 5) end)
-                task.wait(0.05)
-                pcall(function() mousemoverel(-5, -5) end)
-            end)
+        -- ⭐ 3) Jump sekali (kalo aman) — bikin server detect "player aktif"
+        if not isAnyFeatureBusy() then
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum and hum.Health > 0 and not hum.SeatPart and not hum.PlatformStand then
+                pcall(function() hum.Jump = true end)
+            end
         end
 
-        task.delay(0.2, function() _actionBusy = false end)
+        -- ⭐ 4) Mouse move (kalo ada)
+        if type(mousemoverel) == "function" then
+            pcall(function() mousemoverel(10, 10) end)
+            task.wait(0.05)
+            pcall(function() mousemoverel(-10, -10) end)
+        end
+
+        task.delay(0.3, function() _actionBusy = false end)
     end
 
-    -- ═══ 1. IDLED LISTENER (yang paling penting) ═══
-    -- ⭐ JANGAN pakai while true + task.wait DI DALAM handler
-    -- Langsung connect sekali, biar Roblox yang manage
-    task.spawn(function()
-        if not LocalPlayer then return end
-        LocalPlayer.Idled:Connect(function()
-            -- ⭐ Semua action di-defer biar gak block event handler
-            task.spawn(function()
-                if Shared.AntiAFK_Enabled == false then return end
-                doAntiAFKAction()
-            end)
+    -- ═══ 1. IDLED LISTENER — TANPA THROTTLE 30s ═══
+    -- ⭐ Roblox fire Idled ~20s sekali. Jangan pernah skip.
+    LocalPlayer.Idled:Connect(function()
+        task.spawn(function()
+            if Shared.AntiAFK_Enabled == false then return end
+            doAntiAFKAction()
         end)
     end)
 
-    -- ═══ 2. PERIODIC 90s (bukan 60s) — kasih napas ═══
+    -- ═══ 2. PERIODIC 60s — lebih aman dari 90s ═══
     task.spawn(function()
-        task.wait(15) -- delay awal biar gak langsung action pas join
+        task.wait(20) -- delay awal
         while true do
-            task.wait(90)
+            task.wait(60)
             if Shared.AntiAFK_Enabled == false then continue end
-            task.spawn(doAntiAFKAction)
+            doAntiAFKAction()  -- ⭐ LANGSUNG panggil, jangan task.spawn (biar gak numpuk)
         end
     end)
 
-    -- ═══ 3. RESPAWN SAFETY — reset state pas mati/respawn ═══
+    -- ═══ 3. RESPAWN SAFETY ═══
     LocalPlayer.CharacterAdded:Connect(function()
         _actionBusy = false
-        _lastActionTime = 0
     end)
 end
 
