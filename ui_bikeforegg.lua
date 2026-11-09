@@ -4851,7 +4851,7 @@ do
 end
 
 -- ============================================================
--- 🥚 EGG TAB — No Status, Cuma Zone + Toggle
+-- 🥚 EGG TAB — Zone + Rarity Filter + Auto Steal
 -- ============================================================
 do
     local eggPage, eggLeft, eggRight = createTwoColumnPage("Egg")
@@ -4860,17 +4860,46 @@ do
     local FEAT = _G.VRILZ_Features
     local ST   = FEAT and FEAT.EggState
 
-    -- ═══ KIRI: ZONE FILTER ═══
-    local zoneCard, zoneContent = makeCard(eggLeft, "🎯 ZONE FILTER", 1)
+    -- ═══ KIRI: ZONE + RARITY FILTER ═══
+    local filterCard, filterContent = makeCard(eggLeft, "🎯 FILTER", 1)
 
-    local zoneFrame = Instance.new("Frame")
-    zoneFrame.Size = UDim2.new(1, 0, 0, 0)
-    zoneFrame.AutomaticSize = Enum.AutomaticSize.Y
-    zoneFrame.BackgroundTransparency = 1
-    zoneFrame.Parent = zoneContent
-    local zl = Instance.new("UIListLayout")
-    zl.Padding = UDim.new(0, 3)
-    zl.Parent = zoneFrame
+    -- Zone label
+    local zoneLabel = Instance.new("TextLabel")
+    zoneLabel.Size = UDim2.new(1, 0, 0, 18)
+    zoneLabel.BackgroundTransparency = 1
+    zoneLabel.Text = "Zone (multi-select):"
+    zoneLabel.TextColor3 = C.Muted
+    zoneLabel.Font = Enum.Font.GothamBold
+    zoneLabel.TextSize = CFG.FONT_MUTED
+    zoneLabel.TextXAlignment = Enum.TextXAlignment.Left
+    zoneLabel.LayoutOrder = 1
+    zoneLabel.Parent = filterContent
+    registerTheme(zoneLabel, "Muted", "TextColor3")
+
+    local zoneDropdownHolder = Instance.new("Frame")
+    zoneDropdownHolder.Size = UDim2.new(1, 0, 0, CFG.DROPDOWN_H)
+    zoneDropdownHolder.BackgroundTransparency = 1
+    zoneDropdownHolder.LayoutOrder = 2
+    zoneDropdownHolder.Parent = filterContent
+
+    -- Rarity label
+    local rarityLabel = Instance.new("TextLabel")
+    rarityLabel.Size = UDim2.new(1, 0, 0, 18)
+    rarityLabel.BackgroundTransparency = 1
+    rarityLabel.Text = "Rarity (multi-select):"
+    rarityLabel.TextColor3 = C.Muted
+    rarityLabel.Font = Enum.Font.GothamBold
+    rarityLabel.TextSize = CFG.FONT_MUTED
+    rarityLabel.TextXAlignment = Enum.TextXAlignment.Left
+    rarityLabel.LayoutOrder = 3
+    rarityLabel.Parent = filterContent
+    registerTheme(rarityLabel, "Muted", "TextColor3")
+
+    local rarityDropdownHolder = Instance.new("Frame")
+    rarityDropdownHolder.Size = UDim2.new(1, 0, 0, CFG.DROPDOWN_H)
+    rarityDropdownHolder.BackgroundTransparency = 1
+    rarityDropdownHolder.LayoutOrder = 4
+    rarityDropdownHolder.Parent = filterContent
 
     -- ═══ KANAN: AUTO STEAL ═══
     local asCard, asContent = makeCard(eggRight, "🥚 AUTO STEAL", 1)
@@ -4888,7 +4917,11 @@ do
         if not FEAT or not ST then return end
         ST.AutoSteal = v
         if v then
-            if next(ST.FilterZones) == nil then
+            local hasZone = false
+            for _, val in pairs(ST.FilterZones) do
+                if val == true then hasZone = true break end
+            end
+            if not hasZone then
                 notify("⚠️ Pilih minimal 1 zone!", "warning")
                 ST.AutoSteal = false
                 if Shared then Shared.EggAutoSteal_Enabled = false end
@@ -4902,119 +4935,57 @@ do
         end
     end, "EggAutoSteal_Enabled")
 
-    local function buildZoneList()
-        for _, c in ipairs(zoneFrame:GetChildren()) do
-            if not c:IsA("UIListLayout") then c:Destroy() end
-        end
-        if not ST then return end
+    -- Build dropdown setelah feature ready
+    task.spawn(function()
+        task.wait(1.5)
+        if not ST or not FEAT then return end
+        if not ST.Initialized then FEAT.InitEgg() end
 
-        local btnRow = Instance.new("Frame")
-        btnRow.Size = UDim2.new(1, 0, 0, 24)
-        btnRow.BackgroundTransparency = 1
-        btnRow.LayoutOrder = 1
-        btnRow.Parent = zoneFrame
-
-        local allBtn = Instance.new("TextButton")
-        allBtn.Size = UDim2.new(0.5, -2, 1, 0)
-        allBtn.BackgroundColor3 = C.Surface3
-        allBtn.Text = "☑ ALL"
-        allBtn.TextColor3 = C.Text
-        allBtn.Font = Enum.Font.GothamBold
-        allBtn.TextSize = CFG.FONT_MUTED
-        allBtn.BorderSizePixel = 0
-        allBtn.Parent = btnRow
-        local ac = Instance.new("UICorner")
-        ac.CornerRadius = UDim.new(0, 5)
-        ac.Parent = allBtn
-
-        local noneBtn = Instance.new("TextButton")
-        noneBtn.Size = UDim2.new(0.5, -2, 1, 0)
-        noneBtn.Position = UDim2.new(0.5, 2, 0, 0)
-        noneBtn.BackgroundColor3 = C.Surface3
-        noneBtn.Text = "☐ NONE"
-        noneBtn.TextColor3 = C.Text
-        noneBtn.Font = Enum.Font.GothamBold
-        noneBtn.TextSize = CFG.FONT_MUTED
-        noneBtn.BorderSizePixel = 0
-        noneBtn.Parent = btnRow
-        local nc = Instance.new("UICorner")
-        nc.CornerRadius = UDim.new(0, 5)
-        nc.Parent = noneBtn
-
+        -- ═══ ZONE DROPDOWN ═══
         local zones = {}
         for z in pairs(ST.Zones) do table.insert(zones, z) end
         table.sort(zones)
 
-        local toggles = {}
-        for i, zName in ipairs(zones) do
-            local row = Instance.new("Frame")
-            row.Size = UDim2.new(1, 0, 0, 24)
-            row.BackgroundColor3 = C.Surface3
-            row.BackgroundTransparency = 0.4
-            row.BorderSizePixel = 0
-            row.LayoutOrder = 10 + i
-            row.Parent = zoneFrame
-            registerTheme(row, "Surface3", "BackgroundColor3")
-            local rc = Instance.new("UICorner")
-            rc.CornerRadius = UDim.new(0, 4)
-            rc.Parent = row
+        local zoneItems = { "None" }
+        for _, z in ipairs(zones) do table.insert(zoneItems, z) end
 
-            local chk = Instance.new("TextLabel")
-            chk.Size = UDim2.fromOffset(22, 24)
-            chk.Position = UDim2.fromOffset(5, 0)
-            chk.BackgroundTransparency = 1
-            chk.Text = ST.FilterZones[zName] and "✓" or "○"
-            chk.TextColor3 = ST.FilterZones[zName] and C.Accent or C.Muted
-            chk.Font = Enum.Font.GothamBold
-            chk.TextSize = 13
-            chk.Parent = row
-
-            local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, -32, 1, 0)
-            lbl.Position = UDim2.fromOffset(28, 0)
-            lbl.BackgroundTransparency = 1
-            lbl.Text = zName
-            lbl.TextColor3 = ST.FilterZones[zName] and C.Text or C.Muted
-            lbl.Font = Enum.Font.GothamSemibold
-            lbl.TextSize = CFG.FONT_MUTED
-            lbl.TextXAlignment = Enum.TextXAlignment.Left
-            lbl.Parent = row
-            registerTheme(lbl, "Text", "TextColor3")
-
-            local btn = Instance.new("TextButton")
-            btn.Size = UDim2.fromScale(1, 1)
-            btn.BackgroundTransparency = 1
-            btn.Text = ""
-            btn.Parent = row
-            btn.MouseButton1Click:Connect(function()
-                local newState = not ST.FilterZones[zName]
-                if newState then ST.FilterZones[zName] = true
-                else ST.FilterZones[zName] = nil end
-                chk.Text = newState and "✓" or "○"
-                chk.TextColor3 = newState and C.Accent or C.Muted
-                lbl.TextColor3 = newState and C.Text or C.Muted
-            end)
-            toggles[zName] = {chk = chk, lbl = lbl}
+        ST.FilterZones = {}
+        for _, z in ipairs(zones) do
+            ST.FilterZones[z] = nil
         end
+        ST.FilterZones["None"] = true
 
-        allBtn.MouseButton1Click:Connect(function()
-            for zName in pairs(ST.Zones) do ST.FilterZones[zName] = true end
-            for _, ui in pairs(toggles) do
-                ui.chk.Text = "✓"; ui.chk.TextColor3 = C.Accent; ui.lbl.TextColor3 = C.Text
-            end
-        end)
-        noneBtn.MouseButton1Click:Connect(function()
-            ST.FilterZones = {}
-            for _, ui in pairs(toggles) do
-                ui.chk.Text = "○"; ui.chk.TextColor3 = C.Muted; ui.lbl.TextColor3 = C.Muted
-            end
-        end)
-    end
+        makeDropdownMulti(
+            zoneDropdownHolder,
+            zoneItems,
+            ST.FilterZones,
+            nil,
+            function() end
+        )
 
-    task.spawn(function()
-        task.wait(1.5)
-        if ST and not ST.Initialized then FEAT.InitEgg() end
-        buildZoneList()
+        -- ═══ RARITY DROPDOWN ═══
+        -- ⭐ RARITY_LIST dari lo
+        local rarityItems = {
+            "None",
+            "Common", "Uncommon", "Rare", "Epic",
+            "Legendary", "Mythic", "Secret", "Eternal", "Divine"
+        }
+
+        ST.FilterRarities = {}
+        for _, r in ipairs(rarityItems) do
+            if r ~= "None" then
+                ST.FilterRarities[r] = nil
+            end
+        end
+        ST.FilterRarities["None"] = true
+
+        makeDropdownMulti(
+            rarityDropdownHolder,
+            rarityItems,
+            ST.FilterRarities,
+            nil,
+            function() end
+        )
     end)
 end
 
@@ -6092,7 +6063,7 @@ local function renderMessage(msg)
         end
 
 registerTab("Info", "129516985087314", "Info", true)
-registerTab("Egg", "97796889305691", "Egg", false)
+registerTab("Egg", "97796889305691", "Egg", true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Settings", "97834340359225", "Settings", true)
 
