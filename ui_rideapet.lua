@@ -9252,8 +9252,7 @@ local function verifySavedKeyWithServer(key)
 end
 
 -- ============================================================
--- 🎬 LOADING SCREEN v3 — PAKAI VIDEO MP4 DARI GITHUB
--- Effect bulan/bintang/meteor dihapus. Logic loading 100% SAMA.
+-- 🌌 LOADING SCREEN v3 — CLEAN IMAGE VERSION
 -- ============================================================
 local function buildLoadingScreen(parent)
     local viewport = (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize) or Vector2.new(1280, 720)
@@ -9273,170 +9272,62 @@ local function buildLoadingScreen(parent)
     loading.ClipsDescendants = true
     loading.Parent = parent
 
+    local loadingCorner = Instance.new("UICorner")
+    loadingCorner.CornerRadius = UDim.new(0, 12)
+    loadingCorner.Parent = loading
+
+    -- ═══ IMAGE BACKGROUND ═══
+    local IMAGE_URL = "https://raw.githubusercontent.com/vrilz-vd/anime/refs/heads/main/wp11334646-anime-girl-swimsuit-wallpapers.jpe"
+    local IMAGE_CACHE = "vrilz_loading_bg_v1.png"
+
+    local function loadImage()
+        if not (writefile and isfile and getcustomasset) then
+            return nil
+        end
+        if isfile(IMAGE_CACHE) then
+            local ok, asset = pcall(getcustomasset, IMAGE_CACHE)
+            if ok and asset then return asset end
+        end
+        local ok, content = pcall(function()
+            return game:HttpGet(IMAGE_URL)
+        end)
+        if not ok or not content then return nil end
+        pcall(writefile, IMAGE_CACHE, content)
+        local ok2, asset = pcall(getcustomasset, IMAGE_CACHE)
+        if ok2 and asset then return asset end
+        return nil
+    end
+
+    local bgImage = Instance.new("ImageLabel")
+    bgImage.Name = "BgImage"
+    bgImage.Size = UDim2.fromScale(1, 1)
+    bgImage.Position = UDim2.fromScale(0, 0)
+    bgImage.BackgroundColor3 = Color3.fromRGB(8, 10, 20)
+    bgImage.BorderSizePixel = 0
+    bgImage.ScaleType = Enum.ScaleType.Crop
+    bgImage.ZIndex = 301
+    bgImage.Parent = loading
+
+    local bgAsset = loadImage()
+    if bgAsset then
+        bgImage.Image = bgAsset
+    end
+
+    -- Dark overlay biar text kebaca
+    local overlay = Instance.new("Frame")
+    overlay.Size = UDim2.fromScale(1, 1)
+    overlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
+    overlay.BackgroundTransparency = 0.35
+    overlay.BorderSizePixel = 0
+    overlay.ZIndex = 302
+    overlay.Parent = loading
+
     -- ═══ STROKE (neon cyan) ═══
     local stroke1 = Instance.new("UIStroke")
     stroke1.Color = Color3.fromRGB(80, 200, 255)
     stroke1.Thickness = 2.5
     stroke1.Transparency = 0.1
     stroke1.Parent = loading
-
-    local stroke2 = Instance.new("UIStroke")
-    stroke2.Color = Color3.fromRGB(255, 255, 255)
-    stroke2.Thickness = 1
-    stroke2.Transparency = 0.8
-    stroke2.Parent = loading
-
-    -- ═══ GITHUB MP4 VIDEO BACKGROUND ═══
-    -- ⚠️ Catatan: Roblox ImageLabel TIDAK support MP4.
-    -- Kode ini tetap jalan, tapi background video tidak akan muncul (fallback ke warna gelap).
-    -- Logic loading tetap sama 100%.
-    local bgImage = Instance.new("ImageLabel")
-    bgImage.Name = "LoadingBackgroundVideo"
-    bgImage.Size = UDim2.fromScale(1, 1)
-    bgImage.Position = UDim2.fromScale(0, 0)
-    bgImage.BackgroundTransparency = 1
-    bgImage.ScaleType = Enum.ScaleType.Crop
-    bgImage.ZIndex = 301
-    bgImage.Parent = loading
-
-    local GITHUB_LOADING_URL = "https://raw.githubusercontent.com/vrilz-vd/anime/main/ukinami-yuzuha-bikini.3840x2160.mp4"
-    local GITHUB_LOADING_CACHE = "vrilz_loading_bg_video.mp4"
-
-    local function loadGithubLoadingVideo()
-        if not (writefile and isfile and getcustomasset) then
-            return nil
-        end
-        if isfile(GITHUB_LOADING_CACHE) then
-            local ok, asset = pcall(getcustomasset, GITHUB_LOADING_CACHE)
-            if ok and asset then return asset end
-        end
-        local ok, content = pcall(function()
-            return game:HttpGet(GITHUB_LOADING_URL)
-        end)
-        if not ok or not content then return nil end
-        pcall(writefile, GITHUB_LOADING_CACHE, content)
-        local ok2, asset = pcall(getcustomasset, GITHUB_LOADING_CACHE)
-        if ok2 and asset then return asset end
-        return nil
-    end
-
-    local bgAsset = loadGithubLoadingVideo()
-    if bgAsset then
-        bgImage.Image = bgAsset
-    else
-        bgImage.Image = ""
-        bgImage.BackgroundColor3 = Color3.fromRGB(10, 15, 30)
-    end
-
-    -- ═══ DARK OVERLAY (biar teks kebaca) ═══
-    local darkOverlay = Instance.new("Frame")
-    darkOverlay.Size = UDim2.fromScale(1, 1)
-    darkOverlay.Position = UDim2.fromScale(0, 0)
-    darkOverlay.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    darkOverlay.BackgroundTransparency = 0.45
-    darkOverlay.BorderSizePixel = 0
-    darkOverlay.ZIndex = 302
-    darkOverlay.Parent = loading
-
-    -- ═══ VH LOGO (3D + petir) ═══
-    local vHolder = Instance.new("Frame")
-    vHolder.Size = UDim2.fromScale(1, 0.5)
-    vHolder.Position = UDim2.fromScale(0, 0.18)
-    vHolder.BackgroundTransparency = 1
-    vHolder.ZIndex = 305
-    vHolder.Parent = loading
-
-    local vGlow = Instance.new("TextLabel")
-    vGlow.Size = UDim2.fromScale(1, 1)
-    vGlow.BackgroundTransparency = 1
-    vGlow.Text = "V"
-    vGlow.TextColor3 = Color3.fromRGB(100, 200, 255)
-    vGlow.TextTransparency = 0.3
-    vGlow.Font = Enum.Font.GothamBlack
-    vGlow.TextSize = 1
-    vGlow.ZIndex = 304
-    vGlow.Parent = vHolder
-
-    local vRed = Instance.new("TextLabel")
-    vRed.Size = UDim2.fromScale(1, 1)
-    vRed.Position = UDim2.fromOffset(-2, 0)
-    vRed.BackgroundTransparency = 1
-    vRed.Text = "V"
-    vRed.TextColor3 = Color3.fromRGB(255, 0, 0)
-    vRed.TextTransparency = 0.6
-    vRed.Font = Enum.Font.GothamBlack
-    vRed.TextSize = 1
-    vRed.ZIndex = 305
-    vRed.Parent = vHolder
-
-    local vBlue = Instance.new("TextLabel")
-    vBlue.Size = UDim2.fromScale(1, 1)
-    vBlue.Position = UDim2.fromOffset(2, 0)
-    vBlue.BackgroundTransparency = 1
-    vBlue.Text = "V"
-    vBlue.TextColor3 = Color3.fromRGB(0, 100, 255)
-    vBlue.TextTransparency = 0.6
-    vBlue.Font = Enum.Font.GothamBlack
-    vBlue.TextSize = 1
-    vBlue.ZIndex = 305
-    vBlue.Parent = vHolder
-
-    local vLabel = Instance.new("TextLabel")
-    vLabel.Size = UDim2.fromScale(1, 1)
-    vLabel.BackgroundTransparency = 1
-    vLabel.Text = "V"
-    vLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
-    vLabel.Font = Enum.Font.GothamBlack
-    vLabel.TextSize = 1
-    vLabel.ZIndex = 306
-    vLabel.Parent = vHolder
-
-    -- Glitch anim
-    task.spawn(function()
-        while loading.Parent do
-            task.wait(math.random(8, 20) / 100)
-            local offset = math.random(1, 4)
-            vRed.Position = UDim2.fromOffset(-offset, 0)
-            vBlue.Position = UDim2.fromOffset(offset, 0)
-            task.wait(0.05)
-            vRed.Position = UDim2.fromOffset(-1, 0)
-            vBlue.Position = UDim2.fromOffset(1, 0)
-        end
-    end)
-
-    -- Glow pulse
-    task.spawn(function()
-        while loading.Parent do
-            task.wait(0.6)
-            TweenService:Create(vGlow, TweenInfo.new(0.6), {TextTransparency = 0.05}):Play()
-            task.wait(0.6)
-            TweenService:Create(vGlow, TweenInfo.new(0.6), {TextTransparency = 0.4}):Play()
-        end
-    end)
-
-    -- Grow animation
-    task.spawn(function()
-        local endSize = IS_MOBILE and 100 or 130
-        local steps = 40
-        for i = 1, steps do
-            task.wait(1.0 / steps)
-            local t = i / steps
-            local eased = 1 - (1 - t) ^ 3
-            local size = 1 + (endSize - 1) * eased
-            vLabel.TextSize = size
-            vGlow.TextSize = size
-            vRed.TextSize = size
-            vBlue.TextSize = size
-        end
-
-        -- Final shake
-        task.wait(0.2)
-        for i = 1, 6 do
-            vLabel.Position = UDim2.fromOffset(math.random(-5, 5), math.random(-5, 5))
-            task.wait(0.04)
-            vLabel.Position = UDim2.fromOffset(0, 0)
-        end
-    end)
 
     -- ═══ LOADING TEXT (bottom) ═══
     local loadingText = Instance.new("TextLabel")
@@ -9448,6 +9339,8 @@ local function buildLoadingScreen(parent)
     loadingText.Font = Enum.Font.GothamBlack
     loadingText.TextSize = IS_MOBILE and 11 or 12
     loadingText.TextXAlignment = Enum.TextXAlignment.Left
+    loadingText.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    loadingText.TextStrokeTransparency = 0.3
     loadingText.ZIndex = 306
     loadingText.Parent = loading
 
@@ -9456,6 +9349,7 @@ local function buildLoadingScreen(parent)
     barBg.Size = UDim2.new(1, -20, 0, 6)
     barBg.Position = UDim2.new(0, 10, 0, winH - 44)
     barBg.BackgroundColor3 = Color3.fromRGB(20, 30, 60)
+    barBg.BackgroundTransparency = 0.3
     barBg.BorderSizePixel = 0
     barBg.ZIndex = 305
     barBg.Parent = loading
@@ -9499,6 +9393,8 @@ local function buildLoadingScreen(parent)
     percentLbl.Font = Enum.Font.GothamBlack
     percentLbl.TextSize = 10
     percentLbl.TextXAlignment = Enum.TextXAlignment.Right
+    percentLbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    percentLbl.TextStrokeTransparency = 0.3
     percentLbl.ZIndex = 306
     percentLbl.Parent = loading
 
@@ -9511,10 +9407,12 @@ local function buildLoadingScreen(parent)
     brandLbl.Font = Enum.Font.GothamBold
     brandLbl.TextSize = 10
     brandLbl.TextXAlignment = Enum.TextXAlignment.Left
+    brandLbl.TextStrokeColor3 = Color3.fromRGB(0, 0, 0)
+    brandLbl.TextStrokeTransparency = 0.3
     brandLbl.ZIndex = 306
     brandLbl.Parent = loading
 
-    -- ═══ MAIN LOADING SEQUENCE (TETAP SAMA PERSIS) ═══
+    -- ═══ MAIN LOADING SEQUENCE ═══
     task.spawn(function()
         loading.Size = UDim2.fromOffset(0, 0)
         TweenService:Create(loading, TweenInfo.new(0.5, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
