@@ -4851,7 +4851,7 @@ do
 end
 
 -- ============================================================
--- 🥚 EGG TAB — Zone + Rarity Filter + Auto Steal
+-- 🥚 EGG TAB — Filter Zone + Rarity + Auto Steal
 -- ============================================================
 do
     local eggPage, eggLeft, eggRight = createTwoColumnPage("Egg")
@@ -4860,10 +4860,10 @@ do
     local FEAT = _G.VRILZ_Features
     local ST   = FEAT and FEAT.EggState
 
-    -- ═══ KIRI: ZONE + RARITY FILTER ═══
+    -- ═══ KIRI: FILTER ZONE + RARITY ═══
     local filterCard, filterContent = makeCard(eggLeft, "🎯 FILTER", 1)
 
-    -- Zone label
+    -- ─── Zone Label ───
     local zoneLabel = Instance.new("TextLabel")
     zoneLabel.Size = UDim2.new(1, 0, 0, 18)
     zoneLabel.BackgroundTransparency = 1
@@ -4882,7 +4882,7 @@ do
     zoneDropdownHolder.LayoutOrder = 2
     zoneDropdownHolder.Parent = filterContent
 
-    -- Rarity label
+    -- ─── Rarity Label ───
     local rarityLabel = Instance.new("TextLabel")
     rarityLabel.Size = UDim2.new(1, 0, 0, 18)
     rarityLabel.BackgroundTransparency = 1
@@ -4935,7 +4935,9 @@ do
         end
     end, "EggAutoSteal_Enabled")
 
-    -- Build dropdown setelah feature ready
+    -- ═══════════════════════════════════════════════════════════
+    -- BUILD DROPDOWN SETELAH FEATURE READY
+    -- ═══════════════════════════════════════════════════════════
     task.spawn(function()
         task.wait(1.5)
         if not ST or not FEAT then return end
@@ -4951,7 +4953,7 @@ do
 
         ST.FilterZones = {}
         for _, z in ipairs(zones) do
-            ST.FilterZones[z] = nil
+            ST.FilterZones[z] = nil  -- ⭐ nil bukan false (biar checkbox uncheck)
         end
         ST.FilterZones["None"] = true
 
@@ -4964,17 +4966,18 @@ do
         )
 
         -- ═══ RARITY DROPDOWN ═══
-        -- ⭐ RARITY_LIST dari lo
-        local rarityItems = {
-            "None",
-            "Common", "Uncommon", "Rare", "Epic",
-            "Legendary", "Mythic", "Secret", "Eternal", "Divine"
-        }
+        local rarityItems = { "None" }
+        for _, r in ipairs({
+            "Common", "Uncommon", "Rare", "Epic", "Legendary",
+            "Mythic", "Secret", "Eternal", "Divine"
+        }) do
+            table.insert(rarityItems, r)
+        end
 
         ST.FilterRarities = {}
         for _, r in ipairs(rarityItems) do
             if r ~= "None" then
-                ST.FilterRarities[r] = nil
+                ST.FilterRarities[r] = nil  -- ⭐ nil bukan false
             end
         end
         ST.FilterRarities["None"] = true
