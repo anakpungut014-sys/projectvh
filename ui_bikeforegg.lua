@@ -4850,6 +4850,174 @@ do
     end)
 end
 
+-- ============================================================
+-- 🥚 EGG TAB — No Status, Cuma Zone + Toggle
+-- ============================================================
+do
+    local eggPage, eggLeft, eggRight = createTwoColumnPage("Egg")
+    pages.Egg = eggPage
+
+    local FEAT = _G.VRILZ_Features
+    local ST   = FEAT and FEAT.EggState
+
+    -- ═══ KIRI: ZONE FILTER ═══
+    local zoneCard, zoneContent = makeCard(eggLeft, "🎯 ZONE FILTER", 1)
+
+    local zoneFrame = Instance.new("Frame")
+    zoneFrame.Size = UDim2.new(1, 0, 0, 0)
+    zoneFrame.AutomaticSize = Enum.AutomaticSize.Y
+    zoneFrame.BackgroundTransparency = 1
+    zoneFrame.Parent = zoneContent
+    local zl = Instance.new("UIListLayout")
+    zl.Padding = UDim.new(0, 3)
+    zl.Parent = zoneFrame
+
+    -- ═══ KANAN: AUTO STEAL ═══
+    local asCard, asContent = makeCard(eggRight, "🥚 AUTO STEAL", 1)
+
+    local asFrame = Instance.new("Frame")
+    asFrame.Size = UDim2.new(1, 0, 0, 0)
+    asFrame.AutomaticSize = Enum.AutomaticSize.Y
+    asFrame.BackgroundTransparency = 1
+    asFrame.Parent = asContent
+    local asl = Instance.new("UIListLayout")
+    asl.Padding = UDim.new(0, CFG.CARD_GAP)
+    asl.Parent = asFrame
+
+    makeToggle(asFrame, "🥚 Auto Steal", false, function(v)
+        if not FEAT or not ST then return end
+        ST.AutoSteal = v
+        if v then
+            if next(ST.FilterZones) == nil then
+                notify("⚠️ Pilih minimal 1 zone!", "warning")
+                ST.AutoSteal = false
+                if Shared then Shared.EggAutoSteal_Enabled = false end
+                return
+            end
+            FEAT.StartEggAutoSteal()
+            notify("🥚 Auto Steal: ON", "success")
+        else
+            FEAT.StopEggAutoSteal()
+            notify("🥚 Auto Steal: OFF", "info")
+        end
+    end, "EggAutoSteal_Enabled")
+
+    local function buildZoneList()
+        for _, c in ipairs(zoneFrame:GetChildren()) do
+            if not c:IsA("UIListLayout") then c:Destroy() end
+        end
+        if not ST then return end
+
+        local btnRow = Instance.new("Frame")
+        btnRow.Size = UDim2.new(1, 0, 0, 24)
+        btnRow.BackgroundTransparency = 1
+        btnRow.LayoutOrder = 1
+        btnRow.Parent = zoneFrame
+
+        local allBtn = Instance.new("TextButton")
+        allBtn.Size = UDim2.new(0.5, -2, 1, 0)
+        allBtn.BackgroundColor3 = C.Surface3
+        allBtn.Text = "☑ ALL"
+        allBtn.TextColor3 = C.Text
+        allBtn.Font = Enum.Font.GothamBold
+        allBtn.TextSize = CFG.FONT_MUTED
+        allBtn.BorderSizePixel = 0
+        allBtn.Parent = btnRow
+        local ac = Instance.new("UICorner")
+        ac.CornerRadius = UDim.new(0, 5)
+        ac.Parent = allBtn
+
+        local noneBtn = Instance.new("TextButton")
+        noneBtn.Size = UDim2.new(0.5, -2, 1, 0)
+        noneBtn.Position = UDim2.new(0.5, 2, 0, 0)
+        noneBtn.BackgroundColor3 = C.Surface3
+        noneBtn.Text = "☐ NONE"
+        noneBtn.TextColor3 = C.Text
+        noneBtn.Font = Enum.Font.GothamBold
+        noneBtn.TextSize = CFG.FONT_MUTED
+        noneBtn.BorderSizePixel = 0
+        noneBtn.Parent = btnRow
+        local nc = Instance.new("UICorner")
+        nc.CornerRadius = UDim.new(0, 5)
+        nc.Parent = noneBtn
+
+        local zones = {}
+        for z in pairs(ST.Zones) do table.insert(zones, z) end
+        table.sort(zones)
+
+        local toggles = {}
+        for i, zName in ipairs(zones) do
+            local row = Instance.new("Frame")
+            row.Size = UDim2.new(1, 0, 0, 24)
+            row.BackgroundColor3 = C.Surface3
+            row.BackgroundTransparency = 0.4
+            row.BorderSizePixel = 0
+            row.LayoutOrder = 10 + i
+            row.Parent = zoneFrame
+            registerTheme(row, "Surface3", "BackgroundColor3")
+            local rc = Instance.new("UICorner")
+            rc.CornerRadius = UDim.new(0, 4)
+            rc.Parent = row
+
+            local chk = Instance.new("TextLabel")
+            chk.Size = UDim2.fromOffset(22, 24)
+            chk.Position = UDim2.fromOffset(5, 0)
+            chk.BackgroundTransparency = 1
+            chk.Text = ST.FilterZones[zName] and "✓" or "○"
+            chk.TextColor3 = ST.FilterZones[zName] and C.Accent or C.Muted
+            chk.Font = Enum.Font.GothamBold
+            chk.TextSize = 13
+            chk.Parent = row
+
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.new(1, -32, 1, 0)
+            lbl.Position = UDim2.fromOffset(28, 0)
+            lbl.BackgroundTransparency = 1
+            lbl.Text = zName
+            lbl.TextColor3 = ST.FilterZones[zName] and C.Text or C.Muted
+            lbl.Font = Enum.Font.GothamSemibold
+            lbl.TextSize = CFG.FONT_MUTED
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.Parent = row
+            registerTheme(lbl, "Text", "TextColor3")
+
+            local btn = Instance.new("TextButton")
+            btn.Size = UDim2.fromScale(1, 1)
+            btn.BackgroundTransparency = 1
+            btn.Text = ""
+            btn.Parent = row
+            btn.MouseButton1Click:Connect(function()
+                local newState = not ST.FilterZones[zName]
+                if newState then ST.FilterZones[zName] = true
+                else ST.FilterZones[zName] = nil end
+                chk.Text = newState and "✓" or "○"
+                chk.TextColor3 = newState and C.Accent or C.Muted
+                lbl.TextColor3 = newState and C.Text or C.Muted
+            end)
+            toggles[zName] = {chk = chk, lbl = lbl}
+        end
+
+        allBtn.MouseButton1Click:Connect(function()
+            for zName in pairs(ST.Zones) do ST.FilterZones[zName] = true end
+            for _, ui in pairs(toggles) do
+                ui.chk.Text = "✓"; ui.chk.TextColor3 = C.Accent; ui.lbl.TextColor3 = C.Text
+            end
+        end)
+        noneBtn.MouseButton1Click:Connect(function()
+            ST.FilterZones = {}
+            for _, ui in pairs(toggles) do
+                ui.chk.Text = "○"; ui.chk.TextColor3 = C.Muted; ui.lbl.TextColor3 = C.Muted
+            end
+        end)
+    end
+
+    task.spawn(function()
+        task.wait(1.5)
+        if ST and not ST.Initialized then FEAT.InitEgg() end
+        buildZoneList()
+    end)
+end
+
 -- TAB SETTINGS
 do
     local setPage, setLeft, setRight, setHeader = createTwoColumnPage("Settings")
@@ -5924,6 +6092,7 @@ local function renderMessage(msg)
         end
 
 registerTab("Info", "129516985087314", "Info", true)
+registerTab("Egg", "97796889305691", "Egg", false)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Settings", "97834340359225", "Settings", true)
 
@@ -8838,11 +9007,12 @@ function UI.Init(sharedState)
 
     -- ⭐ PRELOAD TAB ICONS (biar gak blank pas pertama launch)
 task.spawn(function()
-    local preloads = {
-        "rbxassetid://129516985087314",  -- Info
-        "rbxassetid://83047761221446",   -- Live Chat
-        "rbxassetid://97834340359225",   -- Settings
-    }
+local preloads = {
+    "rbxassetid://129516985087314",  -- Info
+    "rbxassetid://97796889305691",   -- Egg
+    "rbxassetid://83047761221446",   -- Live Chat
+    "rbxassetid://97834340359225",   -- Settings
+}
         pcall(function()
             game:GetService("ContentProvider"):PreloadAsync(preloads)
         end)
