@@ -9273,12 +9273,12 @@ local function buildLoadingScreen(parent)
     loading.Parent = parent
 
     local loadingCorner = Instance.new("UICorner")
-    loadingCorner.CornerRadius = UDim.new(0, 12)
+    loadingCorner.CornerRadius = UDim.new(0, 0)
     loadingCorner.Parent = loading
 
     -- ═══ IMAGE BACKGROUND ═══
-    local IMAGE_URL = "https://raw.githubusercontent.com/vrilz-vd/anime/refs/heads/main/wp11334646-anime-girl-swimsuit-wallpapers.jpe"
-    local IMAGE_CACHE = "vrilz_loading_bg_v1.png"
+    local IMAGE_URL = "https://raw.githubusercontent.com/vrilz-vd/anime/refs/heads/main/2388x1382-px-anime-girls-katana-sexy-anime-1107593-wallhere.com.jpe"
+    local IMAGE_CACHE = "vrilz_loading_bg_v2.png"
 
     local function loadImage()
         if not (writefile and isfile and getcustomasset) then
