@@ -1,5 +1,5 @@
 -- ============================================================
--- VRILZHUB UI — Bike For Egg v1.0 (AUTO-DETECT PC & MOBILE)
+-- VRILZHUB UI — Tfa v1.0 (AUTO-DETECT PC & MOBILE)
 -- PC: 800x580 | Mobile: 88% x 78% viewport
 -- ============================================================
 
@@ -3747,7 +3747,7 @@ end)
     subtitle.Size = UDim2.new(0, 300, 0, 14)
     subtitle.Position = UDim2.fromOffset(IS_MOBILE and 48 or 58, IS_MOBILE and 26 or 28)
     subtitle.BackgroundTransparency = 1
-    subtitle.Text = "Bike For Egg · v1.0"
+    subtitle.Text = "Throw Food A · v1.0"
     subtitle.TextColor3 = C.Muted
     subtitle.Font = Enum.Font.GothamSemibold
     subtitle.TextSize = IS_MOBILE and 9 or 10
