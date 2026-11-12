@@ -455,6 +455,7 @@ local function initAutoThrow()
             if ThrowState.autoThrow then startCamPin() end
         end)
     end)
+end
     
 -- ============================================================
 -- FEATURES.INIT
