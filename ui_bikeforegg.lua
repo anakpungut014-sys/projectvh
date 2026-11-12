@@ -3583,13 +3583,11 @@ local function loadGithubImage()
     if isfile(GITHUB_ANIME_CACHE) then
         local ok, asset = pcall(getcustomasset, GITHUB_ANIME_CACHE)
         if ok and asset then
-            print("[BG] ✅ Loaded dari cache")
             return asset
         end
     end
     
     -- Download dari GitHub
-    print("[BG] Download dari GitHub...")
     local ok, content = pcall(function()
         return game:HttpGet(GITHUB_ANIME_URL)
     end)
@@ -3605,7 +3603,6 @@ local function loadGithubImage()
     -- Convert ke asset
     local ok2, asset = pcall(getcustomasset, GITHUB_ANIME_CACHE)
     if ok2 and asset then
-        print("[BG] ✅ Loaded dari GitHub")
         return asset
     end
     
@@ -6988,7 +6985,6 @@ local function buildLoadingScreen(parent)
             end
 
             if _G.VRILZ_Features and _G.VRILZ_Features.Init then
-                print("[UI] ✅ Starting Features (after key + loading)...")
                 local ok, err = pcall(function()
                     _G.VRILZ_Features.Init(Shared)
                 end)
@@ -8857,7 +8853,6 @@ local function restoreSavedKeySync()
         Shared.KeyValue = nil
         Shared._RealKeyType = Shared.KeyType
         Shared._RealKeyExpiresAt = Shared.KeyExpiresAt
-        print("[KEY] No saved key found.")
         return
     end
 
@@ -8866,7 +8861,6 @@ local function restoreSavedKeySync()
 
     if valid and data then
         applyKeyInfo(data, savedKey)
-        print("[KEY] ✅ Restored saved key:", Shared.KeyType)
         Shared._RealKeyType = Shared.KeyType
         Shared._RealKeyExpiresAt = Shared.KeyExpiresAt or 0
         return
@@ -8880,7 +8874,6 @@ local function restoreSavedKeySync()
                 clearSavedKey()
                 Shared.KeyType = "FREE"
                 Shared.KeyExpiresAt = 0
-                print("[KEY] ❌ Saved key EXPIRED (local check).")
                 Shared._RealKeyType = "FREE"
                 Shared._RealKeyExpiresAt = 0
                 return
@@ -8889,7 +8882,6 @@ local function restoreSavedKeySync()
     end
 
     if isNetworkError then
-        print("[KEY] ⚠️ Verify failed (network). Keeping saved key:", message)
         Shared.KeyType = Shared.KeyType or "PREMIUM"
         Shared.KeyExpiresAt = Shared.KeyExpiresAt or 0
         Shared._RealKeyType = Shared.KeyType
@@ -8900,7 +8892,6 @@ local function restoreSavedKeySync()
     clearSavedKey()
     Shared.KeyType = "FREE"
     Shared.KeyExpiresAt = 0
-    print("[KEY] ❌ Saved key INVALID:", message)
     Shared._RealKeyType = "FREE"
     Shared._RealKeyExpiresAt = 0
 end
@@ -8942,7 +8933,6 @@ task.spawn(function()
         pcall(function()
             game:GetService("ContentProvider"):PreloadAsync(preloads)
         end)
-        print("[UI] ✅ Tab icons preloaded")
     end)
 
     setupNotifHolder(ScreenGui)
@@ -8979,7 +8969,6 @@ task.spawn(function()
         task.wait(1)
         local savedTitle = loadCustomTitle()
         if savedTitle then
-            print("[TITLE] Loaded: " .. savedTitle)
         end
         task.wait(1)
         if _G.VRILZ_RefreshTitle then
@@ -8996,7 +8985,6 @@ task.spawn(function()
 if true then
     Shared.KeyType = "FREE"
     Shared.KeyExpiresAt = 0
-    print("[KEY] ⚡ SKIP KEY aktif → langsung loading")
     startLoading()
 else
     local hasRealPremium = isRealPremiumKey(Shared._RealKeyType)
@@ -9010,7 +8998,6 @@ else
     if hasRealPremium or hasValidSavedKey then
         Shared.KeyType = Shared._RealKeyType
         Shared.KeyExpiresAt = Shared._RealKeyExpiresAt or 0
-        print("[KEY] ✅ Auto-login with saved key:", Shared.KeyType)
         startLoading()
     else
         Shared.KeyType = "FREE"
