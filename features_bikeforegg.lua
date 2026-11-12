@@ -358,6 +358,50 @@ local function initAutoThrow()
             ThrowState.tpDelay = Shared.TpDelay_Seconds or 0.6
         end
     end)
+
+    -- ═══ CAMERA PIN: kamera diam di base, tetap bisa digerakin ═══
+    local camera = Workspace.CurrentCamera
+    local camAnchor = nil
+    local savedSubject = nil
+    local BASE_POS = Vector3.new(2.23, 6.01, 20.29)   -- ⭐ koordinat base kamu
+
+    local function createCamAnchor()
+        local anchor = Instance.new("Part")
+        anchor.Name = "VRILZ_CamAnchor"
+        anchor.Size = Vector3.new(1, 1, 1)
+        anchor.Transparency = 1
+        anchor.CanCollide = false
+        anchor.Anchored = true
+        anchor.CanQuery = false
+        anchor.CanTouch = false
+        anchor.Massless = true
+        anchor.CFrame = CFrame.new(BASE_POS)
+        anchor.Parent = Workspace
+        return anchor
+    end
+
+    task.spawn(function()
+        while true do
+            task.wait(0.1)
+
+            if ThrowState.autoThrow then
+                if not camAnchor then
+                    camAnchor = createCamAnchor()
+                    savedSubject = camera.CameraSubject
+                    camera.CameraSubject = camAnchor
+                end
+            else
+                if camAnchor then
+                    local humanoid = LocalPlayer.Character
+                        and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+                    camera.CameraSubject = savedSubject or humanoid
+                    savedSubject = nil
+                    camAnchor:Destroy()
+                    camAnchor = nil
+                end
+            end
+        end
+    end)
 end
 
 -- ============================================================
