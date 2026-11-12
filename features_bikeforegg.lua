@@ -114,6 +114,252 @@ end
     end)
 end
 
+-- ═══════════════════════════════════════════════════════════
+-- 🎯 AUTO THROW SYSTEM
+-- ═══════════════════════════════════════════════════════════
+local function initAutoThrow()
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local VirtualInputManager = game:GetService("VirtualInputManager")
+
+    -- ═══ STATE ═══
+    local ThrowState = {
+        autoThrow = false,
+        autoBest = false,
+        tapPoint = 0.93,
+        unequipDelay = 0.5,
+        tpDelay = 0.6,
+        marker = nil,
+        lastTap = 0,
+        revealCache = setmetatable({}, { __mode = "k" }),
+    }
+
+    -- ═══ HELPER: ambil ThrowController, ClientState, TrainingController ═══
+    local function requirePlayerScript(...)
+        local ps = LocalPlayer:WaitForChild("PlayerScripts", 5)
+        if not ps then return nil end
+        for _, name in ipairs({...}) do
+            ps = ps:WaitForChild(name, 5)
+            if not ps then return nil end
+        end
+        local ok, mod = pcall(require, ps)
+        return ok and mod or nil
+    end
+
+    local ThrowController = requirePlayerScript("Client", "Controllers", "ThrowController")
+    local ClientState = requirePlayerScript("Client", "Controllers", "ClientState")
+
+    -- ═══ HELPER: ambil animal tool yang sedang dipegang ═══
+    local function getEquippedAnimal()
+        local char = LocalPlayer.Character
+        if not char then return nil end
+        local tool = char:FindFirstChildOfClass("Tool")
+        if tool and tool:GetAttribute("AnimalId") ~= nil then
+            return tool
+        end
+        return nil
+    end
+
+    -- ═══ HELPER: unequip tool ═══
+    local function unequipTools()
+        local char = LocalPlayer.Character
+        if not char then return nil end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        if not hum then return nil end
+        if not getEquippedAnimal() then return nil end
+        pcall(function() hum:UnequipTools() end)
+        return true
+    end
+
+    -- ═══ HELPER: cari StarterArea & CrossLine ═══
+    local function getStarterArea()
+        local sa = Workspace:FindFirstChild("StarterArea")
+        if not sa then return nil, nil end
+        local cl = sa:FindFirstChild("CrossLine")
+        local crossZ = cl and cl.Position.Z or (sa.Position.Z + sa.Size.Z / 2)
+        return sa, crossZ
+    end
+
+    -- ═══ HELPER: cek apakah player sudah di throw area ═══
+    local function isInThrowArea(hrp)
+        local sa, crossZ = getStarterArea()
+        if not (sa and hrp) then return false end
+        local pos = sa.Position
+        local half = sa.Size / 2
+        local p = hrp.Position
+        if p.Z >= crossZ then return false end
+        if math.abs(p.X - pos.X) > half.X + 0.5 then return false end
+        if p.Z < pos.Z - half.Z - 0.5 then return false end
+        if p.Y < pos.Y + half.Y - 3 then return false end
+        return true
+    end
+
+    -- ═══ HELPER: teleport ke throw area ═══
+    local function teleportToThrowArea()
+        local char = LocalPlayer.Character
+        if not char then return false end
+        local hrp = char:FindFirstChild("HumanoidRootPart")
+        if not hrp then return false end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+        local sa, crossZ = getStarterArea()
+        if not (hrp and sa and hum) then return false end
+
+        local pos = sa.Position
+        local half = sa.Size / 2
+        local x = math.clamp(hrp.Position.X, pos.X - half.X + 2, pos.X + half.X - 2)
+        local z = math.clamp(crossZ - 3, pos.Z - half.Z + 1, crossZ - 1)
+        local y = pos.Y + half.Y + hum.HipHeight + hrp.Size.Y / 2 + 0.1
+
+        hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        hrp.CFrame = CFrame.lookAt(Vector3.new(x, y, z), Vector3.new(x, y, z + 1))
+        return true
+    end
+
+    -- ═══ HELPER: cari power meter marker di PlayerGui ═══
+    local function findMeterMarker()
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        if not pg then return nil end
+        for _, v in ipairs(pg:GetDescendants()) do
+            if v.Name == "Marker" and v.Parent
+                and v.Parent.Parent
+                and v.Parent.Parent.Name == "Meter" then
+                return v
+            end
+        end
+        return nil
+    end
+
+    -- ═══ HELPER: cek apakah ada reveal screen ("tap to continue/skip") ═══
+    local function scanRevealScreens()
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        if not pg then return end
+        for _, v in ipairs(pg:GetDescendants()) do
+            if v:IsA("TextLabel") then
+                local txt = v.Text
+                if txt == "tap to continue" or txt == "tap to skip" then
+                    ThrowState.revealCache[v] = true
+                end
+            end
+        end
+    end
+
+    -- ═══ LOOP: cari marker & reveal screen setiap 0.15s ═══
+    task.spawn(function()
+        while true do
+            task.wait(0.15)
+            if ThrowState.autoBest then
+                local m = ThrowState.marker
+                if m and not m.Parent then
+                    ThrowState.marker = findMeterMarker()
+                elseif not m then
+                    ThrowState.marker = findMeterMarker()
+                end
+            end
+            if ThrowState.autoThrow then
+                scanRevealScreens()
+            end
+        end
+    end)
+
+    -- ═══ SPAWN REVEAL WATCHER (skip "tap to continue/skip" pakai Spasi) ═══
+    task.spawn(function()
+        local pg = LocalPlayer:WaitForChild("PlayerGui")
+        pg.DescendantAdded:Connect(function(d)
+            task.defer(function()
+                if d:IsA("TextLabel") then
+                    local txt = d.Text
+                    if txt == "tap to continue" or txt == "tap to skip" then
+                        ThrowState.revealCache[d] = true
+                    end
+                end
+            end)
+        end)
+        while true do
+            task.wait(0.2)
+            if not ThrowState.autoThrow then continue end
+            for k in pairs(ThrowState.revealCache) do
+                if k.Parent then
+                    if k.TextTransparency < 0.9 then
+                        ThrowState.revealCache[k] = nil
+                        task.wait(0.15)
+                        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                        task.delay(0.03, function()
+                            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+                        end)
+                    end
+                else
+                    ThrowState.revealCache[k] = nil
+                end
+            end
+        end
+    end)
+
+    -- ═══ RENDER STEPPED: AUTO BEST THROW (tap meter di tapPoint) ═══
+    RunService.RenderStepped:Connect(function()
+        if not ThrowState.autoBest then return end
+        local m = ThrowState.marker
+        if not m or not m.Parent then return end
+        if os.clock() - ThrowState.lastTap < 1.5 then return end
+        local norm = 1 - m.Position.Y.Scale
+        if norm >= ThrowState.tapPoint then
+            ThrowState.lastTap = os.clock()
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+            task.delay(0.03, function()
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+            end)
+        end
+    end)
+
+    -- ═══ LOOP: AUTO THROW (teleport → throw → unequip → skip → ulang) ═══
+    task.spawn(function()
+        while true do
+            task.wait(0.5)
+            if not ThrowState.autoThrow then continue end
+            if not ThrowController or not ThrowController.Start then
+                Shared.Notify("Auto Throw", "ThrowController tidak ditemukan.", "error")
+                ThrowState.autoThrow = false
+                Shared.AutoThrow_Enabled = false
+                continue
+            end
+
+            -- Unequip dulu
+            if Shared.UnequipDelay_Seconds and unequipTools() then
+                task.wait(Shared.UnequipDelay_Seconds or ThrowState.unequipDelay)
+            end
+
+            local busy = ClientState and ClientState.Busy
+            local isActive = ThrowController.IsActive and ThrowController.IsActive()
+            if busy or isActive or getEquippedAnimal() then
+                continue
+            end
+
+            -- Teleport kalo belum di area
+            local char = LocalPlayer.Character
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp and not hrp.Anchored and not isInThrowArea(hrp) then
+                teleportToThrowArea()
+                task.wait(Shared.TpDelay_Seconds or ThrowState.tpDelay)
+            end
+
+            -- Throw!
+            if ClientState and ClientState.Busy then continue end
+            pcall(ThrowController.Start)
+            task.wait(3)
+        end
+    end)
+
+    -- ═══ SYNC STATE DARI SHARED ═══
+    task.spawn(function()
+        while true do
+            task.wait(0.3)
+            ThrowState.autoThrow = Shared.AutoThrow_Enabled == true
+            ThrowState.autoBest = Shared.AutoBestThrow_Enabled == true
+            ThrowState.tapPoint = (Shared.TapPoint_Percent or 93) / 100
+            ThrowState.unequipDelay = Shared.UnequipDelay_Seconds or 0.5
+            ThrowState.tpDelay = Shared.TpDelay_Seconds or 0.6
+        end
+    end)
+end
+
 -- ============================================================
 -- FEATURES.INIT
 -- ============================================================
@@ -125,8 +371,14 @@ function Features.Init(sharedState)
         Features._antiAFKStarted = true
         Features.startAntiAFK()
     end
-end   -- ⭐⭐⭐ TUTUP Features.Init DI SINI ⭐⭐⭐
 
+    -- ⭐ Start Auto Throw system
+    if not Features._autoThrowStarted then
+        Features._autoThrowStarted = true
+        pcall(initAutoThrow)
+    end
+end
+    
     _G.VRILZ_Features = Features
 _G.VRILZ_Shared = Shared
 _G.VRILZ_UI_Shared = Shared
