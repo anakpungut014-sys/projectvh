@@ -359,51 +359,103 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ CAMERA PIN: kamera diam di base, tetap bisa digerakin ═══
+        -- ═══ CAMERA PIN v2 — lock di base, anti-override dari game ═══
     local camera = Workspace.CurrentCamera
     local camAnchor = nil
     local savedSubject = nil
-    local BASE_POS = Vector3.new(2.23, 6.01, 20.29)   -- ⭐ koordinat base kamu
+    local savedCameraType = nil
+
+    local BASE_POS  = Vector3.new(2.23, 6.01, 20.29)
+    local CAM_POS   = BASE_POS + Vector3.new(0, 6, 14) -- posisi kamera (khusus hard lock)
+    local HARD_LOCK = false  -- ⬅ true = kamera dibekukan total (anti cutscene game)
+
+    local BIND_SOFT = "VRILZ_CamPin_Soft"
+    local BIND_HARD = "VRILZ_CamPin_Hard"
 
     local function createCamAnchor()
-        local anchor = Instance.new("Part")
-        anchor.Name = "VRILZ_CamAnchor"
-        anchor.Size = Vector3.new(1, 1, 1)
-        anchor.Transparency = 1
-        anchor.CanCollide = false
-        anchor.Anchored = true
-        anchor.CanQuery = false
-        anchor.CanTouch = false
-        anchor.Massless = true
-        anchor.CFrame = CFrame.new(BASE_POS)
-        anchor.Parent = Workspace
-        return anchor
+        local a = Instance.new("Part")
+        a.Name = "VRILZ_CamAnchor"
+        a.Size = Vector3.new(1, 1, 1)
+        a.Transparency = 1
+        a.CanCollide = false
+        a.Anchored = true
+        a.CanQuery = false
+        a.CanTouch = false
+        a.Massless = true
+        a.CFrame = CFrame.new(BASE_POS)
+        a.Parent = Workspace
+        return a
+    end
+
+    -- SOFT: kamera tetap bisa digerakin mouse, tapi subject dipaksa ke anchor
+    local function softStep()
+        local cam = Workspace.CurrentCamera
+        if cam.CameraType ~= Enum.CameraType.Custom then
+            cam.CameraType = Enum.CameraType.Custom
+        end
+        if cam.CameraSubject ~= camAnchor then
+            cam.CameraSubject = camAnchor
+        end
+    end
+
+    -- HARD: kamera dibekukan di titik fix, menang lawan cutscene game
+    local function hardStep()
+        local cam = Workspace.CurrentCamera
+        if cam.CameraType ~= Enum.CameraType.Scriptable then
+            cam.CameraType = Enum.CameraType.Scriptable
+        end
+        cam.CFrame = CFrame.lookAt(CAM_POS, BASE_POS)
+    end
+
+    local function startCamPin()
+        if camAnchor and camAnchor.Parent then return end
+        if camAnchor then pcall(function() camAnchor:Destroy() end) end
+
+        camAnchor = createCamAnchor()
+        savedSubject    = camera.CameraSubject
+        savedCameraType = camera.CameraType
+
+        if HARD_LOCK then
+            RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Camera.Value + 1, hardStep)
+        else
+            RunService:BindToRenderStep(BIND_SOFT, Enum.RenderPriority.Camera.Value - 1, softStep)
+        end
+    end
+
+    local function stopCamPin()
+        RunService:UnbindFromRenderStep(BIND_SOFT)
+        RunService:UnbindFromRenderStep(BIND_HARD)
+        if not camAnchor then return end
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        camera.CameraType = savedCameraType or Enum.CameraType.Custom
+        camera.CameraSubject = savedSubject or hum
+        savedSubject, savedCameraType = nil, nil
+        camAnchor:Destroy()
+        camAnchor = nil
     end
 
     task.spawn(function()
         while true do
             task.wait(0.1)
-
             if ThrowState.autoThrow then
-                if not camAnchor then
-                    camAnchor = createCamAnchor()
-                    savedSubject = camera.CameraSubject
-                    camera.CameraSubject = camAnchor
+                if not camAnchor or not camAnchor.Parent then
+                    startCamPin()
+                elseif not HARD_LOCK then
+                    softStep() -- safety net tambahan
                 end
             else
-                if camAnchor then
-                    local humanoid = LocalPlayer.Character
-                        and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-                    camera.CameraSubject = savedSubject or humanoid
-                    savedSubject = nil
-                    camAnchor:Destroy()
-                    camAnchor = nil
-                end
+                stopCamPin()
             end
         end
     end)
-end
 
+    -- Respawn safety: Roblox auto-reset subject pas character baru
+    LocalPlayer.CharacterAdded:Connect(function()
+        task.delay(0.5, function()
+            if ThrowState.autoThrow then startCamPin() end
+        end)
+    end)
+    
 -- ============================================================
 -- FEATURES.INIT
 -- ============================================================
