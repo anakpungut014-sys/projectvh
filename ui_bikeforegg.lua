@@ -2738,24 +2738,39 @@ local function gfx_enableFPS()
         return false
     end
 
+        -- ═══════════════════════════════════════════════════════════
+    -- 3.5 HIDE POHON & WALL (exact match — aman, gak kena jalan)
     -- ═══════════════════════════════════════════════════════════
-    -- 3.5 HIDE SEMUA POHON (tree / pohon / plant / foliage / dll)
-    -- ═══════════════════════════════════════════════════════════
-    local TREE_KEYWORDS = {
-        "tree", "pohon", "foliage", "leaf", "leaves",
-        "plant", "bush", "grass", "fern", "palm",
-        "trunk", "branch", "canopy", "shrub",
+    local HIDE_NAMES = {
+        -- ═══ POHON ═══
+        ["ForestTree1"] = true,
+        ["ForestTree2"] = true,
+        ["ForestBush1"] = true,
+        ["ForestFern1"] = true,
+        ["ForestGrassPatch1"] = true,
+        ["Trunk"] = true,
+        ["TrunkDark"] = true,
+        ["Leaves"] = true,
+        ["LeavesSecondary"] = true,
+        ["Leaf"] = true,
+        ["Fern"] = true,
+        ["FernLight"] = true,
+
+        -- ═══ WALL / PAGAR ═══
+        ["Wood"] = true,
+        ["DarkWood"] = true,
+        ["LightWood"] = true,
+        ["WoodLight"] = true,
+        ["WoodDark"] = true,
+        ["WoodInner"] = true,
+        ["Fence"] = true,
+        ["Wall"] = true,
+        ["WallWood"] = true,
     }
 
-    local function isTreeObject(obj)
+    local function isHideTarget(obj)
         if not obj or not obj.Parent then return false end
-        local name = tostring(obj.Name):lower()
-        for _, kw in ipairs(TREE_KEYWORDS) do
-            if name:find(kw, 1, true) then
-                return true
-            end
-        end
-        return false
+        return HIDE_NAMES[obj.Name] == true
     end
 
     local function hideTree(obj)
@@ -2763,52 +2778,52 @@ local function gfx_enableFPS()
         if GFX.HiddenParts[obj] then return end
 
         local backup = { obj = obj, isTree = true }
-        pcall(function() backup.transparency = obj.Transparency end)
-        pcall(function() backup.visible = obj.Visible end)
-        pcall(function() backup.size = obj.Size end)
         GFX.HiddenParts[obj] = backup
 
         if obj:IsA("BasePart") then
+            pcall(function() backup.transparency = obj.Transparency end)
+            pcall(function() backup.collide = obj.CanCollide end)
             pcall(function() obj.Transparency = 1 end)
             pcall(function() obj.CanCollide = false end)
             pcall(function() obj.CanQuery = false end)
             pcall(function() obj.CanTouch = false end)
         elseif obj:IsA("Model") then
+            local partsBackup = {}
             for _, d in ipairs(obj:GetDescendants()) do
                 if d:IsA("BasePart") then
+                    partsBackup[d] = {
+                        transparency = d.Transparency,
+                        collide = d.CanCollide,
+                    }
                     pcall(function() d.Transparency = 1 end)
                     pcall(function() d.CanCollide = false end)
+                    pcall(function() d.CanQuery = false end)
+                    pcall(function() d.CanTouch = false end)
                 end
             end
+            backup.parts = partsBackup
         end
     end
 
-    -- Scan awal: hide semua pohon
     task.spawn(function()
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if not GFX.FPSEnabled then break end
-            if (obj:IsA("Model") or obj:IsA("BasePart") or obj:IsA("MeshPart"))
-                and isTreeObject(obj)
-                and not isVrilzObject(obj) then
+            if isHideTarget(obj) and not isVrilzObject(obj) then
                 hideTree(obj)
             end
         end
 
-        -- Watch pohon baru (spawn belakangan)
-        local treeConn = Workspace.DescendantAdded:Connect(function(obj)
+        local hideConn = Workspace.DescendantAdded:Connect(function(obj)
             if not GFX.FPSEnabled then return end
             task.defer(function()
-                if not obj or not obj.Parent then return end
-                if (obj:IsA("Model") or obj:IsA("BasePart") or obj:IsA("MeshPart"))
-                    and isTreeObject(obj)
-                    and not isVrilzObject(obj) then
+                if obj and obj.Parent and isHideTarget(obj) and not isVrilzObject(obj) then
                     hideTree(obj)
                 end
             end)
         end)
-        table.insert(GFX.Connections, treeConn)
+        table.insert(GFX.Connections, hideConn)
     end)
-    
+
     -- ═══ SCAN SEMUA EFFECT DI WORKSPACE ═══
     task.spawn(function()
         local function scanEffects()
@@ -2980,7 +2995,7 @@ local function gfx_disableFPS()
     GFX.Connections = {}
 
     -- ═══ RESTORE SEMUA EFFECT YANG DISEMBUNYIKAN ═══
-    for obj, backup in pairs(GFX.HiddenParts) do
+        for obj, backup in pairs(GFX.HiddenParts) do
         if obj and obj.Parent then
             pcall(function()
                 if backup.enabled ~= nil then obj.Enabled = backup.enabled end
@@ -2990,6 +3005,29 @@ local function gfx_disableFPS()
                 if backup.brightness ~= nil then obj.Brightness = backup.brightness end
                 if backup.density ~= nil then obj.Density = backup.density end
                 if backup.haze ~= nil then obj.Haze = backup.haze end
+
+                -- ⭐ Restore pohon / wall
+                if backup.isTree then
+                    if backup.parts then
+                        for part, partData in pairs(backup.parts) do
+                            if part and part.Parent then
+                                pcall(function() part.Transparency = partData.transparency end)
+                                pcall(function() part.CanCollide = partData.collide end)
+                                pcall(function() part.CanQuery = true end)
+                                pcall(function() part.CanTouch = true end)
+                            end
+                        end
+                    elseif obj:IsA("BasePart") then
+                        if backup.transparency ~= nil then
+                            pcall(function() obj.Transparency = backup.transparency end)
+                        end
+                        if backup.collide ~= nil then
+                            pcall(function() obj.CanCollide = backup.collide end)
+                        end
+                        pcall(function() obj.CanQuery = true end)
+                        pcall(function() obj.CanTouch = true end)
+                    end
+                end
             end)
         end
     end
