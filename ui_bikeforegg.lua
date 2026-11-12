@@ -6318,7 +6318,7 @@ local function renderMessage(msg)
         end
 
 registerTab("Info", "129516985087314", "Info", true)
-registerTab("AutoThrow", "10750704463", "Auto Throw", true)
+registerTab("AutoThrow", "75410123129821", "Auto Throw", true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Settings", "97834340359225", "Settings", true)
 
@@ -9235,6 +9235,7 @@ function UI.Init(sharedState)
 task.spawn(function()
     local preloads = {
         "rbxassetid://129516985087314",  -- Info
+        "rbxassetid://75410123129821",   -- Auto Throw
         "rbxassetid://83047761221446",   -- Live Chat
         "rbxassetid://97834340359225",   -- Settings
     }
