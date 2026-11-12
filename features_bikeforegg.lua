@@ -228,16 +228,38 @@ local function initAutoThrow()
         return nil
     end
 
-    -- ═══ HELPER: cek apakah ada reveal screen ("tap to continue/skip") ═══
+       -- ═══ HELPER: deteksi teks reveal (case-insensitive) ═══
+    local function isRevealText(txt)
+        if type(txt) ~= "string" or txt == "" then return false end
+        local lower = txt:lower()
+        return lower:find("tap to continue", 1, true) ~= nil
+            or lower:find("tap to skip", 1, true) ~= nil
+            or lower:find("click to continue", 1, true) ~= nil
+            or lower:find("click to skip", 1, true) ~= nil
+    end
+
+    -- ═══ HELPER: baca isi reveal screen (hasil yang didapat) ═══
+    local function readRevealResult(label)
+        local ok, gui = pcall(function() return label:FindFirstAncestorOfClass("ScreenGui") end)
+        if not ok or not gui then return nil end
+        local parts = {}
+        for _, d in ipairs(gui:GetDescendants()) do
+            if d:IsA("TextLabel") and d.Visible ~= false
+                and d.Text ~= "" and not isRevealText(d.Text) then
+                table.insert(parts, d.Text)
+            end
+        end
+        if #parts == 0 then return nil end
+        return table.concat(parts, " | ")
+    end
+
+    -- ═══ HELPER: scan reveal screen ═══
     local function scanRevealScreens()
         local pg = LocalPlayer:FindFirstChild("PlayerGui")
         if not pg then return end
         for _, v in ipairs(pg:GetDescendants()) do
-            if v:IsA("TextLabel") then
-                local txt = v.Text
-                if txt == "tap to continue" or txt == "tap to skip" then
-                    ThrowState.revealCache[v] = true
-                end
+            if v:IsA("TextLabel") and isRevealText(v.Text) then
+                ThrowState.revealCache[v] = true
             end
         end
     end
@@ -260,19 +282,19 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ SPAWN REVEAL WATCHER (skip "tap to continue/skip" pakai Spasi) ═══
+       -- ═══ REVEAL WATCHER v2: baca hasil → notify → skip pakai Spasi ═══
     task.spawn(function()
         local pg = LocalPlayer:WaitForChild("PlayerGui")
         pg.DescendantAdded:Connect(function(d)
             task.defer(function()
-                if d:IsA("TextLabel") then
-                    local txt = d.Text
-                    if txt == "tap to continue" or txt == "tap to skip" then
-                        ThrowState.revealCache[d] = true
-                    end
+                if d:IsA("TextLabel") and isRevealText(d.Text) then
+                    ThrowState.revealCache[d] = true
                 end
             end)
         end)
+
+        local lastResult, lastResultTime = nil, 0
+
         while true do
             task.wait(0.2)
             if not ThrowState.autoThrow then continue end
@@ -280,7 +302,21 @@ local function initAutoThrow()
                 if k.Parent then
                     if k.TextTransparency < 0.9 then
                         ThrowState.revealCache[k] = nil
-                        task.wait(0.15)
+
+                        -- 1) tunggu teks result muncul, terus baca
+                        task.wait(0.35)
+                        local result = nil
+                        if k.Parent then
+                            result = readRevealResult(k)
+                        end
+                        if result and Shared and Shared.Notify
+                            and (result ~= lastResult or os.clock() - lastResultTime > 3) then
+                            lastResult = result
+                            lastResultTime = os.clock()
+                            Shared.Notify("Throw Result", result, "info")
+                        end
+
+                        -- 2) baru skip
                         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
                         task.delay(0.03, function()
                             VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
@@ -292,7 +328,7 @@ local function initAutoThrow()
             end
         end
     end)
-
+    
     -- ═══ RENDER STEPPED: AUTO BEST THROW (tap meter di tapPoint) ═══
     RunService.RenderStepped:Connect(function()
         if not ThrowState.autoBest then return end
@@ -429,9 +465,9 @@ local function initAutoThrow()
     end
 
     local function stopCamPin()
-        RunService:UnbindFromRenderStep(BIND_SOFT)
-        RunService:UnbindFromRenderStep(BIND_HARD)
         if not camAnchor then return end
+        pcall(function() RunService:UnbindFromRenderStep(BIND_SOFT) end)
+        pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
         local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
         camera.CameraType = savedCameraType or Enum.CameraType.Custom
         camera.CameraSubject = savedSubject or hum
