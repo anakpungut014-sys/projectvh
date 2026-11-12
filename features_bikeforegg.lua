@@ -463,21 +463,21 @@ end
 function Features.Init(sharedState)
     Shared = sharedState
 
-    -- ⭐ Guard: cegah double-start anti-AFK
+    -- ⭐ update _G refs SEKARANG (Shared udah beneran ada)
+    _G.VRILZ_Shared = Shared
+    _G.VRILZ_UI_Shared = Shared
+
     if not Features._antiAFKStarted then
         Features._antiAFKStarted = true
         Features.startAntiAFK()
     end
 
-    -- ⭐ Start Auto Throw system
     if not Features._autoThrowStarted then
         Features._autoThrowStarted = true
         pcall(initAutoThrow)
     end
 end
     
-    _G.VRILZ_Features = Features
-_G.VRILZ_Shared = Shared
-_G.VRILZ_UI_Shared = Shared
+_G.VRILZ_Features = Features
 
 return Features
