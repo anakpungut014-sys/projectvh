@@ -4850,148 +4850,6 @@ do
     end)
 end
 
--- ============================================================
--- 🥚 EGG TAB — Filter Zone + Rarity + Auto Steal
--- ============================================================
-do
-    local eggPage, eggLeft, eggRight = createTwoColumnPage("Egg")
-    pages.Egg = eggPage
-
-    local FEAT = _G.VRILZ_Features
-    local ST   = FEAT and FEAT.EggState
-
-    -- ═══ KIRI: FILTER ZONE + RARITY ═══
-    local filterCard, filterContent = makeCard(eggLeft, "🎯 FILTER", 1)
-
-    -- ─── Zone Label ───
-    local zoneLabel = Instance.new("TextLabel")
-    zoneLabel.Size = UDim2.new(1, 0, 0, 18)
-    zoneLabel.BackgroundTransparency = 1
-    zoneLabel.Text = "Zone (multi-select):"
-    zoneLabel.TextColor3 = C.Muted
-    zoneLabel.Font = Enum.Font.GothamBold
-    zoneLabel.TextSize = CFG.FONT_MUTED
-    zoneLabel.TextXAlignment = Enum.TextXAlignment.Left
-    zoneLabel.LayoutOrder = 1
-    zoneLabel.Parent = filterContent
-    registerTheme(zoneLabel, "Muted", "TextColor3")
-
-    local zoneDropdownHolder = Instance.new("Frame")
-    zoneDropdownHolder.Size = UDim2.new(1, 0, 0, CFG.DROPDOWN_H)
-    zoneDropdownHolder.BackgroundTransparency = 1
-    zoneDropdownHolder.LayoutOrder = 2
-    zoneDropdownHolder.Parent = filterContent
-
-    -- ─── Rarity Label ───
-    local rarityLabel = Instance.new("TextLabel")
-    rarityLabel.Size = UDim2.new(1, 0, 0, 18)
-    rarityLabel.BackgroundTransparency = 1
-    rarityLabel.Text = "Rarity (multi-select):"
-    rarityLabel.TextColor3 = C.Muted
-    rarityLabel.Font = Enum.Font.GothamBold
-    rarityLabel.TextSize = CFG.FONT_MUTED
-    rarityLabel.TextXAlignment = Enum.TextXAlignment.Left
-    rarityLabel.LayoutOrder = 3
-    rarityLabel.Parent = filterContent
-    registerTheme(rarityLabel, "Muted", "TextColor3")
-
-    local rarityDropdownHolder = Instance.new("Frame")
-    rarityDropdownHolder.Size = UDim2.new(1, 0, 0, CFG.DROPDOWN_H)
-    rarityDropdownHolder.BackgroundTransparency = 1
-    rarityDropdownHolder.LayoutOrder = 4
-    rarityDropdownHolder.Parent = filterContent
-
-    -- ═══ KANAN: AUTO STEAL ═══
-    local asCard, asContent = makeCard(eggRight, "🥚 AUTO STEAL", 1)
-
-    local asFrame = Instance.new("Frame")
-    asFrame.Size = UDim2.new(1, 0, 0, 0)
-    asFrame.AutomaticSize = Enum.AutomaticSize.Y
-    asFrame.BackgroundTransparency = 1
-    asFrame.Parent = asContent
-    local asl = Instance.new("UIListLayout")
-    asl.Padding = UDim.new(0, CFG.CARD_GAP)
-    asl.Parent = asFrame
-
-    makeToggle(asFrame, "🥚 Auto Steal", false, function(v)
-        if not FEAT or not ST then return end
-        ST.AutoSteal = v
-        if v then
-            local hasZone = false
-            for _, val in pairs(ST.FilterZones) do
-                if val == true then hasZone = true break end
-            end
-            if not hasZone then
-                notify("⚠️ Pilih minimal 1 zone!", "warning")
-                ST.AutoSteal = false
-                if Shared then Shared.EggAutoSteal_Enabled = false end
-                return
-            end
-            FEAT.StartEggAutoSteal()
-            notify("🥚 Auto Steal: ON", "success")
-        else
-            FEAT.StopEggAutoSteal()
-            notify("🥚 Auto Steal: OFF", "info")
-        end
-    end, "EggAutoSteal_Enabled")
-
-    -- ═══════════════════════════════════════════════════════════
-    -- BUILD DROPDOWN SETELAH FEATURE READY
-    -- ═══════════════════════════════════════════════════════════
-    task.spawn(function()
-        task.wait(1.5)
-        if not ST or not FEAT then return end
-        if not ST.Initialized then FEAT.InitEgg() end
-
-        -- ═══ ZONE DROPDOWN ═══
-        local zones = {}
-        for z in pairs(ST.Zones) do table.insert(zones, z) end
-        table.sort(zones)
-
-        local zoneItems = { "None" }
-        for _, z in ipairs(zones) do table.insert(zoneItems, z) end
-
-        ST.FilterZones = {}
-        for _, z in ipairs(zones) do
-            ST.FilterZones[z] = nil  -- ⭐ nil bukan false (biar checkbox uncheck)
-        end
-        ST.FilterZones["None"] = true
-
-        makeDropdownMulti(
-            zoneDropdownHolder,
-            zoneItems,
-            ST.FilterZones,
-            nil,
-            function() end
-        )
-
-        -- ═══ RARITY DROPDOWN ═══
-        local rarityItems = { "None" }
-        for _, r in ipairs({
-            "Common", "Uncommon", "Rare", "Epic", "Legendary",
-            "Mythic", "Secret", "Eternal", "Divine"
-        }) do
-            table.insert(rarityItems, r)
-        end
-
-        ST.FilterRarities = {}
-        for _, r in ipairs(rarityItems) do
-            if r ~= "None" then
-                ST.FilterRarities[r] = nil  -- ⭐ nil bukan false
-            end
-        end
-        ST.FilterRarities["None"] = true
-
-        makeDropdownMulti(
-            rarityDropdownHolder,
-            rarityItems,
-            ST.FilterRarities,
-            nil,
-            function() end
-        )
-    end)
-end
-
 -- TAB SETTINGS
 do
     local setPage, setLeft, setRight, setHeader = createTwoColumnPage("Settings")
@@ -6066,7 +5924,6 @@ local function renderMessage(msg)
         end
 
 registerTab("Info", "129516985087314", "Info", true)
-registerTab("Egg", "97796889305691", "Egg", true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Settings", "97834340359225", "Settings", true)
 
@@ -8981,12 +8838,11 @@ function UI.Init(sharedState)
 
     -- ⭐ PRELOAD TAB ICONS (biar gak blank pas pertama launch)
 task.spawn(function()
-local preloads = {
-    "rbxassetid://129516985087314",  -- Info
-    "rbxassetid://97796889305691",   -- Egg
-    "rbxassetid://83047761221446",   -- Live Chat
-    "rbxassetid://97834340359225",   -- Settings
-}
+    local preloads = {
+        "rbxassetid://129516985087314",  -- Info
+        "rbxassetid://83047761221446",   -- Live Chat
+        "rbxassetid://97834340359225",   -- Settings
+    }
         pcall(function()
             game:GetService("ContentProvider"):PreloadAsync(preloads)
         end)
