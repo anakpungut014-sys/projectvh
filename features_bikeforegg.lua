@@ -367,7 +367,7 @@ local function initAutoThrow()
 
     local BASE_POS  = Vector3.new(2.23, 6.01, 20.29)
     local CAM_POS   = BASE_POS + Vector3.new(0, 6, 14) -- posisi kamera (khusus hard lock)
-    local HARD_LOCK = false  -- ⬅ true = kamera dibekukan total (anti cutscene game)
+    local HARD_LOCK = true
 
     local BIND_SOFT = "VRILZ_CamPin_Soft"
     local BIND_HARD = "VRILZ_CamPin_Hard"
@@ -399,12 +399,18 @@ local function initAutoThrow()
     end
 
     -- HARD: kamera dibekukan di titik fix, menang lawan cutscene game
+    local LOOK_AT = Vector3.new(2.23, 6.01, 20.29) -- arah pandang kamera (bebas diganti)
+
     local function hardStep()
         local cam = Workspace.CurrentCamera
+        -- blok game yang coba set first-person/lock
+        if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then
+            LocalPlayer.CameraMode = Enum.CameraMode.Classic
+        end
         if cam.CameraType ~= Enum.CameraType.Scriptable then
             cam.CameraType = Enum.CameraType.Scriptable
         end
-        cam.CFrame = CFrame.lookAt(CAM_POS, BASE_POS)
+        cam.CFrame = CFrame.lookAt(CAM_POS, LOOK_AT)
     end
 
     local function startCamPin()
@@ -415,8 +421,8 @@ local function initAutoThrow()
         savedSubject    = camera.CameraSubject
         savedCameraType = camera.CameraType
 
-        if HARD_LOCK then
-            RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Camera.Value + 1, hardStep)
+            if HARD_LOCK then
+            RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 1, hardStep)
         else
             RunService:BindToRenderStep(BIND_SOFT, Enum.RenderPriority.Camera.Value - 1, softStep)
         end
