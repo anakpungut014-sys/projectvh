@@ -2738,6 +2738,77 @@ local function gfx_enableFPS()
         return false
     end
 
+    -- ═══════════════════════════════════════════════════════════
+    -- 3.5 HIDE SEMUA POHON (tree / pohon / plant / foliage / dll)
+    -- ═══════════════════════════════════════════════════════════
+    local TREE_KEYWORDS = {
+        "tree", "pohon", "foliage", "leaf", "leaves",
+        "plant", "bush", "grass", "fern", "palm",
+        "trunk", "branch", "canopy", "shrub",
+    }
+
+    local function isTreeObject(obj)
+        if not obj or not obj.Parent then return false end
+        local name = tostring(obj.Name):lower()
+        for _, kw in ipairs(TREE_KEYWORDS) do
+            if name:find(kw, 1, true) then
+                return true
+            end
+        end
+        return false
+    end
+
+    local function hideTree(obj)
+        if not obj or not obj.Parent then return end
+        if GFX.HiddenParts[obj] then return end
+
+        local backup = { obj = obj, isTree = true }
+        pcall(function() backup.transparency = obj.Transparency end)
+        pcall(function() backup.visible = obj.Visible end)
+        pcall(function() backup.size = obj.Size end)
+        GFX.HiddenParts[obj] = backup
+
+        if obj:IsA("BasePart") then
+            pcall(function() obj.Transparency = 1 end)
+            pcall(function() obj.CanCollide = false end)
+            pcall(function() obj.CanQuery = false end)
+            pcall(function() obj.CanTouch = false end)
+        elseif obj:IsA("Model") then
+            for _, d in ipairs(obj:GetDescendants()) do
+                if d:IsA("BasePart") then
+                    pcall(function() d.Transparency = 1 end)
+                    pcall(function() d.CanCollide = false end)
+                end
+            end
+        end
+    end
+
+    -- Scan awal: hide semua pohon
+    task.spawn(function()
+        for _, obj in ipairs(Workspace:GetDescendants()) do
+            if not GFX.FPSEnabled then break end
+            if (obj:IsA("Model") or obj:IsA("BasePart") or obj:IsA("MeshPart"))
+                and isTreeObject(obj)
+                and not isVrilzObject(obj) then
+                hideTree(obj)
+            end
+        end
+
+        -- Watch pohon baru (spawn belakangan)
+        local treeConn = Workspace.DescendantAdded:Connect(function(obj)
+            if not GFX.FPSEnabled then return end
+            task.defer(function()
+                if not obj or not obj.Parent then return end
+                if (obj:IsA("Model") or obj:IsA("BasePart") or obj:IsA("MeshPart"))
+                    and isTreeObject(obj)
+                    and not isVrilzObject(obj) then
+                    hideTree(obj)
+                end
+            end)
+        end)
+        table.insert(GFX.Connections, treeConn)
+    end)
+    
     -- ═══ SCAN SEMUA EFFECT DI WORKSPACE ═══
     task.spawn(function()
         local function scanEffects()
@@ -2806,7 +2877,7 @@ local function gfx_enableFPS()
 
         notify("✨ FPS Boost ON — " .. tostring(#Workspace:GetDescendants()) .. " objects scanned", "success")
     end)
-
+    
     -- ═══════════════════════════════════════════════════════════
     -- 4. HIDE POST-PROCESSING EFFECT BERAT (Atmosphere, DOF, SunRays, Bloom)
     -- ═══════════════════════════════════════════════════════════
