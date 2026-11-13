@@ -239,43 +239,70 @@ local function sendFishWebhook(info)
     if not url or url == "" then return end
     if typeof(info) ~= "table" then return end
 
-    local fishName = info.baseName or "Unknown"
-    local fishRarity = info.rarity or info.grade or "Unknown"
-    local fishChance = tonumber(info.chance) or 0
+    local fishName     = info.baseName or "Unknown"
+    local fishRarity   = info.rarity or info.grade or "Unknown"
+    local fishChance   = tonumber(info.chance) or 0
     local fishMutation = info.mutation or "Normal"
-    local fishSize = info.size or "Normal"
-    local fishWeight = tonumber(info.weight) or 0
-    local fishWater = info.waterType or "?"
+    local fishSize     = info.size or "Normal"
+    local fishWeight   = tonumber(info.weight) or 0
+    local fishWater    = info.waterType or "?"
 
+    -- ═══ FILTER RARITY ═══
     local filter = Shared.WebhookSelectedRarities or {}
     local anySelected = false
     for _, v in pairs(filter) do if v == true then anySelected = true break end end
     if anySelected and not filter[fishRarity] then return end
 
+    -- ═══ FORMAT CHANCE ═══
     local chanceStr
     if fishChance >= 1 then chanceStr = string.format("%.2f%%", fishChance)
     elseif fishChance >= 0.01 then chanceStr = string.format("%.2f%%", fishChance * 100)
     elseif fishChance >= 0.0001 then chanceStr = string.format("%.4f%%", fishChance * 100)
     else chanceStr = string.format("%.6f%%", fishChance * 100) end
 
-    local embedColor = WEBHOOK_RARITY_COLORS[fishRarity] or 3447003
-    local userField = "||Disabled||"
+    -- ═══ WARNA PER RARITY (lebih premium / gradient friendly) ═══
+    local RARITY_COLORS = {
+        ["Common"]    = 0xB0B4BC,
+        ["UnCommon"]  = 0x7CF29E,
+        ["Uncommon"]  = 0x7CF29E,
+        ["Rare"]      = 0x5BA8FF,
+        ["Epic"]      = 0xB86CFF,
+        ["Legendary"] = 0xFFC93C,
+        ["Mythical"]  = 0xFF6BD6,
+        ["Mythic"]    = 0xFF6BD6,
+        ["Secret"]    = 0xFF4D6D,
+    }
+
+    local RARITY_EMOJI = {
+        ["Common"]    = "⚪",
+        ["UnCommon"]  = "🟢",
+        ["Uncommon"]  = "🟢",
+        ["Rare"]      = "🔵",
+        ["Epic"]      = "🟣",
+        ["Legendary"] = "🟡",
+        ["Mythical"]  = "🔴",
+        ["Mythic"]    = "🔴",
+        ["Secret"]    = "🟥",
+    }
+
+    local embedColor  = RARITY_COLORS[fishRarity] or 0x5865F2
+    local rarityEmoji = RARITY_EMOJI[fishRarity]  or "⚪"
+
+    -- ═══ USER FIELD (masked) ═══
+    local userField = "`Disabled`"
     if Shared.WebhookShowUser then
-        userField = "```" .. sensorUsername(LocalPlayer.DisplayName) .. "```"
+        userField = "`" .. sensorUsername(LocalPlayer.DisplayName) .. "`"
     end
 
-        local fishImage = nil
+    -- ═══ AMBIL THUMBNAIL IKAN ═══
+    local fishImage = nil
     pcall(function()
         local RS = game:GetService("ReplicatedStorage")
         local imgDB = RS.Modules.Fishing.FishingImageDatabase
         local data = require(imgDB)
         if data and data.Fish then
             local key = info.originalName or info.baseName
-            
-            -- Exact match
             local fishData = data.Fish[key]
-            
-            -- Fallback: case-insensitive
             if not fishData then
                 for fishName, fd in pairs(data.Fish) do
                     if tostring(fishName):lower() == tostring(key):lower() then
@@ -284,7 +311,6 @@ local function sendFishWebhook(info)
                     end
                 end
             end
-            
             local icon
             if fishData then
                 if type(fishData) == "table" then
@@ -293,17 +319,14 @@ local function sendFishWebhook(info)
                     icon = fishData
                 end
             end
-            
-            -- Fallback ke Default
             if not icon and data.Default then
                 icon = type(data.Default) == "table" and data.Default.Icon or data.Default
             end
-            
-            -- Convert ke URL thumbnail (BUKAN assetdelivery)
             if icon then
                 local id = tostring(icon):match("%d+")
                 if id then
-                    fishImage = "https://thumbnails.roblox.com/v1/assets?assetIds=" .. id .. "&size=420x420&format=Png"
+                    fishImage = "https://thumbnails.roblox.com/v1/assets?assetIds="
+                        .. id .. "&size=420x420&format=Png"
                 end
             end
         end
@@ -314,31 +337,97 @@ local function sendFishWebhook(info)
     local HttpService = game:GetService("HttpService")
     local ping = Shared.WebhookPingEveryone and "@everyone" or ""
 
-    local fields = {
-        { name = "🎣 Ikan", value = "```" .. fishName .. "```", inline = true },
-        { name = "⭐ Rarity", value = "```" .. fishRarity .. "```", inline = true },
-        { name = "🎲 Chance", value = "```" .. chanceStr .. "```", inline = true },
-        { name = "🌊 Water", value = "```" .. fishWater .. "```", inline = true },
-        { name = "⚖️ Berat", value = "```" .. string.format("%.2f kg", fishWeight) .. "```", inline = true },
-        { name = "📏 Size", value = "```" .. fishSize .. "```", inline = true },
-    }
-    if fishMutation and fishMutation ~= "Normal" then
-        table.insert(fields, { name = "✨ Mutasi", value = "```" .. fishMutation .. "```", inline = true })
-    end
-    table.insert(fields, { name = "👤 User", value = userField, inline = false })
+    -- ═══ PREMIUM LAYOUT — GRID 2 KOLOM ═══
+    local divider = "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬"
 
+    local description = table.concat({
+        "> **" .. fishName .. "** baru saja ditangkep! 🎣",
+        "",
+        divider,
+        "",
+        "**" .. rarityEmoji .. "  RARITY**  ·  `" .. string.upper(fishRarity) .. "`",
+        "**🎲  CHANCE**   ·  `" .. chanceStr .. "`",
+        "",
+        divider,
+    }, "\n")
+
+    local fields = {
+        {
+            name = "🌊  Water Type",
+            value = "```fix\n" .. fishWater .. "\n```",
+            inline = true,
+        },
+        {
+            name = "⚖️  Weight",
+            value = "```yaml\n" .. string.format("%.2f kg", fishWeight) .. "\n```",
+            inline = true,
+        },
+        {
+            name = "📏  Size",
+            value = "```yaml\n" .. fishSize .. "\n```",
+            inline = true,
+        },
+    }
+
+    -- Mutation cuma muncul kalau ada
+    if fishMutation and fishMutation ~= "Normal" then
+        table.insert(fields, {
+            name = "✨  Mutation",
+            value = "```diff\n+ " .. fishMutation .. "\n```",
+            inline = true,
+        })
+        -- Biar genap 2x2, tambah spacer kalau mutation ada
+        if #fields % 3 ~= 0 then
+            table.insert(fields, {
+                name = "\u{200b}",   -- zero-width space
+                value = "\u{200b}",
+                inline = true,
+            })
+        end
+    end
+
+    -- User footer line
+    table.insert(fields, {
+        name = "👤  Caught By",
+        value = userField,
+        inline = false,
+    })
+
+    -- ═══ BUILD EMBED ═══
     local embed = {
-        title = "🐟 NEW FISH CAUGHT!",
-        description = "**" .. fishName .. "** berhasil ditangkep!",
-        color = embedColor, fields = fields,
-        footer = { text = "VRILZHUB · " .. os.date("%d/%m/%Y %H:%M:%S") },
+        author = {
+            name = "🐟  VRILZHUB  ·  FISHING LOG",
+            icon_url = "https://cdn.discordapp.com/emojis/1157058398263783454.gif",
+        },
+        title = rarityEmoji .. "  " .. fishName,
+        description = description,
+        color = embedColor,
+        fields = fields,
+        footer = {
+            text = "VRILZHUB  •  " .. os.date("%d %b %Y  ·  %H:%M:%S"),
+            icon_url = "https://cdn.discordapp.com/emojis/1157058398263783454.gif",
+        },
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
     }
-    if fishImage then embed.thumbnail = { url = fishImage } end
 
-    local payload = HttpService:JSONEncode({ username = "VRILZHUB", content = ping, embeds = { embed } })
+    if fishImage then
+        embed.thumbnail = { url = fishImage }
+    end
+
+    local payload = HttpService:JSONEncode({
+        username = "VRILZHUB",
+        avatar_url = "https://cdn.discordapp.com/emojis/1157058398263783454.gif",
+        content = ping,
+        embeds = { embed },
+    })
+
     pcall(function()
-        req({ Url = url, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = payload })
+        req({
+            Url = url,
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = payload,
+        })
     end)
 end
 _G.VRILZ_SendFishWebhook = sendFishWebhook
@@ -347,25 +436,69 @@ local function sendTestWebhook()
     if not Shared or not Shared.WebhookURL or Shared.WebhookURL == "" then return false end
     local req = (syn and syn.request) or (http and http.request) or http_request or request
     if not req then return false end
+
     local HttpService = game:GetService("HttpService")
     local ping = Shared.WebhookPingEveryone and "@everyone" or ""
+    local divider = "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬"
+
     local payload = HttpService:JSONEncode({
-        username = "VRILZHUB", content = ping,
-        embeds = {{
-            title = "🔔 WEBHOOK CONNECTED",
-            description = "Test berhasil! Webhook lo udah nyambung ke **VRILZHUB**.",
-            color = 15859455,
-            fields = {
-                { name = "👤 User", value = "```" .. sensorUsername(LocalPlayer.DisplayName) .. "```", inline = true },
-                { name = "⏰ Time", value = "```" .. os.date("%H:%M:%S") .. "```", inline = true },
-                { name = "📅 Date", value = "```" .. os.date("%d/%m/%Y") .. "```", inline = true },
+        username = "VRILZHUB",
+        avatar_url = "https://cdn.discordapp.com/emojis/1157058398263783454.gif",
+        content = ping,
+        embeds = {
+            {
+                author = {
+                    name = "🔔  VRILZHUB  ·  SYSTEM NOTIFICATION",
+                    icon_url = "https://cdn.discordapp.com/emojis/1157058398263783454.gif",
+                },
+                title = "✅  Webhook Successfully Connected",
+                description = table.concat({
+                    "> Sistem **VRILZHUB** sudah terhubung ke webhook ini.",
+                    "",
+                    divider,
+                    "",
+                    "**📡  Status**  ·  `ONLINE`",
+                    "**🔐  Security**  ·  `Encrypted`",
+                    "**⚙️  Endpoint**  ·  `Discord API v10`",
+                    "",
+                    divider,
+                    "",
+                    "> Semua notifikasi fishing akan muncul di sini.",
+                }, "\n"),
+                color = 0x5865F2,
+                fields = {
+                    {
+                        name = "👤  User",
+                        value = "```yaml\n" .. sensorUsername(LocalPlayer.DisplayName) .. "\n```",
+                        inline = true,
+                    },
+                    {
+                        name = "⏰  Time",
+                        value = "```yaml\n" .. os.date("%H:%M:%S") .. "\n```",
+                        inline = true,
+                    },
+                    {
+                        name = "📅  Date",
+                        value = "```yaml\n" .. os.date("%d/%m/%Y") .. "\n```",
+                        inline = true,
+                    },
+                },
+                footer = {
+                    text = "VRILZHUB  •  Premium Notification System",
+                    icon_url = "https://cdn.discordapp.com/emojis/1157058398263783454.gif",
+                },
+                timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
             },
-            footer = { text = "VRILZHUB · Test Notification" },
-            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
-        }}
+        },
     })
+
     local ok = pcall(function()
-        req({ Url = Shared.WebhookURL, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = payload })
+        req({
+            Url = Shared.WebhookURL,
+            Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = payload,
+        })
     end)
     return ok
 end
