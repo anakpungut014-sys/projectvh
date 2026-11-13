@@ -498,7 +498,202 @@ local function initAutoThrow()
         end)
     end)
 end
-    
+
+-- ═══════════════════════════════════════════════════════════
+-- 🛒 AUTO BUY BEST FOOD + AUTO UPGRADE STAND
+-- ═══════════════════════════════════════════════════════════
+local function initAutoShop()
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+    local State = {
+        autoBuy = false,
+        autoUpgrade = false,
+        lastBuyNotify = 0,
+        lastUpgradeNotify = 0,
+    }
+
+    local function requireShared(folder, ...)
+        local node = ReplicatedStorage:WaitForChild(folder, 5)
+        if not node then return nil end
+        for _, name in ipairs({ ... }) do
+            node = node:WaitForChild(name, 5)
+            if not node then return nil end
+        end
+        local ok, mod = pcall(require, node)
+        return ok and mod or nil
+    end
+
+    local function requirePlayerScript(...)
+        local ps = LocalPlayer:WaitForChild("PlayerScripts", 5)
+        if not ps then return nil end
+        for _, name in ipairs({ ... }) do
+            ps = ps:WaitForChild(name, 5)
+            if not ps then return nil end
+        end
+        local ok, mod = pcall(require, ps)
+        return ok and mod or nil
+    end
+
+    local FoodsConfig = requireShared("Config", "FoodsConfig")
+    local StandsConfig = requireShared("Config", "StandsConfig")
+    local Remotes = requireShared("Shared", "Remotes")
+
+    local DataController = requirePlayerScript("Client", "Controllers", "DataController")
+    local PlotController = requirePlayerScript("Client", "Controllers", "PlotController")
+    local TrainingController = requirePlayerScript("Client", "Controllers", "TrainingController")
+    local ClientState = requirePlayerScript("Client", "Controllers", "ClientState")
+
+    local function isBusy()
+        local busy = false
+        if ClientState then
+            pcall(function() busy = ClientState.Busy == true end)
+        end
+        return busy
+    end
+
+    local function notifySafe(title, content)
+        if Shared and Shared.Notify then
+            pcall(Shared.Notify, title .. ": " .. content, "info")
+        end
+    end
+
+    local function notifyThrottled(field, title, content, interval)
+        local now = os.clock()
+        if now - (State[field] or 0) < (interval or 5) then return end
+        State[field] = now
+        notifySafe(title, content)
+    end
+
+    local function stopTraining()
+        if not TrainingController or not TrainingController.IsRunning then return end
+        local running = false
+        pcall(function() running = TrainingController.IsRunning() end)
+        if not running then return end
+        pcall(function() TrainingController.Stop() end)
+        local start = os.clock()
+        while os.clock() - start < 6 do
+            local still = false
+            pcall(function() still = TrainingController.IsRunning() end)
+            if not still then break end
+            task.wait(0.2)
+        end
+    end
+
+    -- ═══ FOOD ═══
+    local function buildFoodList()
+        local list = {}
+        if not FoodsConfig then return list end
+        local okCount, total = pcall(FoodsConfig.CountAll)
+        if not okCount or type(total) ~= "number" then return list end
+        for i = 1, total do
+            local okGet, food = pcall(FoodsConfig.GetAny, i)
+            if okGet and food then
+                local locked = false
+                pcall(function()
+                    locked = FoodsConfig.IsLocked(food.Index) and true or false
+                end)
+                if not locked then
+                    table.insert(list, { slot = i, food = food })
+                end
+            end
+        end
+        table.sort(list, function(a, b)
+            local ta = a.food.Tier or 0
+            local tb = b.food.Tier or 0
+            if ta == tb then return (a.food.Price or 0) > (b.food.Price or 0) end
+            return tb < ta
+        end)
+        return list
+    end
+
+    local function isFoodOwned(food)
+        if not DataController then return false end
+        local ok, owned = pcall(function()
+            return DataController:GetPath("OwnedFoods." .. food.Index) == true
+        end)
+        return ok and owned or false
+    end
+
+    local function runShopCycle()
+        if not (FoodsConfig and DataController and Remotes) then return end
+        if isBusy() then return end
+        local money = 0
+        pcall(function() money = DataController:Get("Money") or 0 end)
+        for _, entry in ipairs(buildFoodList()) do
+            local food = entry.food
+            if isFoodOwned(food) then return end
+            if (food.Price or math.huge) <= money then
+                local okBuy, res = pcall(Remotes.Invoke, "Shop_Buy", entry.slot)
+                if okBuy and res and res.Ok then
+                    notifyThrottled("lastBuyNotify", "Auto Buy", "Bought " .. tostring(food.Name) .. "!", 3)
+                    return
+                end
+            end
+        end
+    end
+
+    -- ═══ STAND ═══
+    local function tryUpgradeStand()
+        if not (Remotes and DataController and StandsConfig) then return nil end
+        local level, money = 0, 0
+        pcall(function()
+            level = DataController:Get("Stand") or 0
+            money = DataController:Get("Money") or 0
+        end)
+        local okNext, nextStand = pcall(StandsConfig.Get, level + 1)
+        if not okNext or not nextStand then return nil end
+        if money < (nextStand.Price or math.huge) then return nil end
+        if TrainingController then stopTraining() end
+        if isBusy() then return nil end
+        local okUp, res = pcall(Remotes.Invoke, "Stand_Upgrade")
+        local upgraded = okUp and res and res.Ok
+        if not upgraded and PlotController and PlotController.TeleportToStand then
+            pcall(PlotController.TeleportToStand, false)
+            task.wait(0.6)
+            local okUp2, res2 = pcall(Remotes.Invoke, "Stand_Upgrade")
+            upgraded = okUp2 and res2 and res2.Ok
+            res = res2
+        end
+        if upgraded and res then
+            local okName, newStand = pcall(StandsConfig.Get, res.NewIndex)
+            local standName = (okName and newStand and newStand.Name) or "a new stand"
+            notifyThrottled("lastUpgradeNotify", "Upgrade", "Upgraded to " .. tostring(standName) .. "!", 3)
+        end
+        return upgraded
+    end
+
+    -- ═══ LOOP SHOP ═══
+    task.spawn(function()
+        while true do
+            task.wait(1.5)
+            if State.autoBuy then pcall(runShopCycle) end
+        end
+    end)
+
+    -- ═══ LOOP STAND ═══
+    task.spawn(function()
+        while true do
+            task.wait(2)
+            if State.autoUpgrade
+                and not isBusy()
+                and not (Shared and Shared.AutoThrow_Enabled) then
+                pcall(tryUpgradeStand)
+            end
+        end
+    end)
+
+    -- ═══ SYNC FLAG ═══
+    task.spawn(function()
+        while true do
+            task.wait(0.3)
+            if Shared then
+                State.autoBuy = Shared.AutoBuy_Enabled == true
+                State.autoUpgrade = Shared.AutoUpgradeStand_Enabled == true
+            end
+        end
+    end)
+end
+
 -- ============================================================
 -- FEATURES.INIT
 -- ============================================================
@@ -517,6 +712,10 @@ function Features.Init(sharedState)
     if not Features._autoThrowStarted then
         Features._autoThrowStarted = true
         pcall(initAutoThrow)
+    end
+        if not Features._autoShopStarted then
+        Features._autoShopStarted = true
+        pcall(initAutoShop)
     end
 end
     
