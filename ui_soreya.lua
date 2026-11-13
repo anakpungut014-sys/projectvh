@@ -264,24 +264,47 @@ local function sendFishWebhook(info)
         userField = "```" .. sensorUsername(LocalPlayer.DisplayName) .. "```"
     end
 
-    local fishImage = nil
+        local fishImage = nil
     pcall(function()
         local RS = game:GetService("ReplicatedStorage")
         local imgDB = RS.Modules.Fishing.FishingImageDatabase
         local data = require(imgDB)
         if data and data.Fish then
             local key = info.originalName or info.baseName
+            
+            -- Exact match
             local fishData = data.Fish[key]
-            if fishData and type(fishData) == "table" then
-                local icon = fishData.Icon or fishData.icon or fishData.Image
-                if icon then
-                    local id = tostring(icon):match("%d+")
-                    if id then fishImage = "https://thumbnails.roblox.com/v1/assets?assetIds=" .. id .. "&size=420x420&format=Png" end
+            
+            -- Fallback: case-insensitive
+            if not fishData then
+                for fishName, fd in pairs(data.Fish) do
+                    if tostring(fishName):lower() == tostring(key):lower() then
+                        fishData = fd
+                        break
+                    end
                 end
             end
-            if not fishImage and data.Default and data.Default.Icon then
-                local id = tostring(data.Default.Icon):match("%d+")
-                if id then fishImage = "https://thumbnails.roblox.com/v1/assets?assetIds=" .. id .. "&size=420x420&format=Png" end
+            
+            local icon
+            if fishData then
+                if type(fishData) == "table" then
+                    icon = fishData.Icon or fishData.icon
+                elseif type(fishData) == "string" or type(fishData) == "number" then
+                    icon = fishData
+                end
+            end
+            
+            -- Fallback ke Default
+            if not icon and data.Default then
+                icon = type(data.Default) == "table" and data.Default.Icon or data.Default
+            end
+            
+            -- Convert ke URL thumbnail (BUKAN assetdelivery)
+            if icon then
+                local id = tostring(icon):match("%d+")
+                if id then
+                    fishImage = "https://thumbnails.roblox.com/v1/assets?assetIds=" .. id .. "&size=420x420&format=Png"
+                end
             end
         end
     end)
