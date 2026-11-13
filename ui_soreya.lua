@@ -187,6 +187,167 @@ local titleLoopRunning = false
 -- ═══════════════════════════════════════════
 local TITLE_SAVE_FILE = "vrilz_title.txt"
 
+-- ============================================================
+-- WEBHOOK SAVE/LOAD + SENDER
+-- ============================================================
+local WEBHOOK_SAVE_FILE = "vrilz_webhook.txt"
+
+local function saveWebhookURL(url)
+    _G.VRILZ_WebhookURL = url
+    if writefile then pcall(writefile, WEBHOOK_SAVE_FILE, url or "") end
+end
+
+local function loadWebhookURL()
+    if _G.VRILZ_WebhookURL then return _G.VRILZ_WebhookURL end
+    if readfile and isfile then
+        local ok, exists = pcall(isfile, WEBHOOK_SAVE_FILE)
+        if ok and exists then
+            local okRead, content = pcall(readfile, WEBHOOK_SAVE_FILE)
+            if okRead and content then
+                content = content:gsub("^%s+", ""):gsub("%s+$", "")
+                if content ~= "" then
+                    _G.VRILZ_WebhookURL = content
+                    return content
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function sensorUsername(name)
+    if not name or #name < 4 then return "***" end
+    local len = #name
+    local keep = math.max(2, math.floor(len * 0.3))
+    local front = name:sub(1, keep)
+    local back = name:sub(len - keep + 1)
+    local stars = string.rep("*", math.max(1, len - keep * 2))
+    return front .. stars .. back
+end
+_G.VRILZ_SensorUsername = sensorUsername
+
+local WEBHOOK_RARITY_COLORS = {
+    ["Common"] = 0xC8C8C8, ["UnCommon"] = 0x64FF64, ["Uncommon"] = 0x64FF64,
+    ["Rare"] = 0x6496FF, ["Epic"] = 0xC864FF, ["Legendary"] = 0xFFC832,
+    ["Mythical"] = 0xFF64C8, ["Mythic"] = 0xFF64C8, ["Secret"] = 0xFF5050,
+}
+
+-- ⚠️ FISH SENDER DIPINDAH KE SINI biar bisa akses `Shared` & `LocalPlayer`
+local function sendFishWebhook(info)
+    if not Shared or not Shared.WebhookEnabled then return end
+    local url = Shared.WebhookURL
+    if not url or url == "" then return end
+    if typeof(info) ~= "table" then return end
+
+    local fishName = info.baseName or "Unknown"
+    local fishRarity = info.rarity or info.grade or "Unknown"
+    local fishChance = tonumber(info.chance) or 0
+    local fishMutation = info.mutation or "Normal"
+    local fishSize = info.size or "Normal"
+    local fishWeight = tonumber(info.weight) or 0
+    local fishWater = info.waterType or "?"
+
+    local filter = Shared.WebhookSelectedRarities or {}
+    local anySelected = false
+    for _, v in pairs(filter) do if v == true then anySelected = true break end end
+    if anySelected and not filter[fishRarity] then return end
+
+    local chanceStr
+    if fishChance >= 1 then chanceStr = string.format("%.2f%%", fishChance)
+    elseif fishChance >= 0.01 then chanceStr = string.format("%.2f%%", fishChance * 100)
+    elseif fishChance >= 0.0001 then chanceStr = string.format("%.4f%%", fishChance * 100)
+    else chanceStr = string.format("%.6f%%", fishChance * 100) end
+
+    local embedColor = WEBHOOK_RARITY_COLORS[fishRarity] or 3447003
+    local userField = "||Disabled||"
+    if Shared.WebhookShowUser then
+        userField = "```" .. sensorUsername(LocalPlayer.DisplayName) .. "```"
+    end
+
+    local fishImage = nil
+    pcall(function()
+        local RS = game:GetService("ReplicatedStorage")
+        local imgDB = RS.Modules.Fishing.FishingImageDatabase
+        local data = require(imgDB)
+        if data and data.Fish then
+            local key = info.originalName or info.baseName
+            local fishData = data.Fish[key]
+            if fishData and type(fishData) == "table" then
+                local icon = fishData.Icon or fishData.icon or fishData.Image
+                if icon then
+                    local id = tostring(icon):match("%d+")
+                    if id then fishImage = "https://thumbnails.roblox.com/v1/assets?assetIds=" .. id .. "&size=420x420&format=Png" end
+                end
+            end
+            if not fishImage and data.Default and data.Default.Icon then
+                local id = tostring(data.Default.Icon):match("%d+")
+                if id then fishImage = "https://thumbnails.roblox.com/v1/assets?assetIds=" .. id .. "&size=420x420&format=Png" end
+            end
+        end
+    end)
+
+    local req = (syn and syn.request) or (http and http.request) or http_request or request
+    if not req then return end
+    local HttpService = game:GetService("HttpService")
+    local ping = Shared.WebhookPingEveryone and "@everyone" or ""
+
+    local fields = {
+        { name = "🎣 Ikan", value = "```" .. fishName .. "```", inline = true },
+        { name = "⭐ Rarity", value = "```" .. fishRarity .. "```", inline = true },
+        { name = "🎲 Chance", value = "```" .. chanceStr .. "```", inline = true },
+        { name = "🌊 Water", value = "```" .. fishWater .. "```", inline = true },
+        { name = "⚖️ Berat", value = "```" .. string.format("%.2f kg", fishWeight) .. "```", inline = true },
+        { name = "📏 Size", value = "```" .. fishSize .. "```", inline = true },
+    }
+    if fishMutation and fishMutation ~= "Normal" then
+        table.insert(fields, { name = "✨ Mutasi", value = "```" .. fishMutation .. "```", inline = true })
+    end
+    table.insert(fields, { name = "👤 User", value = userField, inline = false })
+
+    local embed = {
+        title = "🐟 NEW FISH CAUGHT!",
+        description = "**" .. fishName .. "** berhasil ditangkep!",
+        color = embedColor, fields = fields,
+        footer = { text = "VRILZHUB · " .. os.date("%d/%m/%Y %H:%M:%S") },
+        timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+    }
+    if fishImage then embed.thumbnail = { url = fishImage } end
+
+    local payload = HttpService:JSONEncode({ username = "VRILZHUB", content = ping, embeds = { embed } })
+    pcall(function()
+        req({ Url = url, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = payload })
+    end)
+end
+_G.VRILZ_SendFishWebhook = sendFishWebhook
+
+local function sendTestWebhook()
+    if not Shared or not Shared.WebhookURL or Shared.WebhookURL == "" then return false end
+    local req = (syn and syn.request) or (http and http.request) or http_request or request
+    if not req then return false end
+    local HttpService = game:GetService("HttpService")
+    local ping = Shared.WebhookPingEveryone and "@everyone" or ""
+    local payload = HttpService:JSONEncode({
+        username = "VRILZHUB", content = ping,
+        embeds = {{
+            title = "🔔 WEBHOOK CONNECTED",
+            description = "Test berhasil! Webhook lo udah nyambung ke **VRILZHUB**.",
+            color = 15859455,
+            fields = {
+                { name = "👤 User", value = "```" .. sensorUsername(LocalPlayer.DisplayName) .. "```", inline = true },
+                { name = "⏰ Time", value = "```" .. os.date("%H:%M:%S") .. "```", inline = true },
+                { name = "📅 Date", value = "```" .. os.date("%d/%m/%Y") .. "```", inline = true },
+            },
+            footer = { text = "VRILZHUB · Test Notification" },
+            timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
+        }}
+    })
+    local ok = pcall(function()
+        req({ Url = Shared.WebhookURL, Method = "POST", Headers = { ["Content-Type"] = "application/json" }, Body = payload })
+    end)
+    return ok
+end
+_G.VRILZ_SendTestWebhook = sendTestWebhook
+
 local function saveCustomTitle(title)
     if writefile then
         pcall(function()
@@ -4951,6 +5112,326 @@ do
     end, "AutoFish_Turbo")
 end
 
+-- ============================================================
+-- 🔔 WEBHOOK TAB — PREMIUM EDITION
+-- ============================================================
+do
+    local whPage, whLeft, whRight = createTwoColumnPage("Webhook")
+    pages.Webhook = whPage
+
+    -- ═══ KIRI: URL INPUT ═══
+    local urlCard, urlContent = makeCard(whLeft, "🔗 WEBHOOK URL", 1)
+
+    local urlHint = Instance.new("TextLabel")
+    urlHint.Size = UDim2.new(1, 0, 0, 14)
+    urlHint.BackgroundTransparency = 1
+    urlHint.Text = "Paste Discord webhook URL:"
+    urlHint.TextColor3 = C.Muted
+    urlHint.Font = Enum.Font.GothamSemibold
+    urlHint.TextSize = CFG.FONT_MUTED
+    urlHint.TextXAlignment = Enum.TextXAlignment.Left
+    urlHint.LayoutOrder = 1
+    urlHint.ZIndex = 3
+    urlHint.Parent = urlContent
+    registerTheme(urlHint, "Muted", "TextColor3")
+
+    local urlWrap = Instance.new("Frame")
+    urlWrap.Size = UDim2.new(1, 0, 0, 44)
+    urlWrap.BackgroundColor3 = C.Surface3
+    urlWrap.BackgroundTransparency = 0.3
+    urlWrap.BorderSizePixel = 0
+    urlWrap.ClipsDescendants = true
+    urlWrap.LayoutOrder = 2
+    urlWrap.ZIndex = 3
+    urlWrap.Parent = urlContent
+    registerTheme(urlWrap, "Surface3", "BackgroundColor3")
+
+    local urlWrapCorner = Instance.new("UICorner")
+    urlWrapCorner.CornerRadius = UDim.new(0, 10)
+    urlWrapCorner.Parent = urlWrap
+
+    local urlWrapStroke = Instance.new("UIStroke")
+    urlWrapStroke.Color = C.Accent
+    urlWrapStroke.Thickness = 1.5
+    urlWrapStroke.Transparency = 0.5
+    urlWrapStroke.Parent = urlWrap
+    registerTheme(urlWrapStroke, "Accent", "Color")
+
+    local accentBar = Instance.new("Frame")
+    accentBar.Size = UDim2.new(0, 3, 1, -16)
+    accentBar.Position = UDim2.new(0, 0, 0, 8)
+    accentBar.BackgroundColor3 = C.Accent
+    accentBar.BorderSizePixel = 0
+    accentBar.ZIndex = 5
+    accentBar.Parent = urlWrap
+    registerTheme(accentBar, "Accent", "BackgroundColor3")
+
+    local accentCorner = Instance.new("UICorner")
+    accentCorner.CornerRadius = UDim.new(0, 2)
+    accentCorner.Parent = accentBar
+
+    local urlIcon = Instance.new("TextLabel")
+    urlIcon.Size = UDim2.fromOffset(28, 28)
+    urlIcon.Position = UDim2.new(0, 10, 0.5, -14)
+    urlIcon.BackgroundTransparency = 1
+    urlIcon.Text = "🔗"
+    urlIcon.TextSize = 14
+    urlIcon.ZIndex = 5
+    urlIcon.Parent = urlWrap
+
+    local urlBox = Instance.new("TextBox")
+    urlBox.Size = UDim2.new(1, -54, 1, 0)
+    urlBox.Position = UDim2.fromOffset(44, 0)
+    urlBox.BackgroundTransparency = 1
+    urlBox.Text = Shared.WebhookURL or ""
+    urlBox.PlaceholderText = "https://discord.com/api/webhooks/..."
+    urlBox.PlaceholderColor3 = C.Muted
+    urlBox.TextColor3 = C.Text
+    urlBox.Font = Enum.Font.GothamSemibold
+    urlBox.TextSize = CFG.FONT_MUTED
+    urlBox.TextXAlignment = Enum.TextXAlignment.Left
+    urlBox.TextTruncate = Enum.TextTruncate.AtEnd
+    urlBox.ClearTextOnFocus = false
+    urlBox.ZIndex = 5
+    urlBox.Parent = urlWrap
+    registerTheme(urlBox, "Text", "TextColor3")
+
+    urlBox.FocusLost:Connect(function()
+        local url = urlBox.Text:gsub("^%s+", ""):gsub("%s+$", "")
+        if url ~= "" and (url:find("discord.com/api/webhooks") or url:find("discordapp.com/api/webhooks")) then
+            Shared.WebhookURL = url
+            saveWebhookURL(url)
+            urlWrapStroke.Color = C.Success
+            accentBar.BackgroundColor3 = C.Success
+            notify("✅ URL saved", "success")
+            task.delay(2, function()
+                TweenService:Create(urlWrapStroke, TweenInfo.new(0.5), { Transparency = 0.5 }):Play()
+            end)
+        elseif url ~= "" then
+            urlWrapStroke.Color = C.Error
+            accentBar.BackgroundColor3 = C.Error
+            notify("❌ Invalid URL", "error")
+        end
+    end)
+
+    task.defer(function()
+        if Shared.WebhookURL and Shared.WebhookURL ~= "" then
+            urlWrapStroke.Color = C.Success
+            accentBar.BackgroundColor3 = C.Success
+        end
+    end)
+
+    -- ═══ TOGGLES ═══
+    local toggleCard, toggleContent = makeCard(whLeft, "⚙️ SETTINGS", 2)
+
+    makeToggle(toggleContent, "Enable Webhook", false, function(v)
+        Shared.WebhookEnabled = v
+        if v and Shared.WebhookURL == "" then
+            notify("⚠️ Set URL dulu!", "warning")
+        else
+            notify(v and "🔔 Webhook: ON" or "🔔 Webhook: OFF", v and "success" or "info")
+        end
+    end, "WebhookEnabled")
+
+    makeToggle(toggleContent, "Ping @everyone", false, function(v)
+        Shared.WebhookPingEveryone = v
+    end, "WebhookPingEveryone")
+
+    makeToggle(toggleContent, "Show Username (masked)", true, function(v)
+        Shared.WebhookShowUser = v
+    end, "WebhookShowUser")
+
+    makeToggle(toggleContent, "Notify Got Fish", true, function(v)
+        Shared.WebhookNotifyFish = v
+    end, "WebhookNotifyFish")
+
+    -- ═══ RARITY FILTER ═══
+    local rarityCard, rarityContent = makeCard(whLeft, "⭐ RARITY FILTER", 3)
+
+    local rarityHint = Instance.new("TextLabel")
+    rarityHint.Size = UDim2.new(1, 0, 0, 14)
+    rarityHint.BackgroundTransparency = 1
+    rarityHint.Text = "Pilih rarity yang mau dikirim:"
+    rarityHint.TextColor3 = C.Muted
+    rarityHint.Font = Enum.Font.GothamSemibold
+    rarityHint.TextSize = CFG.FONT_MUTED
+    rarityHint.TextXAlignment = Enum.TextXAlignment.Left
+    rarityHint.LayoutOrder = 1
+    rarityHint.ZIndex = 3
+    rarityHint.Parent = rarityContent
+    registerTheme(rarityHint, "Muted", "TextColor3")
+
+    local rarityHolder = Instance.new("Frame")
+    rarityHolder.Size = UDim2.new(1, 0, 0, CFG.DROPDOWN_H)
+    rarityHolder.BackgroundTransparency = 1
+    rarityHolder.LayoutOrder = 2
+    rarityHolder.ZIndex = 3
+    rarityHolder.Parent = rarityContent
+
+    local rarityItems = { "Common", "UnCommon", "Rare", "Epic", "Legendary", "Mythical", "Secret" }
+
+    if next(Shared.WebhookSelectedRarities or {}) == nil then
+        Shared.WebhookSelectedRarities = {}
+        for _, r in ipairs(rarityItems) do Shared.WebhookSelectedRarities[r] = true end
+    end
+
+    makeDropdownMulti(rarityHolder, rarityItems, Shared.WebhookSelectedRarities, nil, function(t)
+        local count = 0
+        for _, v in pairs(t) do if v == true then count = count + 1 end end
+        if count == 0 then notify("⚠️ Gak ada rarity dipilih", "warning") end
+    end)
+
+    local btnRow = Instance.new("Frame")
+    btnRow.Size = UDim2.new(1, 0, 0, 30)
+    btnRow.BackgroundTransparency = 1
+    btnRow.LayoutOrder = 3
+    btnRow.ZIndex = 3
+    btnRow.Parent = rarityContent
+
+    local selectAllBtn = Instance.new("TextButton")
+    selectAllBtn.Size = UDim2.new(0.48, 0, 1, 0)
+    selectAllBtn.BackgroundColor3 = C.Success
+    selectAllBtn.Text = "✓ ALL"
+    selectAllBtn.TextColor3 = Color3.new(1, 1, 1)
+    selectAllBtn.Font = Enum.Font.GothamBold
+    selectAllBtn.TextSize = CFG.FONT_MUTED
+    selectAllBtn.BorderSizePixel = 0
+    selectAllBtn.Parent = btnRow
+    registerTheme(selectAllBtn, "Success", "BackgroundColor3")
+
+    local saCorner = Instance.new("UICorner")
+    saCorner.CornerRadius = UDim.new(0, 6)
+    saCorner.Parent = selectAllBtn
+
+    local clearAllBtn = Instance.new("TextButton")
+    clearAllBtn.Size = UDim2.new(0.48, 0, 1, 0)
+    clearAllBtn.Position = UDim2.new(0.52, 0, 0, 0)
+    clearAllBtn.BackgroundColor3 = C.Error
+    clearAllBtn.Text = "✕ NONE"
+    clearAllBtn.TextColor3 = Color3.new(1, 1, 1)
+    clearAllBtn.Font = Enum.Font.GothamBold
+    clearAllBtn.TextSize = CFG.FONT_MUTED
+    clearAllBtn.BorderSizePixel = 0
+    clearAllBtn.Parent = btnRow
+    registerTheme(clearAllBtn, "Error", "BackgroundColor3")
+
+    local caCorner = Instance.new("UICorner")
+    caCorner.CornerRadius = UDim.new(0, 6)
+    caCorner.Parent = clearAllBtn
+
+    selectAllBtn.MouseButton1Click:Connect(function()
+        for _, r in ipairs(rarityItems) do Shared.WebhookSelectedRarities[r] = true end
+        notify("✅ Semua rarity dipilih", "success")
+    end)
+
+    clearAllBtn.MouseButton1Click:Connect(function()
+        for _, r in ipairs(rarityItems) do Shared.WebhookSelectedRarities[r] = false end
+        notify("⚠️ Semua rarity di-uncheck", "warning")
+    end)
+
+    -- ═══ KANAN: TEST BUTTON ═══
+    local testCard, testContent = makeCard(whRight, "🧪 TEST CONNECTION", 1)
+
+    local testDesc = Instance.new("TextLabel")
+    testDesc.Size = UDim2.new(1, 0, 0, 28)
+    testDesc.BackgroundTransparency = 1
+    testDesc.Text = "Kirim pesan test ke Discord buat mastiin URL valid + mention work."
+    testDesc.TextColor3 = C.Muted
+    testDesc.Font = Enum.Font.GothamSemibold
+    testDesc.TextSize = CFG.FONT_MUTED
+    testDesc.TextWrapped = true
+    testDesc.TextXAlignment = Enum.TextXAlignment.Left
+    testDesc.TextYAlignment = Enum.TextYAlignment.Top
+    testDesc.LayoutOrder = 1
+    testDesc.ZIndex = 3
+    testDesc.Parent = testContent
+    registerTheme(testDesc, "Muted", "TextColor3")
+
+    local testBtn = Instance.new("TextButton")
+    testBtn.Size = UDim2.new(1, 0, 0, 46)
+    testBtn.BackgroundColor3 = C.Accent
+    testBtn.Text = ""
+    testBtn.BorderSizePixel = 0
+    testBtn.AutoButtonColor = false
+    testBtn.LayoutOrder = 2
+    testBtn.ZIndex = 3
+    testBtn.Parent = testContent
+    registerTheme(testBtn, "Accent", "BackgroundColor3")
+
+    local tbCorner = Instance.new("UICorner")
+    tbCorner.CornerRadius = UDim.new(0, 10)
+    tbCorner.Parent = testBtn
+
+    local tbGrad = Instance.new("UIGradient")
+    tbGrad.Rotation = 135
+    tbGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, C.Accent3),
+        ColorSequenceKeypoint.new(0.5, C.Accent),
+        ColorSequenceKeypoint.new(1, C.Accent2),
+    })
+    tbGrad.Parent = testBtn
+
+    local testLbl = Instance.new("TextLabel")
+    testLbl.Size = UDim2.fromScale(1, 1)
+    testLbl.BackgroundTransparency = 1
+    testLbl.Text = "🚀  SEND TEST NOTIFICATION"
+    testLbl.TextColor3 = Color3.new(1, 1, 1)
+    testLbl.Font = Enum.Font.GothamBlack
+    testLbl.TextSize = CFG.FONT_LABEL
+    testLbl.ZIndex = 6
+    testLbl.Parent = testBtn
+
+    testBtn.MouseButton1Click:Connect(function()
+        if not Shared.WebhookURL or Shared.WebhookURL == "" then
+            notify("❌ Set URL dulu!", "error")
+            return
+        end
+        testLbl.Text = "⏳  SENDING..."
+        task.spawn(function()
+            local ok = _G.VRILZ_SendTestWebhook()
+            if ok then
+                testLbl.Text = "✅  SENT!"
+                notify("✅ Test terkirim ke Discord", "success")
+            else
+                testLbl.Text = "❌  FAILED"
+                notify("❌ Gagal kirim", "error")
+            end
+            task.wait(2.5)
+            testLbl.Text = "🚀  SEND TEST NOTIFICATION"
+        end)
+    end)
+
+    -- ═══ PREVIEW FORMAT ═══
+    local previewCard, previewContent = makeCard(whRight, "📋 PREVIEW FORMAT", 2)
+
+    local previewLines = {
+        "🐟 **NEW FISH CAUGHT!**", "",
+        "🎣 Ikan: **Magma Swordfish**",
+        "⭐ Rarity: **Legendary**",
+        "🎲 Chance: **0.002%**",
+        "🌊 Water: **Lake**",
+        "⚖️ Berat: **63.11 kg**", "",
+        "✨ Mutasi: **Sandy**",
+        "👤 User: **Vri***ub12**", "",
+        "_Gambar ikan muncul sebagai thumbnail_",
+    }
+    for i, line in ipairs(previewLines) do
+        local lbl = Instance.new("TextLabel")
+        lbl.Size = UDim2.new(1, 0, 0, 16)
+        lbl.BackgroundTransparency = 1
+        lbl.Text = line
+        lbl.TextColor3 = C.Muted
+        lbl.Font = Enum.Font.GothamSemibold
+        lbl.TextSize = CFG.FONT_MUTED
+        lbl.TextWrapped = true
+        lbl.TextXAlignment = Enum.TextXAlignment.Left
+        lbl.LayoutOrder = i
+        lbl.ZIndex = 3
+        lbl.Parent = previewContent
+        registerTheme(lbl, "Muted", "TextColor3")
+    end
+end
+
 -- TAB SETTINGS
 do
     local setPage, setLeft, setRight, setHeader = createTwoColumnPage("Settings")
@@ -6028,6 +6509,7 @@ registerTab("Info", "129516985087314", "Info", true)
 registerTab("AutoSummit", "129516985087314", "Auto Summit", true)
 registerTab("AutoFish", "129516985087314", "Auto Fish", true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
+registerTab("Webhook", "78129393420657", "Webhook", true)
 registerTab("Settings", "97834340359225", "Settings", true)
 
                 -- ⭐ AUTO BUKA TAB INFO PAS PERTAMA LAUNCH
@@ -8923,6 +9405,16 @@ function UI.Init(sharedState)
     Shared.AutoFish_Enabled = false
     Shared.AutoSummit_Enabled = false
     Shared.AutoFish_Turbo = true
+
+-- Webhook state
+Shared.WebhookURL = _G.VRILZ_WebhookURL or ""
+Shared.WebhookEnabled = false
+Shared.WebhookPingEveryone = false
+Shared.WebhookNotifyFish = true
+Shared.WebhookShowUser = true
+Shared.WebhookSelectedRarities = {}
+-- ⭐ Load webhook URL tersimpan
+Shared.WebhookURL = loadWebhookURL() or ""
 
     -- Live Chat state
     Shared.LiveChat_Messages = {}
