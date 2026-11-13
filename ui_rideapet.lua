@@ -8233,8 +8233,8 @@ local function renderMessage(msg)
                     ownerTag.Parent = nameRow
                 end
 
-                -- 🏷 Badge game (MT SOREYA / RAP / TFF)
-                local msgTag = (msg.scriptTag and msg.scriptTag ~= "") and msg.scriptTag or getScriptTag()
+-- 🏷 Badge game (MT SOREYA / RAP / TFF)
+local msgTag = (msg.scriptTag and msg.scriptTag ~= "") and msg.scriptTag or nil
                 if msgTag then
                     local tagLbl = Instance.new("TextLabel")
                     tagLbl.Size = UDim2.new(0, 0, 0, 14)
