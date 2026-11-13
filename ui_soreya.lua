@@ -2792,7 +2792,7 @@ end
 local SCRIPT_TAGS = {
     [118517641508250] = "MT SOREYA",  -- Mount Soreya
     [124216119978534] = "RAP",        -- Ride a Pet
-    [10766972131]     = "TFF",        -- Throw Food
+    [10766972131]     = "TFFA",        -- Throw Food
 }
 
 local function getScriptTag()
