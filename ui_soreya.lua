@@ -4881,6 +4881,7 @@ do
             notify("🏔 Auto Summit: OFF", "info")
         end
     end, "AutoSummit_Enabled")
+end
 
 -- ============================================================
 -- 🎣 AUTO FISH TAB
