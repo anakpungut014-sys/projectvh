@@ -4906,15 +4906,11 @@ do
     fishDesc.Parent = fishContent
     registerTheme(fishDesc, "Muted", "TextColor3")
 
-    makeToggle(fishContent, "Enable Auto Fish (ALL)", false, function(v)
-        local FS = _G.VRILZ_FishState
-        if not FS then
-            notify("❌ Auto Fish script belum di-load!", "error")
-            return
-        end
-
+   makeToggle(fishContent, "Enable Auto Fish (ALL)", false, function(v)
+    -- ⭐ FIX: jangan return kalau FS nil — bridge yang urus nanti
+    local FS = _G.VRILZ_FishState
+    if FS then
         FS.enabled = v
-
         if v then
             FS.autoEquip = true
             FS.autoCast = true
@@ -4922,13 +4918,20 @@ do
             FS.autoReel = true
             FS.turboReel = true
             FS.reelAbort = false
-            notify("🎣 Auto Fish: ON (semua fitur)", "success")
         else
             FS.enabled = false
             FS.reelAbort = true
-            notify("🎣 Auto Fish: OFF", "info")
         end
-    end, "AutoFish_Enabled")
+    else
+        notify("⚠️ Fish script belum ready — akan aktif otomatis", "warning")
+    end
+
+    if v then
+        notify("🎣 Auto Fish: ON", "success")
+    else
+        notify("🎣 Auto Fish: OFF", "info")
+    end
+end, "AutoFish_Enabled")
 end
 
 -- TAB SETTINGS
