@@ -4906,32 +4906,52 @@ do
     fishDesc.Parent = fishContent
     registerTheme(fishDesc, "Muted", "TextColor3")
 
-   makeToggle(fishContent, "Enable Auto Fish (ALL)", false, function(v)
-    -- ⭐ FIX: jangan return kalau FS nil — bridge yang urus nanti
-    local FS = _G.VRILZ_FishState
-    if FS then
-        FS.enabled = v
-        if v then
-            FS.autoEquip = true
-            FS.autoCast = true
-            FS.autoPerfect = true
-            FS.autoReel = true
-            FS.turboReel = true
-            FS.reelAbort = false
-        else
-            FS.enabled = false
-            FS.reelAbort = true
-        end
-    else
-        notify("⚠️ Fish script belum ready — akan aktif otomatis", "warning")
-    end
+    local fishStatusLbl = Instance.new("TextLabel")
+    fishStatusLbl.Size = UDim2.new(1, 0, 0, 16)
+    fishStatusLbl.BackgroundTransparency = 1
+    fishStatusLbl.Text = "Status: Idle"
+    fishStatusLbl.TextColor3 = C.Muted
+    fishStatusLbl.Font = Enum.Font.GothamSemibold
+    fishStatusLbl.TextSize = CFG.FONT_MUTED
+    fishStatusLbl.TextXAlignment = Enum.TextXAlignment.Left
+    fishStatusLbl.LayoutOrder = 2
+    fishStatusLbl.ZIndex = 3
+    fishStatusLbl.Parent = fishContent
+    registerTheme(fishStatusLbl, "Muted", "TextColor3")
 
-    if v then
-        notify("🎣 Auto Fish: ON", "success")
-    else
-        notify("🎣 Auto Fish: OFF", "info")
-    end
-end, "AutoFish_Enabled")
+    task.spawn(function()
+        while fishStatusLbl.Parent do
+            task.wait(0.5)
+            local FS = _G.VRILZ_FishState
+            if FS then
+                local stats = FS.stats or {}
+                if FS.enabled then
+                    fishStatusLbl.Text = string.format("%s | Cast:%d Caught:%d",
+                        FS.status or "Running", stats.cast or 0, stats.caught or 0)
+                    fishStatusLbl.TextColor3 = Color3.fromRGB(80, 220, 140)
+                else
+                    fishStatusLbl.Text = "Status: OFF"
+                    fishStatusLbl.TextColor3 = C.Muted
+                end
+            else
+                fishStatusLbl.Text = "Status: ❌ Fish not ready"
+                fishStatusLbl.TextColor3 = Color3.fromRGB(255, 90, 100)
+            end
+        end
+    end)
+
+    makeToggle(fishContent, "Enable Auto Fish (ALL)", false, function(v)
+        if v then
+            notify("🎣 Auto Fish: ON", "success")
+        else
+            notify("🎣 Auto Fish: OFF", "info")
+        end
+    end, "AutoFish_Enabled")
+
+    makeToggle(fishContent, "⚡ Turbo Reel", true, function(v)
+        local FS = _G.VRILZ_FishState
+        if FS then FS.turboReel = v end
+    end, "AutoFish_Turbo")
 end
 
 -- TAB SETTINGS
@@ -8911,6 +8931,7 @@ function UI.Init(sharedState)
     Shared.ShowTitle = true 
     Shared.AutoFish_Enabled = false
     Shared.AutoSummit_Enabled = false
+    Shared.AutoFish_Turbo = true
 
     -- Live Chat state
     Shared.LiveChat_Messages = {}
