@@ -143,7 +143,6 @@ local FishState = {
 local FishMiniGame, FishPowerBar
 pcall(function() FishMiniGame  = require(RS.Modules.Fishing.MiniGameHandler)  end)
 pcall(function() FishPowerBar = require(RS.Modules.Fishing.PowerBarHandler) end)
-print("[Fish] MiniGameHandler :", FishMiniGame ~= nil)
 
 local function isFishingRod(tool)
     return tool and tool:IsA("Tool") and tool:FindFirstChild("Mechanics") ~= nil
@@ -278,7 +277,6 @@ local function hookRod(rod)
             FishState.status = "⚠ Not in fishing zone"
         end
     end)
-    print("[Fish] ✅ Hooked:", rod.Name)
 end
 
 local function startFishLoop()
@@ -336,11 +334,9 @@ local function initAutoFish()
                     FishState.turboReel   = true
                     FishState.reelAbort   = false
                     FishState.enabled     = true
-                    print("[FISH] ✅ ON")
                 else
                     FishState.enabled   = false
                     FishState.reelAbort = true
-                    print("[FISH] ❌ OFF")
                 end
             end
         end
