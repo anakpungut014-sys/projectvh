@@ -143,6 +143,45 @@ local function initAutoFish()
 end
 
 -- ============================================================
+-- 🏔 AUTO SUMMIT BRIDGE — nyambungin toggle UI ke Auto CP script
+-- ============================================================
+local function initAutoSummit()
+    local wasOn = false
+
+    task.spawn(function()
+        while true do
+            task.wait(0.3)
+            local wantOn = Shared and Shared.AutoSummit_Enabled == true
+
+            -- Cuma eksekusi kalau state berubah
+            if wantOn ~= wasOn then
+                local pg = LocalPlayer:FindFirstChild("PlayerGui")
+                local gui = pg and pg:FindFirstChild("VrilzAutoCP")
+
+                if gui then
+                    -- Cari tombol START/STOP
+                    for _, d in ipairs(gui:GetDescendants()) do
+                        if d:IsA("TextButton") and d.Text then
+                            local isStart = d.Text:find("START AUTO LOOP") ~= nil
+                            local isStop  = d.Text:find("STOP AUTO LOOP")  ~= nil
+                            if isStart or isStop then
+                                local isRunning = isStop
+                                if isRunning ~= wantOn then
+                                    -- Klik paksa via firetouch / activate
+                                    pcall(function() d:Activate() end)
+                                end
+                                break
+                            end
+                        end
+                    end
+                    wasOn = wantOn
+                end
+            end
+        end
+    end)
+end
+
+-- ============================================================
 -- FEATURES.INIT
 -- ============================================================
 function Features.Init(sharedState)
@@ -161,6 +200,12 @@ function Features.Init(sharedState)
     if not Features._autoFishStarted then
         Features._autoFishStarted = true
         pcall(initAutoFish)
+    end
+
+    -- ⭐ AUTO SUMMIT
+    if not Features._autoSummitStarted then
+        Features._autoSummitStarted = true
+        pcall(initAutoSummit)
     end
 end
 
