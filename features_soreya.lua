@@ -115,38 +115,234 @@ end
 end
 
 -- ============================================================
--- 🎣 AUTO FISH BRIDGE — nyambungin toggle UI ke _G.VRILZ_FishState
+-- 🎣 AUTO FISH v3 — BUILT-IN (dulu file terpisah)
 -- ============================================================
-local function initAutoFish()
+local RS      = game:GetService("ReplicatedStorage")
+local UIS     = game:GetService("UserInputService")
+local VIM     = game:GetService("VirtualInputManager")
+
+local FishSpeed = {
+    reelSafe      = 0.03,
+    reelTurbo     = 0.005,
+    reelMaxTime   = 8,
+    castCooldown  = 0.8,
+    biteReaction  = 0.1,
+    castPowerWait = 0.3,
+    loopDelay     = 0.15,
+}
+
+local FishState = {
+    enabled = false,
+    autoEquip = true, autoCast = true, autoPerfect = true, autoReel = true,
+    turboReel = true,
+    reeling = false, reelAbort = false,
+    stats = { cast = 0, caught = 0, perfect = 0, fail = 0 },
+    status = "Idle", lastCastTime = 0, lastBiteTime = 0,
+}
+
+local FishMiniGame, FishPowerBar
+pcall(function() FishMiniGame  = require(RS.Modules.Fishing.MiniGameHandler)  end)
+pcall(function() FishPowerBar = require(RS.Modules.Fishing.PowerBarHandler) end)
+print("[Fish] MiniGameHandler :", FishMiniGame ~= nil)
+
+local function isFishingRod(tool)
+    return tool and tool:IsA("Tool") and tool:FindFirstChild("Mechanics") ~= nil
+end
+local function getEquippedRod()
+    local char = LocalPlayer.Character; if not char then return nil end
+    for _, t in ipairs(char:GetChildren()) do
+        if isFishingRod(t) then return t end
+    end
+end
+local function findRodInBackpack()
+    local bp = LocalPlayer:FindFirstChild("Backpack"); if not bp then return nil end
+    for _, t in ipairs(bp:GetChildren()) do
+        if isFishingRod(t) then return t end
+    end
+end
+local function getStatusValue(rod, name)
+    local mech = rod and rod:FindFirstChild("Mechanics")
+    local s = mech and mech:FindFirstChild("Status")
+    local v = s and s:FindFirstChild(name)
+    return v and v.Value or false
+end
+local function getRodRemotes(rod)
+    local mech = rod and rod:FindFirstChild("Mechanics")
+    return mech and mech:FindFirstChild("Remotes")
+end
+
+local function autoEquipRod()
+    if getEquippedRod() then return true end
+    local rod = findRodInBackpack()
+    if not rod then FishState.status = "❌ Rod tidak terdeteksi"; return false end
+    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    if not hum then return false end
+    FishState.status = "Equipping " .. rod.Name
+    pcall(function() hum:EquipTool(rod) end)
+    task.wait(0.3)
+    return getEquippedRod() ~= nil
+end
+
+local function autoCast()
+    local rod = getEquippedRod()
+    if not rod then return false end
+    if getStatusValue(rod, "FishingActive") then return false end
+    if getStatusValue(rod, "MiniGameActive") then return false end
+    local remotes = getRodRemotes(rod)
+    local castEvent = remotes and remotes:FindFirstChild("CastEvent")
+    if not castEvent then FishState.status = "❌ CastEvent tidak ada"; return false end
+    FishState.status = "Casting..."
+    pcall(function()
+        castEvent:FireServer(true)
+        task.wait(FishSpeed.castPowerWait)
+        castEvent:FireServer(false, 100, Vector3.new(0, 0, -1))
+    end)
+    FishState.stats.cast += 1
+    FishState.lastCastTime = os.clock()
+    return true
+end
+
+local function tapOnce()
+    if FishMiniGame and FishMiniGame.MobileTap then
+        pcall(function() FishMiniGame.MobileTap() end)
+    else
+        pcall(function()
+            VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+            VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        end)
+    end
+end
+
+local function doReelSpam()
+    if FishState.reeling then return end
+    FishState.reeling = true
+    FishState.reelAbort = false
+    local rod = getEquippedRod()
+    local start = os.clock()
+    local interval = FishState.turboReel and FishSpeed.reelTurbo or FishSpeed.reelSafe
+    local miss = 0
+    FishState.status = FishState.turboReel and "⚡ Reeling (TURBO)..." or "Reeling..."
+    while FishState.enabled
+        and not FishState.reelAbort
+        and os.clock() - start < FishSpeed.reelMaxTime do
+        if rod then
+            if getStatusValue(rod, "MiniGameActive") then
+                miss = 0
+            else
+                miss += 1
+                if miss >= 2 then break end
+            end
+        end
+        tapOnce()
+        task.wait(interval)
+    end
+    FishState.reeling = false
+    FishState.status = "Selesai reel → cast lagi..."
+end
+
+local fishHookedRods = {}
+local function hookRod(rod)
+    if not rod or fishHookedRods[rod] then return end
+    local remotes = getRodRemotes(rod)
+    if not remotes then return end
+    local miniGame     = remotes:FindFirstChild("MiniGame")
+    local notifyClient = remotes:FindFirstChild("NotifyClient")
+    if not miniGame or not notifyClient then return end
+    fishHookedRods[rod] = true
+
+    miniGame.OnClientEvent:Connect(function(action, info)
+        if not FishState.enabled then return end
+        if action == "Start" then
+            FishState.lastBiteTime = os.clock()
+            if FishState.autoPerfect or FishState.autoReel then
+                task.spawn(doReelSpam)
+            end
+        elseif action == "Stop" then
+            FishState.reelAbort = true
+            FishState.status = "Reel done"
+        end
+    end)
+
+    notifyClient.OnClientEvent:Connect(function(action, info)
+        if not FishState.enabled then return end
+        if action == "Bite" then
+            FishState.status = "🐟 Fish biting..."
+        elseif action == "GotFish" then
+            FishState.stats.caught += 1
+            local name = (typeof(info) == "table" and info.baseName) or tostring(info) or "Fish"
+            FishState.status = "✅ Caught: " .. name
+        elseif action == "CastFailed" then
+            FishState.stats.fail += 1
+            FishState.status = "❌ Cast failed"
+        elseif action == "NoFishingZone" then
+            FishState.status = "⚠ Not in fishing zone"
+        end
+    end)
+    print("[Fish] ✅ Hooked:", rod.Name)
+end
+
+local function startFishLoop()
     task.spawn(function()
-        local lastWant = nil
         while true do
-            task.wait(0.3)
-            local FS = _G.VRILZ_FishState
-            if not FS then
-                -- ⭐ Fish belum ready — reset state biar begitu ready langsung apply
-                lastWant = nil
+            task.wait(FishSpeed.loopDelay)
+            if not FishState.enabled then continue end
+            local char = LocalPlayer.Character
+            if not char then FishState.status = "No character"; continue end
+            if FishState.autoEquip and not getEquippedRod() then
+                autoEquipRod()
                 continue
             end
+            local rod = getEquippedRod()
+            if not rod then FishState.status = "Waiting for rod..."; continue end
+            if not fishHookedRods[rod] then hookRod(rod) end
+            if FishState.autoCast
+                and not getStatusValue(rod, "FishingActive")
+                and not getStatusValue(rod, "MiniGameActive")
+                and os.clock() - FishState.lastCastTime > FishSpeed.castCooldown then
+                autoCast()
+            end
+            if FishState.autoReel
+                and getStatusValue(rod, "MiniGameActive")
+                and not FishState.reeling
+                and os.clock() - FishState.lastBiteTime > FishSpeed.biteReaction then
+                FishState.lastBiteTime = os.clock()
+                task.spawn(doReelSpam)
+            end
+        end
+    end)
+end
 
+_G.VRILZ_FishState = FishState
+_G.VRILZ_FishUI = {
+    setStatus  = function(s) FishState.status = s end,
+    setEnabled = function(v) FishState.enabled = v and true or false end,
+    toggle     = function() FishState.enabled = not FishState.enabled end,
+    isEnabled  = function() return FishState.enabled end,
+    isTurbo    = function() return FishState.turboReel end,
+}
+
+local function initAutoFish()
+    startFishLoop()  -- start loop sekali aja
+    task.spawn(function()
+        while true do
+            task.wait(0.3)
             local wantOn = (Shared and Shared.AutoFish_Enabled == true)
-
-            -- ⭐ FIX: paksa sinkron tiap loop (bukan cuma saat beda)
-            if wantOn ~= FS.enabled then
+            if wantOn ~= FishState.enabled then
                 if wantOn then
-                    FS.autoEquip   = true
-                    FS.autoCast    = true
-                    FS.autoPerfect = true
-                    FS.autoReel    = true
-                    FS.turboReel   = true
-                    FS.reelAbort   = false
-                    FS.enabled     = true
+                    FishState.autoEquip   = true
+                    FishState.autoCast    = true
+                    FishState.autoPerfect = true
+                    FishState.autoReel    = true
+                    FishState.turboReel   = true
+                    FishState.reelAbort   = false
+                    FishState.enabled     = true
+                    print("[FISH] ✅ ON")
                 else
-                    FS.enabled   = false
-                    FS.reelAbort = true
+                    FishState.enabled   = false
+                    FishState.reelAbort = true
+                    print("[FISH] ❌ OFF")
                 end
             end
-            lastWant = wantOn
         end
     end)
 end
