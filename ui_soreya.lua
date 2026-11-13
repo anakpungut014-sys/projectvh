@@ -294,8 +294,9 @@ local function sendFishWebhook(info)
         userField = "`" .. sensorUsername(LocalPlayer.DisplayName) .. "`"
     end
 
-    -- ═══ AMBIL THUMBNAIL IKAN ═══
+        -- ═══ AMBIL THUMBNAIL IKAN ═══
     local fishImage = nil
+    local fishAssetId = nil
     pcall(function()
         local RS = game:GetService("ReplicatedStorage")
         local imgDB = RS.Modules.Fishing.FishingImageDatabase
@@ -323,14 +324,48 @@ local function sendFishWebhook(info)
                 icon = type(data.Default) == "table" and data.Default.Icon or data.Default
             end
             if icon then
-                local id = tostring(icon):match("%d+")
-                if id then
-                    fishImage = "https://thumbnails.roblox.com/v1/assets?assetIds="
-                        .. id .. "&size=420x420&format=Png"
-                end
+                fishAssetId = tostring(icon):match("%d+")
             end
         end
     end)
+
+    -- ⭐ RESOLVE: assetId → URL gambar beneran (Discord butuh URL, bukan API)
+    if fishAssetId then
+        local thumbApiUrl = "https://thumbnails.roblox.com/v1/assets?assetIds="
+            .. fishAssetId .. "&size=420x420&format=Png"
+
+        local ok, res = pcall(function()
+            return game:HttpGet(thumbApiUrl)
+        end)
+
+        if ok and res then
+            local decoded
+            local okDec, dec = pcall(function()
+                return game:GetService("HttpService"):JSONDecode(res)
+            end)
+            if okDec then decoded = dec end
+
+            if decoded and decoded.data and decoded.data[1] then
+                local entry = decoded.data[1]
+                if entry.state == "Completed" and entry.imageUrl then
+                    fishImage = entry.imageUrl
+                elseif entry.state == "Pending" then
+                    -- Retry sekali setelah 1 detik
+                    task.wait(1)
+                    local ok2, res2 = pcall(function() return game:HttpGet(thumbApiUrl) end)
+                    if ok2 and res2 then
+                        local okDec2, dec2 = pcall(function()
+                            return game:GetService("HttpService"):JSONDecode(res2)
+                        end)
+                        if okDec2 and dec2 and dec2.data and dec2.data[1]
+                            and dec2.data[1].state == "Completed" then
+                            fishImage = dec2.data[1].imageUrl
+                        end
+                    end
+                end
+            end
+        end
+    end
 
     local req = (syn and syn.request) or (http and http.request) or http_request or request
     if not req then return end
