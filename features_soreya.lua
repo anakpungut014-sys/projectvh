@@ -115,20 +115,55 @@ end
 end
 
 -- ============================================================
+-- 🎣 AUTO FISH BRIDGE — nyambungin toggle UI ke _G.VRILZ_FishState
+-- ============================================================
+local function initAutoFish()
+    task.spawn(function()
+        while true do
+            task.wait(0.3)
+            local FS = _G.VRILZ_FishState
+            if not FS then continue end
+
+            local wantOn = Shared and Shared.AutoFish_Enabled == true
+
+            if wantOn and not FS.enabled then
+                FS.autoEquip   = true
+                FS.autoCast    = true
+                FS.autoPerfect = true
+                FS.autoReel    = true
+                FS.turboReel   = true
+                FS.reelAbort   = false
+                FS.enabled     = true
+            elseif not wantOn and FS.enabled then
+                FS.enabled   = false
+                FS.reelAbort = true
+            end
+        end
+    end)
+end
+
+-- ============================================================
 -- FEATURES.INIT
 -- ============================================================
 function Features.Init(sharedState)
     Shared = sharedState
 
-    -- ⭐ Guard: cegah double-start anti-AFK
+    -- ⭐ update _G refs SEKARANG (Shared udah beneran ada)
+    _G.VRILZ_Shared = Shared
+    _G.VRILZ_UI_Shared = Shared
+
     if not Features._antiAFKStarted then
         Features._antiAFKStarted = true
         Features.startAntiAFK()
     end
-end   -- ⭐⭐⭐ TUTUP Features.Init DI SINI ⭐⭐⭐
+
+    -- ⭐ TAMBAH INI
+    if not Features._autoFishStarted then
+        Features._autoFishStarted = true
+        pcall(initAutoFish)
+    end
+end
 
     _G.VRILZ_Features = Features
-_G.VRILZ_Shared = Shared
-_G.VRILZ_UI_Shared = Shared
 
 return Features
