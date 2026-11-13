@@ -6657,8 +6657,8 @@ local function renderMessage(msg)
         end
 
 registerTab("Info", "129516985087314", "Info", true)
-registerTab("AutoSummit", "129516985087314", "Auto Summit", true)
-registerTab("AutoFish", "129516985087314", "Auto Fish", true)
+registerTab("AutoSummit", "127064137622496", "Auto Summit", true)
+registerTab("AutoFish", "118895892824960", "Auto Fish", true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Webhook", "78129393420657", "Webhook", true)
 registerTab("Settings", "97834340359225", "Settings", true)
@@ -9582,10 +9582,13 @@ Shared.WebhookURL = loadWebhookURL() or ""
     -- ⭐ PRELOAD TAB ICONS (biar gak blank pas pertama launch)
 task.spawn(function()
     local preloads = {
-        "rbxassetid://129516985087314",  -- Info
-        "rbxassetid://83047761221446",   -- Live Chat
-        "rbxassetid://97834340359225",   -- Settings
-    }
+            "rbxassetid://129516985087314",  -- Info
+            "rbxassetid://127064137622496",  -- AutoSummit
+            "rbxassetid://118895892824960",  -- AutoFish
+            "rbxassetid://83047761221446",   -- Live Chat
+            "rbxassetid://78129393420657",   -- Webhook
+            "rbxassetid://97834340359225",   -- Settings
+        }
         pcall(function()
             game:GetService("ContentProvider"):PreloadAsync(preloads)
         end)
