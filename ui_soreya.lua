@@ -233,7 +233,7 @@ local WEBHOOK_RARITY_COLORS = {
 }
 
 -- ⭐ PROFILE WEBHOOK CONFIG (taruh SEBELUM sendFishWebhook)
-local VH_AVATAR = "https://raw.githubusercontent.com/vrilz-vd/anime/main/vh-logo.png"
+local VH_AVATAR = "https://raw.githubusercontent.com/vrilz-bot-exploit/vrilzhub/main/WhatsApp%20Image%202026-10-16%20at%2018.56.22.jpeg"
 
 local function sendFishWebhook(info)
     if not Shared or not Shared.WebhookEnabled then return end
