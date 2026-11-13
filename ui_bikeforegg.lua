@@ -5227,6 +5227,60 @@ do
     end, "AutoThrow_Enabled")
 end
 
+-- ============================================================
+-- 🛒 TAB SHOP — Auto Buy Best Food + Auto Upgrade Stand
+-- ============================================================
+do
+    local shopPage, shopLeft, shopRight = createTwoColumnPage("Shop")
+    pages.Shop = shopPage
+
+    -- ═══ FOOD SHOP ═══
+    local foodCard, foodContent = makeCard(shopLeft, "🛒 FOOD SHOP", 1)
+
+    local foodInfo = Instance.new("TextLabel")
+    foodInfo.Size = UDim2.new(1, 0, 0, 30)
+    foodInfo.BackgroundTransparency = 1
+    foodInfo.Text = "Beli makanan terbaik yang mampu, lalu equip makanan terbaik yang dimiliki."
+    foodInfo.TextColor3 = C.Muted
+    foodInfo.Font = Enum.Font.GothamSemibold
+    foodInfo.TextSize = CFG.FONT_MUTED
+    foodInfo.TextWrapped = true
+    foodInfo.TextXAlignment = Enum.TextXAlignment.Left
+    foodInfo.LayoutOrder = 1
+    foodInfo.ZIndex = 3
+    foodInfo.Parent = foodContent
+    registerTheme(foodInfo, "Muted", "TextColor3")
+
+    makeToggle(foodContent, "Auto Buy Best Food", false, function(v)
+        Shared.AutoBuy_Enabled = v
+        if v then notify("🛒 Auto Buy Best Food: ON", "success")
+        else notify("🛒 Auto Buy Best Food: OFF", "info") end
+    end, "AutoBuy_Enabled")
+
+    -- ═══ PULL-UP STAND ═══
+    local standCard, standContent = makeCard(shopRight, "🏋 PULL-UP STAND", 1)
+
+    local standInfo = Instance.new("TextLabel")
+    standInfo.Size = UDim2.new(1, 0, 0, 30)
+    standInfo.BackgroundTransparency = 1
+    standInfo.Text = "Upgrade pull-up stand otomatis kalau uangnya cukup."
+    standInfo.TextColor3 = C.Muted
+    standInfo.Font = Enum.Font.GothamSemibold
+    standInfo.TextSize = CFG.FONT_MUTED
+    standInfo.TextWrapped = true
+    standInfo.TextXAlignment = Enum.TextXAlignment.Left
+    standInfo.LayoutOrder = 1
+    standInfo.ZIndex = 3
+    standInfo.Parent = standContent
+    registerTheme(standInfo, "Muted", "TextColor3")
+
+    makeToggle(standContent, "Auto Upgrade Stand", false, function(v)
+        Shared.AutoUpgradeStand_Enabled = v
+        if v then notify("🏋 Auto Upgrade Stand: ON", "success")
+        else notify("🏋 Auto Upgrade Stand: OFF", "info") end
+    end, "AutoUpgradeStand_Enabled")
+end
+
                        -- ============================================================
         -- 💬 LIVE CHAT TAB — PREMIUM CLEAN v3
         -- Gradient halus · Glow subtle · Simetris · Elegan
@@ -6054,6 +6108,7 @@ local function renderMessage(msg)
 
 registerTab("Info", "129516985087314", "Info", true)
 registerTab("AutoThrow", "75410123129821", "Auto Throw", true)
+registerTab("Shop", "101498199599518", "Shop", true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Settings", "97834340359225", "Settings", true)
 
@@ -8947,6 +9002,8 @@ function UI.Init(sharedState)
     Shared.LightsEffect_Enabled = true
     Shared.HD4K_Enabled = false
     Shared.ShowTitle = true 
+    Shared.AutoBuy_Enabled = false
+    Shared.AutoUpgradeStand_Enabled = false
 
     -- Live Chat state
     Shared.LiveChat_Messages = {}
@@ -8965,6 +9022,7 @@ task.spawn(function()
     local preloads = {
         "rbxassetid://129516985087314",  -- Info
         "rbxassetid://75410123129821",   -- Auto Throw
+        "rbxassetid://101498199599518",  -- Shop
         "rbxassetid://83047761221446",   -- Live Chat
         "rbxassetid://97834340359225",   -- Settings
     }
