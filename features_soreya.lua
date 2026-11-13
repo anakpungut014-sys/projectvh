@@ -270,6 +270,13 @@ local function hookRod(rod)
             FishState.stats.caught += 1
             local name = (typeof(info) == "table" and info.baseName) or tostring(info) or "Fish"
             FishState.status = "✅ Caught: " .. name
+
+            -- ⭐ WEBHOOK HOOK
+            if Shared and Shared.WebhookNotifyFish and _G.VRILZ_SendFishWebhook then
+                task.spawn(function()
+                    _G.VRILZ_SendFishWebhook(info)
+                end)
+            end
         elseif action == "CastFailed" then
             FishState.stats.fail += 1
             FishState.status = "❌ Cast failed"
