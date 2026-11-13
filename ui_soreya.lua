@@ -232,7 +232,9 @@ local WEBHOOK_RARITY_COLORS = {
     ["Mythical"] = 0xFF64C8, ["Mythic"] = 0xFF64C8, ["Secret"] = 0xFF5050,
 }
 
--- ⚠️ FISH SENDER DIPINDAH KE SINI biar bisa akses `Shared` & `LocalPlayer`
+-- ⭐ PROFILE WEBHOOK CONFIG (taruh SEBELUM sendFishWebhook)
+local VH_AVATAR = "https://raw.githubusercontent.com/vrilz-vd/anime/main/vh-logo.png"
+
 local function sendFishWebhook(info)
     if not Shared or not Shared.WebhookEnabled then return end
     local url = Shared.WebhookURL
@@ -260,7 +262,7 @@ local function sendFishWebhook(info)
     elseif fishChance >= 0.0001 then chanceStr = string.format("%.4f%%", fishChance * 100)
     else chanceStr = string.format("%.6f%%", fishChance * 100) end
 
-    -- ═══ WARNA PER RARITY (lebih premium / gradient friendly) ═══
+    -- ═══ WARNA PER RARITY ═══
     local RARITY_COLORS = {
         ["Common"]    = 0xB0B4BC,
         ["UnCommon"]  = 0x7CF29E,
@@ -272,7 +274,6 @@ local function sendFishWebhook(info)
         ["Mythic"]    = 0xFF6BD6,
         ["Secret"]    = 0xFF4D6D,
     }
-
     local RARITY_EMOJI = {
         ["Common"]    = "⚪",
         ["UnCommon"]  = "🟢",
@@ -288,13 +289,13 @@ local function sendFishWebhook(info)
     local embedColor  = RARITY_COLORS[fishRarity] or 0x5865F2
     local rarityEmoji = RARITY_EMOJI[fishRarity]  or "⚪"
 
-    -- ═══ USER FIELD (masked) ═══
+    -- ═══ USER FIELD ═══
     local userField = "`Disabled`"
     if Shared.WebhookShowUser then
         userField = "`" .. sensorUsername(LocalPlayer.DisplayName) .. "`"
     end
 
-        -- ═══ AMBIL THUMBNAIL IKAN ═══
+    -- ═══ THUMBNAIL IKAN (TETAP MUNCUL) ═══
     local fishImage = nil
     local fishAssetId = nil
     pcall(function()
@@ -329,28 +330,20 @@ local function sendFishWebhook(info)
         end
     end)
 
-    -- ⭐ RESOLVE: assetId → URL gambar beneran (Discord butuh URL, bukan API)
+    -- ⭐ RESOLVE assetId → URL gambar (Discord butuh URL, bukan JSON)
     if fishAssetId then
         local thumbApiUrl = "https://thumbnails.roblox.com/v1/assets?assetIds="
             .. fishAssetId .. "&size=420x420&format=Png"
-
-        local ok, res = pcall(function()
-            return game:HttpGet(thumbApiUrl)
-        end)
-
+        local ok, res = pcall(function() return game:HttpGet(thumbApiUrl) end)
         if ok and res then
-            local decoded
-            local okDec, dec = pcall(function()
+            local okDec, decoded = pcall(function()
                 return game:GetService("HttpService"):JSONDecode(res)
             end)
-            if okDec then decoded = dec end
-
-            if decoded and decoded.data and decoded.data[1] then
+            if okDec and decoded and decoded.data and decoded.data[1] then
                 local entry = decoded.data[1]
                 if entry.state == "Completed" and entry.imageUrl then
                     fishImage = entry.imageUrl
                 elseif entry.state == "Pending" then
-                    -- Retry sekali setelah 1 detik
                     task.wait(1)
                     local ok2, res2 = pcall(function() return game:HttpGet(thumbApiUrl) end)
                     if ok2 and res2 then
@@ -372,7 +365,7 @@ local function sendFishWebhook(info)
     local HttpService = game:GetService("HttpService")
     local ping = Shared.WebhookPingEveryone and "@everyone" or ""
 
-    -- ═══ PREMIUM LAYOUT — GRID 2 KOLOM ═══
+    -- ═══ LAYOUT ═══
     local divider = "▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬▬"
 
     local description = table.concat({
@@ -387,52 +380,29 @@ local function sendFishWebhook(info)
     }, "\n")
 
     local fields = {
-        {
-            name = "🌊  Water Type",
-            value = "```fix\n" .. fishWater .. "\n```",
-            inline = true,
-        },
-        {
-            name = "⚖️  Weight",
-            value = "```yaml\n" .. string.format("%.2f kg", fishWeight) .. "\n```",
-            inline = true,
-        },
-        {
-            name = "📏  Size",
-            value = "```yaml\n" .. fishSize .. "\n```",
-            inline = true,
-        },
+        { name = "🌊  Water Type", value = "```fix\n" .. fishWater .. "\n```", inline = true },
+        { name = "⚖️  Weight", value = "```yaml\n" .. string.format("%.2f kg", fishWeight) .. "\n```", inline = true },
+        { name = "📏  Size", value = "```yaml\n" .. fishSize .. "\n```", inline = true },
     }
 
-    -- Mutation cuma muncul kalau ada
     if fishMutation and fishMutation ~= "Normal" then
         table.insert(fields, {
             name = "✨  Mutation",
             value = "```diff\n+ " .. fishMutation .. "\n```",
             inline = true,
         })
-        -- Biar genap 2x2, tambah spacer kalau mutation ada
         if #fields % 3 ~= 0 then
-            table.insert(fields, {
-                name = "\u{200b}",   -- zero-width space
-                value = "\u{200b}",
-                inline = true,
-            })
+            table.insert(fields, { name = "\u{200b}", value = "\u{200b}", inline = true })
         end
     end
 
-    -- User footer line
-    table.insert(fields, {
-        name = "👤  Caught By",
-        value = userField,
-        inline = false,
-    })
+    table.insert(fields, { name = "👤  Caught By", value = userField, inline = false })
 
-    -- ═══ BUILD EMBED ═══
+    -- ═══ EMBED — CUMA GANTI ICON, IKAN TETAP ═══
     local embed = {
         author = {
             name = "🐟  VRILZHUB  ·  FISHING LOG",
-            icon_url = "https://cdn.discordapp.com/emojis/1157058398263783454.gif",
+            icon_url = VH_AVATAR,          -- ⭐ GANTI (bukan emoji polos)
         },
         title = rarityEmoji .. "  " .. fishName,
         description = description,
@@ -440,18 +410,20 @@ local function sendFishWebhook(info)
         fields = fields,
         footer = {
             text = "VRILZHUB  •  " .. os.date("%d %b %Y  ·  %H:%M:%S"),
-            icon_url = "https://cdn.discordapp.com/emojis/1157058398263783454.gif",
+            icon_url = VH_AVATAR,          -- ⭐ GANTI (bukan emoji polos)
         },
         timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
     }
 
+    -- ⭐ IKAN TETAP MUNCUL (thumbnail)
     if fishImage then
         embed.thumbnail = { url = fishImage }
     end
 
+    -- ⭐ PAYLOAD — CUMA GANTI AVATAR, IKAN AMAN ═══
     local payload = HttpService:JSONEncode({
         username = "VRILZHUB",
-        avatar_url = "https://cdn.discordapp.com/emojis/1157058398263783454.gif",
+        avatar_url = VH_AVATAR,            -- ⭐ GANTI (bukan emoji polos)
         content = ping,
         embeds = { embed },
     })
@@ -478,13 +450,13 @@ local function sendTestWebhook()
 
     local payload = HttpService:JSONEncode({
         username = "VRILZHUB",
-        avatar_url = "https://cdn.discordapp.com/emojis/1157058398263783454.gif",
+        avatar_url = VH_AVATAR,            -- ⭐ GANTI (bukan emoji polos)
         content = ping,
         embeds = {
             {
                 author = {
                     name = "🔔  VRILZHUB  ·  SYSTEM NOTIFICATION",
-                    icon_url = "https://cdn.discordapp.com/emojis/1157058398263783454.gif",
+                    icon_url = VH_AVATAR,  -- ⭐ GANTI
                 },
                 title = "✅  Webhook Successfully Connected",
                 description = table.concat({
@@ -502,25 +474,13 @@ local function sendTestWebhook()
                 }, "\n"),
                 color = 0x5865F2,
                 fields = {
-                    {
-                        name = "👤  User",
-                        value = "```yaml\n" .. sensorUsername(LocalPlayer.DisplayName) .. "\n```",
-                        inline = true,
-                    },
-                    {
-                        name = "⏰  Time",
-                        value = "```yaml\n" .. os.date("%H:%M:%S") .. "\n```",
-                        inline = true,
-                    },
-                    {
-                        name = "📅  Date",
-                        value = "```yaml\n" .. os.date("%d/%m/%Y") .. "\n```",
-                        inline = true,
-                    },
+                    { name = "👤  User", value = "```yaml\n" .. sensorUsername(LocalPlayer.DisplayName) .. "\n```", inline = true },
+                    { name = "⏰  Time", value = "```yaml\n" .. os.date("%H:%M:%S") .. "\n```", inline = true },
+                    { name = "📅  Date", value = "```yaml\n" .. os.date("%d/%m/%Y") .. "\n```", inline = true },
                 },
                 footer = {
                     text = "VRILZHUB  •  Premium Notification System",
-                    icon_url = "https://cdn.discordapp.com/emojis/1157058398263783454.gif",
+                    icon_url = VH_AVATAR,  -- ⭐ GANTI
                 },
                 timestamp = os.date("!%Y-%m-%dT%H:%M:%SZ"),
             },
