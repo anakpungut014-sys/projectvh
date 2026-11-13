@@ -119,25 +119,34 @@ end
 -- ============================================================
 local function initAutoFish()
     task.spawn(function()
+        local lastWant = nil
         while true do
             task.wait(0.3)
             local FS = _G.VRILZ_FishState
-            if not FS then continue end
-
-            local wantOn = Shared and Shared.AutoFish_Enabled == true
-
-            if wantOn and not FS.enabled then
-                FS.autoEquip   = true
-                FS.autoCast    = true
-                FS.autoPerfect = true
-                FS.autoReel    = true
-                FS.turboReel   = true
-                FS.reelAbort   = false
-                FS.enabled     = true
-            elseif not wantOn and FS.enabled then
-                FS.enabled   = false
-                FS.reelAbort = true
+            if not FS then
+                -- ⭐ Fish belum ready — reset state biar begitu ready langsung apply
+                lastWant = nil
+                continue
             end
+
+            local wantOn = (Shared and Shared.AutoFish_Enabled == true)
+
+            -- ⭐ FIX: paksa sinkron tiap loop (bukan cuma saat beda)
+            if wantOn ~= FS.enabled then
+                if wantOn then
+                    FS.autoEquip   = true
+                    FS.autoCast    = true
+                    FS.autoPerfect = true
+                    FS.autoReel    = true
+                    FS.turboReel   = true
+                    FS.reelAbort   = false
+                    FS.enabled     = true
+                else
+                    FS.enabled   = false
+                    FS.reelAbort = true
+                end
+            end
+            lastWant = wantOn
         end
     end)
 end
