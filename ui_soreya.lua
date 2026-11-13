@@ -4850,6 +4850,54 @@ do
     end)
 end
 
+-- ============================================================
+-- 🎣 AUTO FISH TAB
+-- ============================================================
+do
+    local fishPage, fishLeft, fishRight = createTwoColumnPage("AutoFish")
+    pages.AutoFish = fishPage
+
+    local fishCard, fishContent = makeCard(fishLeft, "Auto Fish", 1)
+
+    local fishDesc = Instance.new("TextLabel")
+    fishDesc.Size = UDim2.new(1, 0, 0, 16)
+    fishDesc.BackgroundTransparency = 1
+    fishDesc.Text = "Semua fitur fish nyala bareng (equip+cast+reel):"
+    fishDesc.TextColor3 = C.Muted
+    fishDesc.Font = Enum.Font.GothamSemibold
+    fishDesc.TextSize = CFG.FONT_MUTED
+    fishDesc.TextXAlignment = Enum.TextXAlignment.Left
+    fishDesc.TextWrapped = true
+    fishDesc.LayoutOrder = 1
+    fishDesc.ZIndex = 3
+    fishDesc.Parent = fishContent
+    registerTheme(fishDesc, "Muted", "TextColor3")
+
+    makeToggle(fishContent, "Enable Auto Fish (ALL)", false, function(v)
+        local FS = _G.VRILZ_FishState
+        if not FS then
+            notify("❌ Auto Fish script belum di-load!", "error")
+            return
+        end
+
+        FS.enabled = v
+
+        if v then
+            FS.autoEquip = true
+            FS.autoCast = true
+            FS.autoPerfect = true
+            FS.autoReel = true
+            FS.turboReel = true
+            FS.reelAbort = false
+            notify("🎣 Auto Fish: ON (semua fitur)", "success")
+        else
+            FS.enabled = false
+            FS.reelAbort = true
+            notify("🎣 Auto Fish: OFF", "info")
+        end
+    end, "AutoFish_Enabled")
+end
+
 -- TAB SETTINGS
 do
     local setPage, setLeft, setRight, setHeader = createTwoColumnPage("Settings")
@@ -5924,6 +5972,7 @@ local function renderMessage(msg)
         end
 
 registerTab("Info", "129516985087314", "Info", true)
+registerTab("AutoFish", "129516985087314", "Auto Fish", true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Settings", "97834340359225", "Settings", true)
 
@@ -8823,6 +8872,7 @@ function UI.Init(sharedState)
     Shared.LightsEffect_Enabled = true
     Shared.HD4K_Enabled = false
     Shared.ShowTitle = true 
+    Shared.AutoFish_Enabled = false
 
     -- Live Chat state
     Shared.LiveChat_Messages = {}
