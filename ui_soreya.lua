@@ -2850,6 +2850,7 @@ function ChatClient.send(text)
             username = LocalPlayer.Name,
             displayName = LocalPlayer.DisplayName,
             text = text,
+            scriptTag = getScriptTag() or "",
         }
     )
     if data and data.success then return true end
@@ -2864,13 +2865,14 @@ function ChatClient.pollOnce()
     for _, m in ipairs(data.messages) do
         local ts = tonumber(m.ts or 0)
         if ts > ChatClient.lastTs then ChatClient.lastTs = ts end
-        local msg = {
+            local msg = {
             userId = tonumber(m.i or 0),
             username = tostring(m.u or "?"),
             displayName = tostring(m.d or m.u or "?"),
             text = tostring(m.t or ""),
             time = os.date("%H:%M", math.floor(ts / 1000)),
             ts = ts,
+            scriptTag = tostring(m.g or ""),
         }
         table.insert(Shared.LiveChat_Messages, msg)
         while #Shared.LiveChat_Messages > Shared.LiveChat_MaxMessages do
@@ -5831,6 +5833,19 @@ do
     end, "LightningEffect_Enabled")
 end
 
+-- ============================================================
+-- 🏷 TAG SCRIPT PER GAME (untuk Live Chat)
+-- ============================================================
+local SCRIPT_TAGS = {
+    [118517641508250] = "MT SOREYA",  -- Mount Soreya
+    [124216119978534] = "RAP",        -- Ride a Pet
+    [10766972131]     = "TFF",        -- Throw Food
+}
+
+local function getScriptTag()
+    return SCRIPT_TAGS[game.PlaceId]
+end
+
                        -- ============================================================
         -- 💬 LIVE CHAT TAB — PREMIUM CLEAN v3
         -- Gradient halus · Glow subtle · Simetris · Elegan
@@ -6522,11 +6537,29 @@ local function renderMessage(msg)
                     ownerTag.Parent = nameRow
                 end
 
+                -- 🏷 Badge game (MT SOREYA / RAP / TFF)
+                local msgTag = (msg.scriptTag and msg.scriptTag ~= "") and msg.scriptTag or getScriptTag()
+                if msgTag then
+                    local tagLbl = Instance.new("TextLabel")
+                    tagLbl.Size = UDim2.new(0, 0, 0, 14)
+                    tagLbl.AutomaticSize = Enum.AutomaticSize.X
+                    tagLbl.BackgroundTransparency = 1
+                    tagLbl.Text = "[" .. msgTag .. "]"
+                    tagLbl.TextColor3 = Color3.fromRGB(255, 200, 80)
+                    tagLbl.Font = Enum.Font.GothamBold
+                    tagLbl.TextSize = IS_MOBILE and 8 or 9
+                    tagLbl.TextXAlignment = Enum.TextXAlignment.Left
+                    tagLbl.TextYAlignment = Enum.TextYAlignment.Center
+                    tagLbl.LayoutOrder = 3
+                    tagLbl.ZIndex = 8
+                    tagLbl.Parent = nameRow
+                end
+
                 -- Time (dorong ke kanan pakai spacer)
                 local timeSpacer = Instance.new("Frame")
                 timeSpacer.Size = UDim2.new(1, 0, 1, 0)
                 timeSpacer.BackgroundTransparency = 1
-                timeSpacer.LayoutOrder = 3
+                timeSpacer.LayoutOrder = 4
                 timeSpacer.ZIndex = 7
                 timeSpacer.Parent = nameRow
 
@@ -6540,7 +6573,7 @@ local function renderMessage(msg)
                 timeLbl.TextSize = IS_MOBILE and 8 or 9
                 timeLbl.TextXAlignment = Enum.TextXAlignment.Right
                 timeLbl.TextYAlignment = Enum.TextYAlignment.Center
-                timeLbl.LayoutOrder = 4
+                timeLbl.LayoutOrder = 5
                 timeLbl.ZIndex = 8
                 timeLbl.Parent = nameRow
 
