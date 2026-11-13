@@ -4873,44 +4873,14 @@ do
     summitDesc.Parent = summitContent
     registerTheme(summitDesc, "Muted", "TextColor3")
 
-    makeToggle(summitContent, "Enable Auto Summit (ALL)", false, function(v)
+        makeToggle(summitContent, "Enable Auto Summit (ALL)", false, function(v)
         Shared.AutoSummit_Enabled = v
-
-        -- Panggil toggle di script Auto CP (soreyacp.txt)
-        local ok, err = pcall(function()
-            if _G.VRILZ_AutoCP_Toggle then
-                _G.VRILZ_AutoCP_Toggle(v)
-                return
-            end
-            -- Fallback: kalau function belum ada, cari tombol START/STOP-nya
-            local pg = game:GetService("Players").LocalPlayer:FindFirstChild("PlayerGui")
-            local gui = pg and pg:FindFirstChild("VrilzAutoCP")
-            if not gui then
-                if v then notify("⚠ Auto CP script belum di-load!", "warning") end
-                return
-            end
-            for _, d in ipairs(gui:GetDescendants()) do
-                if d:IsA("TextButton") and d.Text and (d.Text:find("START AUTO LOOP") or d.Text:find("STOP AUTO LOOP")) then
-                    -- Klik kalau state beda
-                    local isRunning = d.Text:find("STOP") ~= nil
-                    if isRunning ~= v then
-                        d:Activate() -- bukan klik langsung, tapi lebih aman pakai fireclick
-                        -- Kalau :Activate() gak jalan, panggil MouseButton1Click manual
-                        if d.MouseButton1Click then
-                            -- no direct way, fallback visual
-                        end
-                    end
-                    break
-                end
-            end
-        end)
         if v then
             notify("🏔 Auto Summit: ON", "success")
         else
             notify("🏔 Auto Summit: OFF", "info")
         end
     end, "AutoSummit_Enabled")
-end
 
 -- ============================================================
 -- 🎣 AUTO FISH TAB
