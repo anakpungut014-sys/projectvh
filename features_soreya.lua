@@ -147,19 +147,18 @@ end
 -- ============================================================
 local function initAutoSummit()
     local wasOn = false
+    local VIM = game:GetService("VirtualInputManager")
 
     task.spawn(function()
         while true do
             task.wait(0.3)
             local wantOn = Shared and Shared.AutoSummit_Enabled == true
 
-            -- Cuma eksekusi kalau state berubah
             if wantOn ~= wasOn then
                 local pg = LocalPlayer:FindFirstChild("PlayerGui")
                 local gui = pg and pg:FindFirstChild("VrilzAutoCP")
 
                 if gui then
-                    -- Cari tombol START/STOP
                     for _, d in ipairs(gui:GetDescendants()) do
                         if d:IsA("TextButton") and d.Text then
                             local isStart = d.Text:find("START AUTO LOOP") ~= nil
@@ -167,8 +166,16 @@ local function initAutoSummit()
                             if isStart or isStop then
                                 local isRunning = isStop
                                 if isRunning ~= wantOn then
-                                    -- Klik paksa via firetouch / activate
-                                    pcall(function() d:Activate() end)
+                                    -- ⭐ Klik BENERAN pakai VirtualInputManager
+                                    pcall(function()
+                                        local pos = d.AbsolutePosition
+                                        local size = d.AbsoluteSize
+                                        local cx = pos.X + size.X / 2
+                                        local cy = pos.Y + size.Y / 2
+                                        VIM:SendMouseButtonEvent(cx, cy, 0, true, game, 0)
+                                        task.wait(0.05)
+                                        VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 0)
+                                    end)
                                 end
                                 break
                             end
