@@ -115,18 +115,21 @@ end
 end
 
 -- ============================================================
--- 🎣 AUTO FISH v5 — MULTI-TAP PER FRAME + AUTO DEBUG
+-- 🎣 AUTO FISH v6 — SMART REEL + EXPLOIT + SNIFFER
+-- Strategi: drain 0 + zone gede + sweep naik-turun
 -- ============================================================
-local RS      = game:GetService("ReplicatedStorage")
-local UIS     = game:GetService("UserInputService")
-local VIM     = game:GetService("VirtualInputManager")
+local RS  = game:GetService("ReplicatedStorage")
+local VIM = game:GetService("VirtualInputManager")
 
 local FishSpeed = {
-    reelMaxTime   = 8,
+    reelMaxTime   = 30,
     castCooldown  = 0.15,
     castPowerWait = 0.15,
     loopDelay     = 0.05,
-    tapsPerFrame  = 5,    -- ⚡⚡ 5 tap TIAP FRAME ≈ 300 tap/detik
+    tapsPerFrame  = 3,
+    useSweep      = true,   -- mode tahan-lepas
+    sweepHold     = 0.30,   -- lama tahan (zone naik)
+    sweepRelease  = 0.30,   -- lama lepas (zone turun)
 }
 
 local FishState = {
@@ -199,6 +202,111 @@ local function autoCast()
     return true
 end
 
+-- ═══════════════════════════════════════════
+-- 🔍 DEEP DEBUG v2 — GetState + GUI tree live
+-- ═══════════════════════════════════════════
+local function dumpValue(v, indent, depth)
+    depth = depth or 0
+    if depth > 3 then print(indent .. "...") return end
+    if type(v) ~= "table" then print(indent .. tostring(v)) return end
+    for k, val in pairs(v) do
+        if type(val) == "table" then
+            print(indent .. tostring(k) .. " = {")
+            dumpValue(val, indent .. "    ", depth + 1)
+            print(indent .. "}")
+        else
+            print(indent .. tostring(k) .. " = " .. tostring(val))
+        end
+    end
+end
+
+local function getMinigameGui()
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    local f = pg and pg:FindFirstChild("Fishing")
+    local m = f and f:FindFirstChild("Main")
+    local d = m and m:FindFirstChild("Display")
+    return d and d:FindFirstChild("Minigame")
+end
+
+local function dumpDebug()
+    if FishState.debugDone then return end
+    FishState.debugDone = true
+    print("════════ [VRILZ FISH DEBUG v2] ════════")
+    pcall(function()
+        if FishMiniGame and FishMiniGame.GetState then
+            local ok, st = pcall(FishMiniGame.GetState)
+            print("▶ GetState():")
+            if ok then dumpValue(st, "   ") else print("   error:", tostring(st)) end
+        end
+    end)
+    pcall(function()
+        local mg = getMinigameGui()
+        if not mg then print("▶ GUI Minigame gak ketemu") return end
+        print("▶ GUI Minigame tree (posisi live):")
+        print("   ROOT pos=" .. tostring(mg.AbsolutePosition) .. " size=" .. tostring(mg.AbsoluteSize))
+        for _, d in ipairs(mg:GetDescendants()) do
+            if d:IsA("GuiObject") then
+                print(string.format("   %s [%s] pos=%s size=%s vis=%s",
+                    d.Name, d.ClassName, tostring(d.AbsolutePosition),
+                    tostring(d.AbsoluteSize), tostring(d.Visible)))
+            end
+        end
+    end)
+    print("════════ END DEBUG v2 — COPY SEMUA & KIRIM ════════")
+end
+
+-- ═══════════════════════════════════════════
+-- 🎯 SNIFFER — log paket yang client kirim ke server
+-- ═══════════════════════════════════════════
+local snifferInstalled = false
+local function installSniffer()
+    if snifferInstalled then return end
+    snifferInstalled = true
+    if type(hookmetamethod) ~= "function" then
+        print("🎯 [SNIFFER] Executor gak support hookmetamethod — skip")
+        return
+    end
+    pcall(function()
+        local old
+        old = hookmetamethod(game, "__namecall", function(self, ...)
+            local m = ""
+            pcall(function() m = getnamecallmethod() end)
+            if m == "FireServer" and self ~= nil and self.Name == "MiniGame" then
+                local parts = {}
+                for i = 1, select("#", ...) do
+                    parts[i] = tostring((select(i, ...)))
+                end
+                print("🎯 [SNIFFER] MiniGame:FireServer( " .. table.concat(parts, " | ") .. " )")
+            end
+            return old(self, ...)
+        end)
+        print("🎯 [SNIFFER] AKTIF — selesaikan 1x minigame, log FireServer bakal muncul")
+    end)
+end
+
+-- ═══════════════════════════════════════════
+-- 💉 EXPLOIT — jalan tiap minigame mulai
+-- ═══════════════════════════════════════════
+local function tryExploits()
+    local ok1 = pcall(function() FishMiniGame.SetClickDrainRate(0) end)      -- progress gak turun
+    local ok2 = pcall(function() FishMiniGame.SetDynamicSize(1000) end)      -- zone dibesarin
+    pcall(function() FishMiniGame.SetAutoDetectOrientation(true) end)
+    FishState.status = "💉 Exploit drain=" .. tostring(ok1) .. " size=" .. tostring(ok2)
+end
+
+-- ═══ HOLD helpers ═══
+local holding = false
+local function holdDown()
+    if holding then return true end
+    local ok = pcall(function() FishMiniGame.MobileHoldDown() end)
+    holding = ok
+    return ok
+end
+local function holdUp()
+    pcall(function() FishMiniGame.MobileHoldUp() end)
+    holding = false
+end
+
 local function tapOnce()
     if FishMiniGame and FishMiniGame.MobileTap then
         pcall(function() FishMiniGame.MobileTap() end)
@@ -209,67 +317,13 @@ local function tapOnce()
         end)
     end
 end
-
--- ═══════════════════════════════════════════
--- 🔍 DEBUG DUMP — otomatis print info minigame 1x
--- ═══════════════════════════════════════════
-local function dumpDebug(info)
-    if FishState.debugDone then return end
-    FishState.debugDone = true
-    print("════════ [VRILZ FISH DEBUG] ════════")
-    pcall(function()
-        print("▶ MiniGame Start info:")
-        if typeof(info) == "table" then
-            for k, v in pairs(info) do print("   ", tostring(k), "=", tostring(v)) end
-        else
-            print("   ", tostring(info))
-        end
-    end)
-    pcall(function()
-        if FishMiniGame then
-            print("▶ MiniGameHandler isi module:")
-            for k, v in pairs(FishMiniGame) do print("   ", tostring(k), "(", type(v), ")") end
-        end
-        if FishPowerBar then
-            print("▶ PowerBarHandler isi module:")
-            for k, v in pairs(FishPowerBar) do print("   ", tostring(k), "(", type(v), ")") end
-        end
-    end)
-    pcall(function()
-        local rod = getEquippedRod()
-        if rod and rod:FindFirstChild("Mechanics") then
-            print("▶ Rod Mechanics:")
-            for _, d in ipairs(rod.Mechanics:GetDescendants()) do
-                if d:IsA("RemoteEvent") or d:IsA("RemoteFunction") or d:IsA("ValueBase") then
-                    local extra = ""
-                    if d:IsA("ValueBase") then pcall(function() extra = "= " .. tostring(d.Value) end) end
-                    print("   ", d.ClassName, d.Name, extra)
-                end
-            end
-        end
-    end)
-    pcall(function()
-        local pg = LocalPlayer:FindFirstChild("PlayerGui")
-        if pg then
-            print("▶ GUI minigame (kemungkinan):")
-            local n = 0
-            for _, d in ipairs(pg:GetDescendants()) do
-                if n > 15 then break end
-                if (d:IsA("Frame") or d:IsA("ImageLabel")) and d.Visible then
-                    local ln = d.Name:lower()
-                    if ln:find("mini") or ln:find("reel") or ln:find("fish") or ln:find("bar") or ln:find("power") then
-                        print("   ", d:GetFullName())
-                        n += 1
-                    end
-                end
-            end
-        end
-    end)
-    print("════════ END DEBUG — COPY SEMUA & KIRIM ════════")
+local function tapSpam()
+    for _ = 1, FishSpeed.tapsPerFrame do tapOnce() end
 end
-_G.VRILZ_FishDebug = dumpDebug
 
--- ⚡⚡ REEL — 5 TAP PER FRAME (nembus batas 60 tap/detik)
+-- ═══════════════════════════════════════════
+-- 🧠 SMART REEL — sweep + drain 0
+-- ═══════════════════════════════════════════
 local function doReelSpam()
     if FishState.reeling then return end
     FishState.reeling = true
@@ -277,32 +331,56 @@ local function doReelSpam()
     local rod = getEquippedRod()
     local start = os.clock()
     local taps = 0
-    FishState.status = "⚡⚡ MULTI-TAP REEL..."
+    FishState.status = "🧠 SMART REEL (drain 0 + sweep)..."
 
-    local miss = 0
-    local minigameSeen = false
+    tryExploits()
+    dumpDebug()
+    installSniffer()
 
-    while FishState.enabled
-        and not FishState.reelAbort
-        and os.clock() - start < FishSpeed.reelMaxTime do
+    local holdAvailable = (FishMiniGame and FishMiniGame.MobileHoldDown and FishMiniGame.MobileHoldUp) ~= nil
 
-        if rod then
-            if getStatusValue(rod, "MiniGameActive") then
-                minigameSeen = true
-                miss = 0
-            elseif minigameSeen then
-                miss += 1
-                if miss >= 2 then break end
+    if holdAvailable and FishSpeed.useSweep then
+        -- ⭐ SWEEP: tahan (zone naik) → lepas + tap (zone turun) → ulangi
+        --    Karena drain = 0, progress CUMA NAMBAH, gak pernah turun
+        while FishState.enabled
+            and not FishState.reelAbort
+            and os.clock() - start < FishSpeed.reelMaxTime do
+            if rod and not getStatusValue(rod, "MiniGameActive") then break end
+
+            holdDown()
+            local t0 = os.clock()
+            while os.clock() - t0 < FishSpeed.sweepHold
+                and FishState.enabled and not FishState.reelAbort do
+                RunService.Heartbeat:Wait()
+            end
+
+            holdUp()
+            t0 = os.clock()
+            while os.clock() - t0 < FishSpeed.sweepRelease
+                and FishState.enabled and not FishState.reelAbort do
+                tapSpam(); taps += FishSpeed.tapsPerFrame
+                RunService.Heartbeat:Wait()
             end
         end
-
-        -- ⚡⚡ INTI BARU: beberapa tap dalam 1 frame
-        for _ = 1, FishSpeed.tapsPerFrame do
-            tapOnce()
-            taps += 1
+        holdUp()
+    else
+        -- fallback: multitap biasa
+        local miss, seen = 0, false
+        while FishState.enabled and not FishState.reelAbort
+            and os.clock() - start < FishSpeed.reelMaxTime do
+            if rod then
+                if getStatusValue(rod, "MiniGameActive") then
+                    seen = true
+                    miss = 0
+                elseif seen then
+                    miss += 1
+                    if miss >= 2 then break end
+                end
+            end
+            tapSpam()
+            taps += FishSpeed.tapsPerFrame
+            RunService.Heartbeat:Wait()
         end
-
-        RunService.Heartbeat:Wait()
     end
 
     local dur = os.clock() - start
@@ -324,7 +402,6 @@ local function hookRod(rod)
         if not FishState.enabled then return end
         if action == "Start" then
             FishState.lastBiteTime = os.clock()
-            dumpDebug(info)  -- 🔍 debug otomatis 1x
             if not FishState.reeling then
                 task.spawn(doReelSpam)
             end
@@ -338,7 +415,7 @@ local function hookRod(rod)
         if not FishState.enabled then return end
         if action == "Bite" then
             FishState.lastBiteTime = os.clock()
-            FishState.status = "🐟 Ikan nyangkut! LANGSUNG REEL..."
+            FishState.status = "🐟 Ikan nyangkut! SMART REEL..."
             if FishState.autoReel and not FishState.reeling then
                 task.spawn(doReelSpam)
             end
@@ -381,8 +458,7 @@ local function startFishLoop()
             end
             if FishState.autoReel
                 and getStatusValue(rod, "MiniGameActive")
-                and not FishState.reeling
-                and os.clock() - FishState.lastBiteTime > 0 then
+                and not FishState.reeling then
                 FishState.lastBiteTime = os.clock()
                 task.spawn(doReelSpam)
             end
