@@ -115,26 +115,29 @@ end
 end
 
 -- ============================================================
--- 🎣 AUTO FISH v3 — BUILT-IN (dulu file terpisah)
+-- 🎣 AUTO FISH v4 — LIGHTNING REEL ⚡
+-- Cast → nunggu ikan → KENA LANGSUNG REEL KILAT (~2 detik kelar)
 -- ============================================================
 local RS      = game:GetService("ReplicatedStorage")
 local UIS     = game:GetService("UserInputService")
 local VIM     = game:GetService("VirtualInputManager")
 
 local FishSpeed = {
-reelSafe      = 0.02,
+    reelSafe      = 0.02,
     reelTurbo     = 0.003,
+    reelLightning = 0,        -- ⚡ 0 = tap TIAP FRAME (max speed, kelar ~2 detik)
     reelMaxTime   = 5,
-    castCooldown  = 0.25,
-    biteReaction  = 0.05,
+    castCooldown  = 0.15,     -- ⚡ cast ulang lebih cepet
+    biteReaction  = 0,        -- ⚡ INSTANT — 0 detik setelah ikan nyangkut
     castPowerWait = 0.15,
-    loopDelay     = 0.08,
+    loopDelay     = 0.05,     -- ⚡ loop makin sering ngecek status
 }
 
 local FishState = {
     enabled = false,
     autoEquip = true, autoCast = true, autoPerfect = true, autoReel = true,
     turboReel = true,
+    lightningReel = true,     -- ⚡ MODE KILAT (default ON)
     reeling = false, reelAbort = false,
     stats = { cast = 0, caught = 0, perfect = 0, fail = 0 },
     status = "Idle", lastCastTime = 0, lastBiteTime = 0,
@@ -212,31 +215,57 @@ local function tapOnce()
     end
 end
 
+-- ⚡⚡ REEL KILAT — tap secepat kilat sampai minigame kelar
 local function doReelSpam()
     if FishState.reeling then return end
     FishState.reeling = true
     FishState.reelAbort = false
     local rod = getEquippedRod()
     local start = os.clock()
-    local interval = FishState.turboReel and FishSpeed.reelTurbo or FishSpeed.reelSafe
+
+    local interval, label
+    if FishState.lightningReel then
+        interval, label = FishSpeed.reelLightning, "⚡⚡ REEL KILAT!"
+    elseif FishState.turboReel then
+        interval, label = FishSpeed.reelTurbo, "⚡ Reeling (TURBO)..."
+    else
+        interval, label = FishSpeed.reelSafe, "Reeling..."
+    end
+    FishState.status = label
+
     local miss = 0
-    FishState.status = FishState.turboReel and "⚡ Reeling (TURBO)..." or "Reeling..."
+    local taps = 0
+    local minigameSeen = false  -- ⚡ bite bisa datang sebelum minigame aktif
+
     while FishState.enabled
         and not FishState.reelAbort
         and os.clock() - start < FishSpeed.reelMaxTime do
+
         if rod then
             if getStatusValue(rod, "MiniGameActive") then
+                minigameSeen = true
                 miss = 0
-            else
+            elseif minigameSeen then
+                -- minigame udah pernah aktif → sekarang udah kelar/gagal
                 miss += 1
                 if miss >= 2 then break end
             end
         end
+
         tapOnce()
-        task.wait(interval)
+        taps += 1
+
+        -- ⚡ interval 0 = tap tiap frame (1/60 detik) → KILAT
+        if interval <= 0 then
+            RunService.Heartbeat:Wait()
+        else
+            task.wait(interval)
+        end
     end
+
+    local dur = os.clock() - start
     FishState.reeling = false
-    FishState.status = "Selesai reel → cast lagi..."
+    FishState.status = string.format("✅ Reel kelar %.1fs (%d tap) → cast lagi", dur, taps)
 end
 
 local fishHookedRods = {}
@@ -253,7 +282,8 @@ local function hookRod(rod)
         if not FishState.enabled then return end
         if action == "Start" then
             FishState.lastBiteTime = os.clock()
-            if FishState.autoPerfect or FishState.autoReel then
+            -- ⚡ LANGSUNG reel, tanpa jeda apa pun
+            if not FishState.reeling then
                 task.spawn(doReelSpam)
             end
         elseif action == "Stop" then
@@ -265,13 +295,17 @@ local function hookRod(rod)
     notifyClient.OnClientEvent:Connect(function(action, info)
         if not FishState.enabled then return end
         if action == "Bite" then
-            FishState.status = "🐟 Fish biting..."
+            FishState.lastBiteTime = os.clock()
+            FishState.status = "🐟 Ikan nyangkut! LANGSUNG REEL..."
+            -- ⚡ INSTANT REEL pas bite — gak nunggu event "Start"
+            if FishState.autoReel and not FishState.reeling then
+                task.spawn(doReelSpam)
+            end
         elseif action == "GotFish" then
             FishState.stats.caught += 1
             local name = (typeof(info) == "table" and info.baseName) or tostring(info) or "Fish"
             FishState.status = "✅ Caught: " .. name
 
-            -- ⭐ WEBHOOK HOOK
             if Shared and Shared.WebhookNotifyFish and _G.VRILZ_SendFishWebhook then
                 task.spawn(function()
                     _G.VRILZ_SendFishWebhook(info)
@@ -303,6 +337,7 @@ local function startFishLoop()
             if FishState.autoCast
                 and not getStatusValue(rod, "FishingActive")
                 and not getStatusValue(rod, "MiniGameActive")
+                and not FishState.reeling
                 and os.clock() - FishState.lastCastTime > FishSpeed.castCooldown then
                 autoCast()
             end
@@ -319,28 +354,31 @@ end
 
 _G.VRILZ_FishState = FishState
 _G.VRILZ_FishUI = {
-    setStatus  = function(s) FishState.status = s end,
-    setEnabled = function(v) FishState.enabled = v and true or false end,
-    toggle     = function() FishState.enabled = not FishState.enabled end,
-    isEnabled  = function() return FishState.enabled end,
-    isTurbo    = function() return FishState.turboReel end,
+    setStatus    = function(s) FishState.status = s end,
+    setEnabled   = function(v) FishState.enabled = v and true or false end,
+    toggle       = function() FishState.enabled = not FishState.enabled end,
+    isEnabled    = function() return FishState.enabled end,
+    isTurbo      = function() return FishState.turboReel end,
+    isLightning  = function() return FishState.lightningReel end,
+    setLightning = function(v) FishState.lightningReel = v and true or false end,
 }
 
 local function initAutoFish()
-    startFishLoop()  -- start loop sekali aja
+    startFishLoop()
     task.spawn(function()
         while true do
             task.wait(0.3)
             local wantOn = (Shared and Shared.AutoFish_Enabled == true)
             if wantOn ~= FishState.enabled then
                 if wantOn then
-                    FishState.autoEquip   = true
-                    FishState.autoCast    = true
-                    FishState.autoPerfect = true
-                    FishState.autoReel    = true
-                    FishState.turboReel   = true
-                    FishState.reelAbort   = false
-                    FishState.enabled     = true
+                    FishState.autoEquip     = true
+                    FishState.autoCast      = true
+                    FishState.autoPerfect   = true
+                    FishState.autoReel      = true
+                    FishState.turboReel     = true
+                    FishState.lightningReel = true   -- ⚡
+                    FishState.reelAbort     = false
+                    FishState.enabled       = true
                 else
                     FishState.enabled   = false
                     FishState.reelAbort = true
