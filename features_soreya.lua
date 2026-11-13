@@ -122,13 +122,13 @@ local UIS     = game:GetService("UserInputService")
 local VIM     = game:GetService("VirtualInputManager")
 
 local FishSpeed = {
-    reelSafe      = 0.03,
-    reelTurbo     = 0.005,
-    reelMaxTime   = 8,
-    castCooldown  = 0.8,
-    biteReaction  = 0.1,
-    castPowerWait = 0.3,
-    loopDelay     = 0.15,
+reelSafe      = 0.02,
+    reelTurbo     = 0.003,
+    reelMaxTime   = 5,
+    castCooldown  = 0.25,
+    biteReaction  = 0.05,
+    castPowerWait = 0.15,
+    loopDelay     = 0.08,
 }
 
 local FishState = {
