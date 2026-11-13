@@ -2787,6 +2787,19 @@ local function buildFPSWindow(parent)
 end
 
 -- ============================================================
+-- 🏷 TAG SCRIPT PER GAME (untuk Live Chat) — PINDAH KE ATAS
+-- ============================================================
+local SCRIPT_TAGS = {
+    [118517641508250] = "MT SOREYA",  -- Mount Soreya
+    [124216119978534] = "RAP",        -- Ride a Pet
+    [10766972131]     = "TFF",        -- Throw Food
+}
+
+local function getScriptTag()
+    return SCRIPT_TAGS[game.PlaceId]
+end
+
+-- ============================================================
 -- LIVE CHAT CLIENT (global via Cloudflare Worker + D1)
 -- ============================================================
 _G.VRILZ_ChatClient = _G.VRILZ_ChatClient or {
@@ -5831,19 +5844,6 @@ do
             notify("⚡ Lightning Effect: OFF", "info")
         end
     end, "LightningEffect_Enabled")
-end
-
--- ============================================================
--- 🏷 TAG SCRIPT PER GAME (untuk Live Chat)
--- ============================================================
-local SCRIPT_TAGS = {
-    [118517641508250] = "MT SOREYA",  -- Mount Soreya
-    [124216119978534] = "RAP",        -- Ride a Pet
-    [10766972131]     = "TFF",        -- Throw Food
-}
-
-local function getScriptTag()
-    return SCRIPT_TAGS[game.PlaceId]
 end
 
                        -- ============================================================
