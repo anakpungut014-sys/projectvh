@@ -695,6 +695,237 @@ local function initAutoShop()
 end
 
 -- ============================================================
+-- 👻 GHOST MODE v5 (THROW) — char invisible + clone fix di base
+-- Auto ON pas Auto Throw nyala. GUI game dihide. Camera di clone.
+-- ============================================================
+
+local GHOST_CLONE_POS = Vector3.new(2.23, 6.01, 20.29) + Vector3.new(0, 3, 0) -- base + tinggi HRP
+
+local GhostState = {
+    enabled      = false,
+    clone        = nil,
+    saved        = {},
+    savedDisplay = nil,
+    savedGuis    = {},
+}
+
+-- ═══ GUI: hide semua ScreenGui KECUALI yang mengandung "vrilz" ═══
+local function ghostHideGuis()
+    local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    if not pg then return end
+    for _, g in ipairs(pg:GetChildren()) do
+        if g:IsA("ScreenGui") and g.Name:lower():find("vrilz") == nil then
+            if GhostState.savedGuis[g] == nil then
+                GhostState.savedGuis[g] = g.Enabled
+            end
+            g.Enabled = false
+        end
+    end
+end
+
+local function ghostRestoreGuis()
+    for g, v in pairs(GhostState.savedGuis) do
+        if g and g.Parent then g.Enabled = v end
+    end
+    GhostState.savedGuis = {}
+end
+
+-- ═══ Sembunyikan real char ═══
+local function ghostHide(char)
+    for _, d in ipairs(char:GetDescendants()) do
+        if d:IsA("BasePart") then
+            if GhostState.saved[d] == nil then GhostState.saved[d] = d.Transparency end
+            d.Transparency = 1
+            d.LocalTransparencyModifier = 1
+        elseif d:IsA("Decal") then
+            if GhostState.saved[d] == nil then GhostState.saved[d] = d.Transparency end
+            d.Transparency = 1
+        elseif d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam")
+            or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles") then
+            d.Enabled = false
+        elseif d:IsA("BillboardGui") or d:IsA("SurfaceGui") then
+            d.Enabled = false
+        end
+    end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        if GhostState.savedDisplay == nil then
+            GhostState.savedDisplay = hum.DisplayDistanceType
+        end
+        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+    end
+    local hl = char:FindFirstChildOfClass("Highlight")
+    if hl then hl.Enabled = false end
+end
+
+local function ghostRestore(char)
+    for d, t in pairs(GhostState.saved) do
+        if d and d.Parent then
+            d.Transparency = t
+            d.LocalTransparencyModifier = 0
+        end
+    end
+    GhostState.saved = {}
+    for _, d in ipairs(char:GetDescendants()) do
+        if d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam")
+            or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles")
+            or d:IsA("BillboardGui") or d:IsA("SurfaceGui") then
+            d.Enabled = true
+        end
+    end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum and GhostState.savedDisplay then
+        hum.DisplayDistanceType = GhostState.savedDisplay
+        GhostState.savedDisplay = nil
+    end
+    local hl = char:FindFirstChildOfClass("Highlight")
+    if hl then hl.Enabled = true end
+end
+
+-- ═══ Clone: fix di base, berbaju, diem ═══
+local function ghostCreateClone(char)
+    if GhostState.clone then
+        GhostState.clone:Destroy()
+        GhostState.clone = nil
+    end
+
+    local oldArch = char.Archivable
+    char.Archivable = true
+    local ok, clone = pcall(function() return char:Clone() end)
+    char.Archivable = oldArch
+    if not ok or not clone then return end
+
+    for _, d in ipairs(clone:GetDescendants()) do
+        if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
+            d:Destroy()
+        end
+    end
+    for _, d in ipairs(clone:GetChildren()) do
+        if d:IsA("Tool") then d:Destroy() end
+    end
+
+    -- Humanoid dipertahankan biar BAJU ke-render, di-neuter
+    local hum = clone:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+        hum.HealthDisplayType  = Enum.HumanoidHealthDisplayType.AlwaysOff
+        hum.PlatformStand      = true
+        pcall(function() hum.EvaluateStateMachine = false end)
+    end
+
+    for _, cls in ipairs({"Shirt", "Pants", "ShirtGraphic"}) do
+        local src = char:FindFirstChildOfClass(cls)
+        if src then
+            local old = clone:FindFirstChildOfClass(cls)
+            if old then old:Destroy() end
+            src:Clone().Parent = clone
+        end
+    end
+
+    -- ⭐ POSISI FIX di base — gak ikut char yang teleport/lempar
+    clone:PivotTo(CFrame.new(GHOST_CLONE_POS))
+
+    for _, d in ipairs(clone:GetDescendants()) do
+        if d:IsA("BasePart") then
+            d.Anchored = true
+            d.CanCollide = false
+            d.Massless = true
+        end
+    end
+
+    clone.Name = char.Name
+    clone.Parent = Workspace
+    GhostState.clone = clone
+end
+
+-- ═══ Camera ikut clone (KECUALI throw cam pin lagi aktif) ═══
+local function throwCamActive()
+    return Workspace:FindFirstChild("VRILZ_CamAnchor") ~= nil
+end
+
+local function ghostCamToClone()
+    if throwCamActive() then return end -- hard lock base menang, jangan rebutan
+    local cam = Workspace.CurrentCamera
+    local cloneHRP = GhostState.clone and GhostState.clone:FindFirstChild("HumanoidRootPart")
+    if cam and cloneHRP and cam.CameraSubject ~= cloneHRP then
+        cam.CameraSubject = cloneHRP
+    end
+end
+
+local function ghostEnable()
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    ghostCreateClone(char)
+    task.wait(0.1)
+    ghostHide(char)
+    ghostHideGuis()
+    ghostCamToClone()
+    GhostState.enabled = true
+end
+
+local function ghostDisable()
+    local char = LocalPlayer.Character
+    if char then ghostRestore(char) end
+    ghostRestoreGuis()
+    if GhostState.clone then
+        GhostState.clone:Destroy()
+        GhostState.clone = nil
+    end
+    if not throwCamActive() then
+        local cam = Workspace.CurrentCamera
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if cam and hum then
+            cam.CameraSubject = hum
+        end
+    end
+    GhostState.enabled = false
+end
+
+local function initGhostMode()
+    LocalPlayer.CharacterAdded:Connect(function()
+        if GhostState.clone then
+            GhostState.clone:Destroy()
+            GhostState.clone = nil
+        end
+        if GhostState.enabled then
+            task.wait(2)
+            pcall(ghostEnable)
+        end
+    end)
+
+    task.spawn(function()
+        while true do
+            task.wait(0.5)
+            -- ⭐ ghost ON kalau: toggle manual ATAU Auto Throw nyala
+            local wantOn = Shared and (Shared.GhostMode_Enabled == true
+                or Shared.AutoThrow_Enabled == true)
+
+            if wantOn and not GhostState.enabled then
+                pcall(ghostEnable)
+            elseif not wantOn and GhostState.enabled then
+                pcall(ghostDisable)
+            end
+
+            if GhostState.enabled then
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    if GhostState.clone and not GhostState.clone.Parent then
+                        pcall(ghostCreateClone, char)
+                    end
+                    if GhostState.clone and GhostState.clone.Parent
+                        and hrp.Transparency < 1 then
+                        pcall(ghostHide, char)
+                    end
+                end
+                ghostHideGuis()   -- GUI game yang re-enable → hide lagi
+                ghostCamToClone() -- camera balik ke clone kalau gak ada hard lock
+            end
+        end
+    end)
+end
+
+-- ============================================================
 -- FEATURES.INIT
 -- ============================================================
 function Features.Init(sharedState)
@@ -713,9 +944,15 @@ function Features.Init(sharedState)
         Features._autoThrowStarted = true
         pcall(initAutoThrow)
     end
-        if not Features._autoShopStarted then
+                if not Features._autoShopStarted then
         Features._autoShopStarted = true
         pcall(initAutoShop)
+    end
+
+    -- ⭐ GHOST MODE
+    if not Features._ghostStarted then
+        Features._ghostStarted = true
+        pcall(initGhostMode)
     end
 end
     
