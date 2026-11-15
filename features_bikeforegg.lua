@@ -469,7 +469,14 @@ local function initAutoThrow()
         pcall(function() RunService:UnbindFromRenderStep(BIND_SOFT) end)
         pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
         local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        camera.CameraType = savedCameraType or Enum.CameraType.Custom
+        -- jangan set Custom kalau ghost masih aktif (biar watchdog game tidak protes)
+        local ghostOn = _G.VRILZ_Shared
+            and (_G.VRILZ_Shared.GhostMode_Enabled or _G.VRILZ_Shared.AutoThrow_Enabled)
+        if ghostOn then
+            camera.CameraType = Enum.CameraType.Scriptable
+        else
+            camera.CameraType = savedCameraType or Enum.CameraType.Custom
+        end
         camera.CameraSubject = savedSubject or hum
         savedSubject, savedCameraType = nil, nil
         camAnchor:Destroy()
@@ -876,14 +883,16 @@ end
 local function ghostCamToClone()
     local cam = Workspace.CurrentCamera
     local cloneHRP = GhostState.clone and GhostState.clone:FindFirstChild("HumanoidRootPart")
-    if cam and cloneHRP then
-        if cam.CameraType ~= Enum.CameraType.Custom then
-            cam.CameraType = Enum.CameraType.Custom
-        end
-        if cam.CameraSubject ~= cloneHRP then
-            cam.CameraSubject = cloneHRP
-        end
+    if not (cam and cloneHRP) then return end
+
+    -- game paksa Scriptable saat cinematic → kita ikut Scriptable,
+    -- tapi CFrame-nya KITA yang isi, menghadap clone
+    if cam.CameraType ~= Enum.CameraType.Scriptable then
+        cam.CameraType = Enum.CameraType.Scriptable
     end
+    local target = cloneHRP.Position
+    local camPos = target + Vector3.new(0, 6, 14)
+    cam.CFrame = CFrame.lookAt(camPos, target)
 end
 
 local function ghostEnable()
@@ -931,14 +940,36 @@ local function initGhostMode()
     -- Bind di priority Last+2 → jalan SETELAH hardStep (Last+1) di initAutoThrow,
     -- jadi menimpa Scriptable/CFrame fixed → camera ikut clone
     RunService:BindToRenderStep("VRILZ_GhostCamOverride",
-        Enum.RenderPriority.Last.Value + 2, function()
+        Enum.RenderPriority.Last.Value + 5, function()
             if not GhostState.enabled then return end
             local SharedNow = Shared
             if not SharedNow then return end
             if not (SharedNow.GhostMode_Enabled or SharedNow.AutoThrow_Enabled) then return end
             ghostCamToClone()
         end)
-    -- ⬆️⬆️ SAMPAI SINI ⬆️⬆️
+    -- pengawal Animator: jalan tiap 0.05s, tidak peduli transparency
+    task.spawn(function()
+        while true do
+            task.wait(0.05)
+            if not GhostState.enabled then continue end
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                local anim = hum:FindFirstChildOfClass("Animator")
+                if anim then
+                    pcall(function()
+                        for _, t in ipairs(anim:GetPlayingAnimationTracks()) do
+                            t:Stop(0)
+                        end
+                    end)
+                    if GhostState.savedAnimator == nil then
+                        GhostState.savedAnimator = { anim = anim, parent = anim.Parent }
+                    end
+                    anim.Parent = nil
+                end
+            end
+        end
+    end)
 
     task.spawn(function()
         while true do
@@ -964,20 +995,22 @@ local function initGhostMode()
                         and hrp.Transparency < 1 then
                         pcall(ghostHide, char)
                     end
-                    -- ⬇️⬇️ TAMBAH BLOK INI ⬇️⬇️
-                    -- jaga-jaga kalau game spawn Animator baru
+                                        -- cabut Animator SETIAP kali ada (jangan cek savedAnimator == nil)
                     local humNow = char:FindFirstChildOfClass("Humanoid")
-                    local anNow = humNow and humNow:FindFirstChildOfClass("Animator")
-                    if anNow and GhostState.savedAnimator == nil then
-                        GhostState.savedAnimator = { anim = anNow, parent = anNow.Parent }
-                        pcall(function()
-                            for _, t in ipairs(anNow:GetPlayingAnimationTracks()) do
-                                t:Stop(0)
+                    if humNow then
+                        local anNow = humNow:FindFirstChildOfClass("Animator")
+                        if anNow then
+                            pcall(function()
+                                for _, t in ipairs(anNow:GetPlayingAnimationTracks()) do
+                                    t:Stop(0)
+                                end
+                            end)
+                            if GhostState.savedAnimator == nil then
+                                GhostState.savedAnimator = { anim = anNow, parent = anNow.Parent }
                             end
-                        end)
-                        anNow.Parent = nil
+                            anNow.Parent = nil
+                        end
                     end
-                    -- ⬆️⬆️ SAMPAI SINI ⬆️⬆️
                 end
                 ghostHideGuis()
                 ghostCamToClone()
