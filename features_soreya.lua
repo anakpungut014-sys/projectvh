@@ -407,6 +407,217 @@ local function initAutoSummit()
 end
 
 -- ============================================================
+-- 🛒 SHOP FEATURES — Auto Sell / Upgrade Rod / Buy Skin
+-- Default: SEMUA RARITY = FALSE (user pilih sendiri)
+-- ============================================================
+local ShopSpeed = { loopDelay = 1.0 }
+
+local ShopState = {
+    autoSell      = false,
+    autoUpgradeRod= false,
+    autoBuySkin   = false,
+    -- ⭐ DEFAULT NONE
+    sellRarities  = {
+        Common=false, Uncommon=false, Rare=false, Epic=false,
+        Legendary=false, Mythic=false, SECRET=false, FORGOTTEN=false,
+    },
+    status = "Idle",
+    stats  = { sold=0, koinsEarned=0, rodsUpgraded=0, skinsBought=0, lastError="" },
+}
+
+local RS = game:GetService("ReplicatedStorage")
+local ShopRemotes = {}
+pcall(function()
+    local M = RS:WaitForChild("Remote"):WaitForChild("Mancing")
+    ShopRemotes.JualPilihan = M:WaitForChild("JualPilihan")
+    ShopRemotes.JualSatu    = M:WaitForChild("JualSatu")
+    local K = RS:WaitForChild("Remote"):WaitForChild("KoinShop")
+    ShopRemotes.KoinAmbilData = K:WaitForChild("AmbilData")
+    ShopRemotes.KoinBeli      = K:WaitForChild("Beli")
+    ShopRemotes.KoinPakai     = K:WaitForChild("Pakai")
+    local S = RS:WaitForChild("Remote"):WaitForChild("SkinShop")
+    ShopRemotes.SkinAmbilPunya = S:WaitForChild("AmbilPunya")
+    ShopRemotes.SkinMintaBeli  = S:WaitForChild("MintaBeli")
+end)
+
+local function getFishTools()
+    local bp = LocalPlayer:FindFirstChild("Backpack")
+    if not bp then return {} end
+    local out = {}
+    for _, t in ipairs(bp:GetChildren()) do
+        if t:IsA("Tool") and t:FindFirstChild("Handle") then
+            local r = t:GetAttribute("Rarity")
+            if r then
+                table.insert(out, {
+                    tool=t, uid=t:GetAttribute("UidIkan"), rarity=r,
+                    harga=t:GetAttribute("Harga") or 0,
+                })
+            end
+        end
+    end
+    return out
+end
+
+local function shouldSell(rarity)
+    if not rarity then return false end
+    local n = rarity
+    if n:lower()=="secret" then n="SECRET" end
+    if n:lower()=="mythical" then n="Mythic" end
+    if n:lower()=="legend" then n="Legendary" end
+    if n:lower()=="uncommon" then n="Uncommon" end
+    if n:lower()=="forgotten" then n="FORGOTTEN" end
+    return ShopState.sellRarities[n] == true
+end
+
+local function doAutoSell()
+    -- Safety: kalau gak ada rarity dipilih → jangan jual
+    local any = false
+    for _, v in pairs(ShopState.sellRarities) do
+        if v == true then any = true break end
+    end
+    if not any then
+        ShopState.status = "⚠ Pilih rarity dulu di UI"
+        return
+    end
+
+    local fishes = getFishTools()
+    if #fishes == 0 then ShopState.status = "🐟 Backpack kosong" return end
+
+    local toSell = {}
+    for _, f in ipairs(fishes) do
+        if shouldSell(f.rarity) then table.insert(toSell, f) end
+    end
+    if #toSell == 0 then
+        ShopState.status = "✅ Tidak ada ikan cocok filter"
+        return
+    end
+
+    ShopState.status = string.format("💰 Jual %d ikan...", #toSell)
+    local uids = {}
+    for _, f in ipairs(toSell) do if f.uid then table.insert(uids, f.uid) end end
+
+    local ok, koin = false, 0
+    if #uids > 0 and ShopRemotes.JualPilihan then
+        local s, r = pcall(function() return ShopRemotes.JualPilihan:InvokeServer(uids) end)
+        if s and type(r)=="number" and r>0 then koin=r; ok=true
+        else ShopState.stats.lastError = "JualPilihan(uid): "..tostring(r) end
+    end
+    if not ok and ShopRemotes.JualSatu and #uids>0 then
+        local total = 0
+        for _, uid in ipairs(uids) do
+            local s, r = pcall(function() return ShopRemotes.JualSatu:InvokeServer(uid) end)
+            if s and type(r)=="number" then total += r end
+            task.wait(0.1)
+        end
+        if total > 0 then koin=total; ok=true end
+    end
+
+    if ok then
+        ShopState.stats.sold += #toSell
+        ShopState.stats.koinsEarned += koin
+        ShopState.status = string.format("✅ Jual %d → +%d Koin", #toSell, koin)
+    else
+        ShopState.status = "❌ Gagal: "..ShopState.stats.lastError
+    end
+end
+
+local function doAutoUpgradeRod()
+    if not ShopRemotes.KoinAmbilData then return end
+    local s, data = pcall(function() return ShopRemotes.KoinAmbilData:InvokeServer() end)
+    if not s or type(data)~="table" then return end
+    local owned = data.rod or {}
+    for name, isOwned in pairs(owned) do
+        if not isOwned then
+            ShopState.status = "🛒 Beli rod: "..name
+            local s2, r = pcall(function() return ShopRemotes.KoinBeli:InvokeServer(name) end)
+            if s2 and r then
+                ShopState.stats.rodsUpgraded += 1
+                ShopState.status = "✅ Beli rod: "..name
+            else
+                ShopState.status = "❌ Gagal beli rod: "..name
+            end
+            return
+        end
+    end
+    ShopState.status = "✅ Semua rod udah punya"
+end
+
+local function doAutoBuySkin()
+    if not ShopRemotes.SkinAmbilPunya then return end
+    local s, owned = pcall(function() return ShopRemotes.SkinAmbilPunya:InvokeServer() end)
+    if not s or type(owned)~="table" then return end
+    local ItemDB = RS.Modules.Fishing.ItemDatabase
+    local okDB, DB = pcall(require, ItemDB)
+    if not okDB or not DB.GetAllSkins then return end
+    local s2, skins = pcall(function() return DB.GetAllSkins() end)
+    if not s2 or type(skins)~="table" then return end
+
+    local koin = LocalPlayer:GetAttribute("Koin") or 0
+    for _, sk in pairs(skins) do
+        if type(sk)=="table" then
+            local n = sk.Name or sk.nama or sk.id
+            local p = sk.Price or sk.Harga or sk.price or 0
+            if n and not owned[n] and p>0 and koin>=p then
+                ShopState.status = "🛒 Beli skin: "..n
+                local s3 = pcall(function() return ShopRemotes.SkinMintaBeli:InvokeServer(n) end)
+                if s3 then
+                    ShopState.stats.skinsBought += 1
+                    ShopState.status = "✅ Beli skin: "..n
+                    koin = koin - p
+                end
+                return
+            end
+        end
+    end
+end
+
+local function startShopLoop()
+    task.spawn(function()
+        while true do
+            task.wait(ShopSpeed.loopDelay)
+            if not Shared then continue end
+            ShopState.autoSell      = Shared.Shop_AutoSell_Enabled == true
+            ShopState.autoUpgradeRod= Shared.Shop_AutoUpgradeRod_Enabled == true
+            ShopState.autoBuySkin   = Shared.Shop_AutoBuySkin_Enabled == true
+            if type(Shared.Shop_SellRarity) == "table" then
+                for k, v in pairs(Shared.Shop_SellRarity) do
+                    if ShopState.sellRarities[k] ~= nil then
+                        ShopState.sellRarities[k] = v == true
+                    end
+                end
+            end
+            local fishBusy = _G.VRILZ_FishState and _G.VRILZ_FishState.reeling
+            if fishBusy then continue end
+            if ShopState.autoSell then pcall(doAutoSell) end
+            if ShopState.autoUpgradeRod then pcall(doAutoUpgradeRod) end
+            if ShopState.autoBuySkin then pcall(doAutoBuySkin) end
+        end
+    end)
+end
+
+_G.VRILZ_ShopState = ShopState
+_G.VRILZ_ShopUI = {
+    setStatus          = function(s) ShopState.status = s end,
+    getStatus          = function() return ShopState.status end,
+    setSellRarity      = function(r, e)
+        if ShopState.sellRarities[r] ~= nil then ShopState.sellRarities[r] = e == true end
+    end,
+    getSellRarities    = function() return ShopState.sellRarities end,
+    getStats           = function() return ShopState.stats end,
+    listFishByRarity   = function()
+        local fishes = getFishTools()
+        local g = {}
+        for _, f in ipairs(fishes) do
+            g[f.rarity] = g[f.rarity] or {}
+            table.insert(g[f.rarity], f.name or f.tool.Name)
+        end
+        return g, fishes
+    end,
+    sellNow = function() task.spawn(doAutoSell) end,
+}
+local function initShop() startShopLoop() end
+
+-- ============================================================
 -- FEATURES.INIT
 -- ============================================================
 function Features.Init(sharedState)
@@ -431,6 +642,11 @@ function Features.Init(sharedState)
     if not Features._autoSummitStarted then
         Features._autoSummitStarted = true
         pcall(initAutoSummit)
+    end
+        -- ⭐ SHOP
+    if not Features._shopStarted then
+        Features._shopStarted = true
+        pcall(initShop)
     end
 end
 
