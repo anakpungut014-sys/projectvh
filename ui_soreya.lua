@@ -6687,11 +6687,145 @@ local msgTag = (msg.scriptTag and msg.scriptTag ~= "") and msg.scriptTag or nil
             end)
 
             chHide.MouseButton1Click:Connect(closeChat)
+    end
+
+-- ============================================================
+-- 🛒 SHOP TAB — Auto Sell / Upgrade Rod / Buy Skin
+-- ============================================================
+do
+    local shopPage, shopLeft, shopRight = createTwoColumnPage("Shop")
+    pages.Shop = shopPage
+
+    -- ═══ KIRI: AUTO SELL ═══
+    local sellCard, sellContent = makeCard(shopLeft, "💰 AUTO SELL", 1)
+
+    local sellDesc = Instance.new("TextLabel")
+    sellDesc.Size = UDim2.new(1, 0, 0, 26)
+    sellDesc.BackgroundTransparency = 1
+    sellDesc.Text = "Jual ikan otomatis by rarity. Pilih rarity dulu di bawah."
+    sellDesc.TextColor3 = C.Muted
+    sellDesc.Font = Enum.Font.GothamSemibold
+    sellDesc.TextSize = CFG.FONT_MUTED
+    sellDesc.TextWrapped = true
+    sellDesc.TextXAlignment = Enum.TextXAlignment.Left
+    sellDesc.LayoutOrder = 1
+    sellDesc.Parent = sellContent
+    registerTheme(sellDesc, "Muted", "TextColor3")
+
+    makeToggle(sellContent, "Enable Auto Sell", false, function(v)
+        Shared.Shop_AutoSell_Enabled = v
+        if v then notify("💰 Auto Sell: ON", "success")
+        else notify("💰 Auto Sell: OFF", "info") end
+    end, "Shop_AutoSell_Enabled")
+
+    -- ⭐ Dropdown rarity — DEFAULT NONE
+    local rarityHint = Instance.new("TextLabel")
+    rarityHint.Size = UDim2.new(1, 0, 0, 16)
+    rarityHint.BackgroundTransparency = 1
+    rarityHint.Text = "Rarity yang mau dijual:"
+    rarityHint.TextColor3 = C.Muted
+    rarityHint.Font = Enum.Font.GothamSemibold
+    rarityHint.TextSize = CFG.FONT_MUTED
+    rarityHint.TextXAlignment = Enum.TextXAlignment.Left
+    rarityHint.LayoutOrder = 2
+    rarityHint.Parent = sellContent
+    registerTheme(rarityHint, "Muted", "TextColor3")
+
+    local rarityHolder = Instance.new("Frame")
+    rarityHolder.Size = UDim2.new(1, 0, 0, CFG.DROPDOWN_H)
+    rarityHolder.BackgroundTransparency = 1
+    rarityHolder.LayoutOrder = 3
+    rarityHolder.Parent = sellContent
+
+    local sellRarityItems = { "Common", "Uncommon", "Rare", "Epic", "Legendary", "Mythic", "SECRET", "FORGOTTEN" }
+
+    -- ⭐ DEFAULT: SEMUA FALSE
+    if not Shared.Shop_SellRarity then
+        Shared.Shop_SellRarity = {}
+        for _, r in ipairs(sellRarityItems) do
+            Shared.Shop_SellRarity[r] = false
         end
+    end
+
+    makeDropdownMulti(rarityHolder, sellRarityItems, Shared.Shop_SellRarity, nil, function(t)
+        local cnt = 0
+        for _, v in pairs(t) do if v == true then cnt = cnt + 1 end end
+        if cnt == 0 then
+            notify("⚠️ Pilih minimal 1 rarity", "warning")
+        end
+    end)
+
+    -- Status + stats
+    local sellStatusLbl = Instance.new("TextLabel")
+    sellStatusLbl.Size = UDim2.new(1, 0, 0, 16)
+    sellStatusLbl.BackgroundTransparency = 1
+    sellStatusLbl.Text = "Status: Idle"
+    sellStatusLbl.TextColor3 = C.Muted
+    sellStatusLbl.Font = Enum.Font.GothamSemibold
+    sellStatusLbl.TextSize = CFG.FONT_MUTED
+    sellStatusLbl.TextXAlignment = Enum.TextXAlignment.Left
+    sellStatusLbl.LayoutOrder = 4
+    sellStatusLbl.Parent = sellContent
+    registerTheme(sellStatusLbl, "Muted", "TextColor3")
+
+    task.spawn(function()
+        while sellStatusLbl.Parent do
+            task.wait(0.5)
+            local SS = _G.VRILZ_ShopState
+            if SS then
+                local st = SS.stats or {}
+                sellStatusLbl.Text = string.format("%s | Sold:%d +%d Koin",
+                    SS.status or "Idle", st.sold or 0, st.koinsEarned or 0)
+            end
+        end
+    end)
+
+    -- ═══ KANAN: UPGRADE ROD + BUY SKIN ═══
+    local rodCard, rodContent = makeCard(shopRight, "⚙️ AUTO UPGRADE ROD", 1)
+    local rodDesc = Instance.new("TextLabel")
+    rodDesc.Size = UDim2.new(1, 0, 0, 26)
+    rodDesc.BackgroundTransparency = 1
+    rodDesc.Text = "Beli rod baru yang belum punya otomatis."
+    rodDesc.TextColor3 = C.Muted
+    rodDesc.Font = Enum.Font.GothamSemibold
+    rodDesc.TextSize = CFG.FONT_MUTED
+    rodDesc.TextWrapped = true
+    rodDesc.TextXAlignment = Enum.TextXAlignment.Left
+    rodDesc.LayoutOrder = 1
+    rodDesc.Parent = rodContent
+    registerTheme(rodDesc, "Muted", "TextColor3")
+
+    makeToggle(rodContent, "Enable Auto Upgrade Rod", false, function(v)
+        Shared.Shop_AutoUpgradeRod_Enabled = v
+        if v then notify("⚙️ Upgrade Rod: ON", "success")
+        else notify("⚙️ Upgrade Rod: OFF", "info") end
+    end, "Shop_AutoUpgradeRod_Enabled")
+
+    local skinCard, skinContent = makeCard(shopRight, "🎨 AUTO BUY SKIN", 2)
+    local skinDesc = Instance.new("TextLabel")
+    skinDesc.Size = UDim2.new(1, 0, 0, 26)
+    skinDesc.BackgroundTransparency = 1
+    skinDesc.Text = "Beli skin yang belum punya otomatis (yang affordable)."
+    skinDesc.TextColor3 = C.Muted
+    skinDesc.Font = Enum.Font.GothamSemibold
+    skinDesc.TextSize = CFG.FONT_MUTED
+    skinDesc.TextWrapped = true
+    skinDesc.TextXAlignment = Enum.TextXAlignment.Left
+    skinDesc.LayoutOrder = 1
+    skinDesc.Parent = skinContent
+    registerTheme(skinDesc, "Muted", "TextColor3")
+
+    makeToggle(skinContent, "Enable Auto Buy Skin", false, function(v)
+        Shared.Shop_AutoBuySkin_Enabled = v
+        if v then notify("🎨 Buy Skin: ON", "success")
+        else notify("🎨 Buy Skin: OFF", "info") end
+    end, "Shop_AutoBuySkin_Enabled")
+end
 
 registerTab("Info", "129516985087314", "Info", true)
 registerTab("AutoSummit", "127064137622496", "Auto Summit", true)
 registerTab("AutoFish", "118895892824960", "Auto Fish", true)
+registerTab("Shop", "101498199599518", "Shop", true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Webhook", "78129393420657", "Webhook", true)
 registerTab("Settings", "97834340359225", "Settings", true)
@@ -9590,6 +9724,15 @@ function UI.Init(sharedState)
     Shared.AutoSummit_Enabled = false
     Shared.AutoFish_Turbo = true
 
+    -- ⭐ SHOP defaults (OFF + rarity NONE)
+    Shared.Shop_AutoSell_Enabled       = false
+    Shared.Shop_AutoUpgradeRod_Enabled = false
+    Shared.Shop_AutoBuySkin_Enabled    = false
+    Shared.Shop_SellRarity = {
+        Common = false, Uncommon = false, Rare = false, Epic = false,
+        Legendary = false, Mythic = false, SECRET = false, FORGOTTEN = false,
+    }
+
 -- Webhook state
 Shared.WebhookURL = _G.VRILZ_WebhookURL or ""
 Shared.WebhookEnabled = false
@@ -9618,6 +9761,7 @@ task.spawn(function()
             "rbxassetid://129516985087314",  -- Info
             "rbxassetid://127064137622496",  -- AutoSummit
             "rbxassetid://118895892824960",  -- AutoFish
+            "rbxassetid://101498199599518",  -- Shop
             "rbxassetid://83047761221446",   -- Live Chat
             "rbxassetid://78129393420657",   -- Webhook
             "rbxassetid://97834340359225",   -- Settings
