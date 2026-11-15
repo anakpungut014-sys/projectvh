@@ -351,9 +351,13 @@ local function initAutoFish()
                     FishState.autoReel    = true
                     FishState.reelAbort   = false
                     FishState.enabled     = true
+                    -- ⭐ AUTO FISH ON → GHOST IKUT ON
+                    Shared.GhostMode_Enabled = true
                 else
                     FishState.enabled   = false
                     FishState.reelAbort = true
+                    -- ⭐ AUTO FISH OFF → GHOST IKUT OFF (char balik normal)
+                    Shared.GhostMode_Enabled = false
                 end
             end
         end
