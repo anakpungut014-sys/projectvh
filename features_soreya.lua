@@ -618,6 +618,170 @@ _G.VRILZ_ShopUI = {
 local function initShop() startShopLoop() end
 
 -- ============================================================
+-- 👻 GHOST MODE — Real char invisible + fake clone diem
+-- ============================================================
+
+local GhostState = {
+    enabled      = false,
+    clone        = nil,
+    saved        = {},
+    savedDisplay = nil,
+}
+
+local function ghostHide(char)
+    for _, d in ipairs(char:GetDescendants()) do
+        if d:IsA("BasePart") then
+            if GhostState.saved[d] == nil then GhostState.saved[d] = d.Transparency end
+            d.Transparency = 1
+            d.LocalTransparencyModifier = 1
+        elseif d:IsA("Decal") then
+            if GhostState.saved[d] == nil then GhostState.saved[d] = d.Transparency end
+            d.Transparency = 1
+        elseif d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam")
+            or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles") then
+            d.Enabled = false
+        elseif d:IsA("BillboardGui") or d:IsA("SurfaceGui") then
+            d.Enabled = false
+        end
+    end
+    -- hilangkan nama di atas kepala
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        if GhostState.savedDisplay == nil then
+            GhostState.savedDisplay = hum.DisplayDistanceType
+        end
+        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+    end
+    local hl = char:FindFirstChildOfClass("Highlight")
+    if hl then hl.Enabled = false end
+end
+
+local function ghostRestore(char)
+    for d, t in pairs(GhostState.saved) do
+        if d and d.Parent then
+            d.Transparency = t
+            d.LocalTransparencyModifier = 0
+        end
+    end
+    GhostState.saved = {}
+    for _, d in ipairs(char:GetDescendants()) do
+        if d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam")
+            or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles")
+            or d:IsA("BillboardGui") or d:IsA("SurfaceGui") then
+            d.Enabled = true
+        end
+    end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum and GhostState.savedDisplay then
+        hum.DisplayDistanceType = GhostState.savedDisplay
+        GhostState.savedDisplay = nil
+    end
+    local hl = char:FindFirstChildOfClass("Highlight")
+    if hl then hl.Enabled = true end
+end
+
+local function ghostCreateClone(char)
+    if GhostState.clone then
+        GhostState.clone:Destroy()
+        GhostState.clone = nil
+    end
+
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if not hrp then return end
+
+    -- ⭐ WAJIB: character default-nya Archivable=false → Clone() return NIL
+    local oldArch = char.Archivable
+    char.Archivable = true
+    local ok, clone = pcall(function() return char:Clone() end)
+    char.Archivable = oldArch
+    if not ok or not clone then return end
+
+    -- bersihkan clone: scripts, humanoid, animate, tool
+    for _, d in ipairs(clone:GetDescendants()) do
+        if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
+            d:Destroy()
+        end
+    end
+    local hum = clone:FindFirstChildOfClass("Humanoid")
+    if hum then hum:Destroy() end
+    local anim = clone:FindFirstChild("Animate")
+    if anim then anim:Destroy() end
+    for _, d in ipairs(clone:GetChildren()) do
+        if d:IsA("Tool") then d:Destroy() end
+    end
+    for _, d in ipairs(clone:GetDescendants()) do
+        if d:IsA("BasePart") then
+            d.Anchored = true
+            d.CanCollide = false
+            d.Massless = true
+        end
+    end
+
+    clone.Name = char.Name
+    clone.Parent = workspace
+    GhostState.clone = clone
+end
+
+local function ghostEnable()
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    ghostCreateClone(char)  -- clone DULU (masih keliatan normal)
+    task.wait(0.1)
+    ghostHide(char)         -- baru real char di-invisible
+    GhostState.enabled = true
+end
+
+local function ghostDisable()
+    local char = LocalPlayer.Character
+    if char then ghostRestore(char) end
+    if GhostState.clone then
+        GhostState.clone:Destroy()
+        GhostState.clone = nil
+    end
+    GhostState.enabled = false
+end
+
+local function initGhostMode()
+    -- respawn → re-apply ghost
+    LocalPlayer.CharacterAdded:Connect(function()
+        if GhostState.enabled then
+            task.wait(2)
+            pcall(ghostEnable)
+        end
+    end)
+
+    -- polling loop: ikutin toggle + safety
+    task.spawn(function()
+        while true do
+            task.wait(0.5)
+            local wantOn = Shared and Shared.GhostMode_Enabled == true
+
+            if wantOn and not GhostState.enabled then
+                pcall(ghostEnable)
+            elseif not wantOn and GhostState.enabled then
+                pcall(ghostDisable)
+            end
+
+            if GhostState.enabled then
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    -- clone kehapus server → recreate
+                    if GhostState.clone and not GhostState.clone.Parent then
+                        pcall(ghostCreateClone, char)
+                    end
+                    -- server force-restore transparency → re-hide
+                    if GhostState.clone and GhostState.clone.Parent
+                        and hrp.Transparency < 1 then
+                        pcall(ghostHide, char)
+                    end
+                end
+            end
+        end
+    end)
+end
+
+-- ============================================================
 -- FEATURES.INIT
 -- ============================================================
 function Features.Init(sharedState)
@@ -647,6 +811,11 @@ function Features.Init(sharedState)
     if not Features._shopStarted then
         Features._shopStarted = true
         pcall(initShop)
+    end
+    -- ⭐ GHOST MODE  ← TAMBAH INI
+    if not Features._ghostStarted then
+        Features._ghostStarted = true
+        pcall(initGhostMode)
     end
 end
 
