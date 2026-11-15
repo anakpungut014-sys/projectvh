@@ -622,8 +622,9 @@ _G.VRILZ_ShopUI = {
 local function initShop() startShopLoop() end
 
 -- ============================================================
--- 👻 GHOST MODE v2 — Real char invisible + clone berbaju diem
--- Clone spawn 15 studs dari char asli + camera nempel ke clone
+-- 👻 GHOST MODE v3 — Real char invisible + DIKUNCI di tempat
+-- Clone berbaju diem 15 studs + camera di clone
+-- Real char gak bisa gerak/lompat sampai ghost di-OFF kan
 -- ============================================================
 
 local GHOST_DISTANCE = 15 -- jarak clone dari char asli (studs)
@@ -634,7 +635,37 @@ local GhostState = {
     saved           = {},
     savedDisplay    = nil,
     savedCamSubject = nil,
+    savedWalk       = nil,
+    savedJump       = nil,
 }
+
+-- ═══ KUNCI real char: anchor HRP + WalkSpeed/Jump 0 ═══
+local function ghostLock(char)
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hum then
+        if GhostState.savedWalk == nil then GhostState.savedWalk = hum.WalkSpeed end
+        if GhostState.savedJump == nil then GhostState.savedJump = hum.JumpPower end
+        hum.WalkSpeed  = 0
+        hum.JumpPower  = 0
+        hum.JumpHeight = 0 -- game yang pakai JumpHeight juga ke-cover
+    end
+    if hrp then hrp.Anchored = true end
+end
+
+-- ═══ BUKA kunci ═══
+local function ghostUnlock(char)
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+    if hum then
+        if GhostState.savedWalk ~= nil then hum.WalkSpeed  = GhostState.savedWalk end
+        if GhostState.savedJump ~= nil then hum.JumpPower  = GhostState.savedJump end
+        hum.JumpHeight = GhostState.savedJump or hum.JumpHeight
+    end
+    if hrp then hrp.Anchored = false end
+    GhostState.savedWalk = nil
+    GhostState.savedJump = nil
+end
 
 local function ghostHide(char)
     for _, d in ipairs(char:GetDescendants()) do
@@ -702,7 +733,6 @@ local function ghostCreateClone(char)
     char.Archivable = oldArch
     if not ok or not clone then return end
 
-    -- bersihkan scripts & tool (⚠ Humanoid JANGAN dihapus — dibutuhkan render baju)
     for _, d in ipairs(clone:GetDescendants()) do
         if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
             d:Destroy()
@@ -712,16 +742,16 @@ local function ghostCreateClone(char)
         if d:IsA("Tool") then d:Destroy() end
     end
 
-    -- ⭐ FIX BAJU: Humanoid dipertahankan tapi di-neuter total
+    -- Humanoid clone dipertahankan (biar baju ke-render) tapi di-neuter
     local hum = clone:FindFirstChildOfClass("Humanoid")
     if hum then
-        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None   -- gak ada nama
-        hum.HealthDisplayType  = Enum.HumanoidHealthDisplayType.AlwaysOff -- gak ada health bar
-        hum.PlatformStand      = true                                     -- gak coba jalan
+        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+        hum.HealthDisplayType  = Enum.HumanoidHealthDisplayType.AlwaysOff
+        hum.PlatformStand      = true
         pcall(function() hum.EvaluateStateMachine = false end)
     end
 
-    -- ⭐ safety ekstra: copy ulang baju dari char asli
+    -- safety ekstra: copy ulang baju dari char asli
     for _, cls in ipairs({"Shirt", "Pants", "ShirtGraphic"}) do
         local src = char:FindFirstChildOfClass(cls)
         if src then
@@ -731,7 +761,7 @@ local function ghostCreateClone(char)
         end
     end
 
-    -- ⭐ posisi clone: GHOST_DISTANCE studs di BELAKANG char asli
+    -- clone 15 studs di belakang char asli
     clone:PivotTo(hrp.CFrame * CFrame.new(0, 0, GHOST_DISTANCE))
 
     for _, d in ipairs(clone:GetDescendants()) do
@@ -746,13 +776,10 @@ local function ghostCreateClone(char)
     clone.Parent = workspace
     GhostState.clone = clone
 
-    -- ⭐ camera nempel ke clone
+    -- camera nempel ke clone
     local cam = workspace.CurrentCamera
     local cloneHRP = clone:FindFirstChild("HumanoidRootPart")
     if cam and cloneHRP then
-        if GhostState.savedCamSubject == nil then
-            GhostState.savedCamSubject = cam.CameraSubject
-        end
         cam.CameraSubject = cloneHRP
     end
 end
@@ -763,33 +790,37 @@ local function ghostEnable()
     ghostCreateClone(char)
     task.wait(0.1)
     ghostHide(char)
+    ghostLock(char)   -- ⭐ KUNCI real char
     GhostState.enabled = true
 end
 
 local function ghostDisable()
     local char = LocalPlayer.Character
-    if char then ghostRestore(char) end
+    if char then
+        ghostUnlock(char)  -- ⭐ BUKA kunci dulu
+        ghostRestore(char)
+    end
     if GhostState.clone then
         GhostState.clone:Destroy()
         GhostState.clone = nil
     end
-    -- ⭐ balikin camera ke char asli
     local cam = workspace.CurrentCamera
     local hum = char and char:FindFirstChildOfClass("Humanoid")
     if cam and hum then
         cam.CameraSubject = hum
     end
-    GhostState.savedCamSubject = nil
     GhostState.enabled = false
 end
 
 local function initGhostMode()
     LocalPlayer.CharacterAdded:Connect(function()
-        -- clone lama langsung dihapus biar gak dobel
         if GhostState.clone then
             GhostState.clone:Destroy()
             GhostState.clone = nil
         end
+        -- reset lock state (char baru = nilai default)
+        GhostState.savedWalk = nil
+        GhostState.savedJump = nil
         if GhostState.enabled then
             task.wait(2)
             pcall(ghostEnable)
@@ -811,15 +842,22 @@ local function initGhostMode()
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if hrp then
+                    -- clone kehapus → recreate
                     if GhostState.clone and not GhostState.clone.Parent then
                         pcall(ghostCreateClone, char)
                     end
+                    -- server force-restore transparency → re-hide
                     if GhostState.clone and GhostState.clone.Parent
                         and hrp.Transparency < 1 then
                         pcall(ghostHide, char)
                     end
+                    -- ⭐ RE-ASSERT LOCK: game/fitur lain ubah speed atau unanchor → balikin
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum and (hum.WalkSpeed ~= 0 or not hrp.Anchored) then
+                        pcall(ghostLock, char)
+                    end
                 end
-                -- ⭐ camera tetap nempel ke clone (respawn/game reset → balikin otomatis)
+                -- camera tetap nempel clone
                 local cam = workspace.CurrentCamera
                 local cloneHRP = GhostState.clone and GhostState.clone:FindFirstChild("HumanoidRootPart")
                 if cam and cloneHRP and cam.CameraSubject ~= cloneHRP then
