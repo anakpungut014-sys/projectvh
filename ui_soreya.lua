@@ -9723,6 +9723,8 @@ function UI.Init(sharedState)
     Shared.AutoFish_Enabled = false
     Shared.AutoSummit_Enabled = false
     Shared.AutoFish_Turbo = true
+    Shared.GhostMode_Enabled = true
+    Shared.GhostMode_Enabled = false
 
     -- ⭐ SHOP defaults (OFF + rarity NONE)
     Shared.Shop_AutoSell_Enabled       = false
