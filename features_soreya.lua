@@ -622,14 +622,18 @@ _G.VRILZ_ShopUI = {
 local function initShop() startShopLoop() end
 
 -- ============================================================
--- 👻 GHOST MODE — Real char invisible + fake clone diem
+-- 👻 GHOST MODE v2 — Real char invisible + clone berbaju diem
+-- Clone spawn 15 studs dari char asli + camera nempel ke clone
 -- ============================================================
 
+local GHOST_DISTANCE = 15 -- jarak clone dari char asli (studs)
+
 local GhostState = {
-    enabled      = false,
-    clone        = nil,
-    saved        = {},
-    savedDisplay = nil,
+    enabled         = false,
+    clone           = nil,
+    saved           = {},
+    savedDisplay    = nil,
+    savedCamSubject = nil,
 }
 
 local function ghostHide(char)
@@ -648,7 +652,6 @@ local function ghostHide(char)
             d.Enabled = false
         end
     end
-    -- hilangkan nama di atas kepala
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then
         if GhostState.savedDisplay == nil then
@@ -693,26 +696,44 @@ local function ghostCreateClone(char)
     local hrp = char:FindFirstChild("HumanoidRootPart")
     if not hrp then return end
 
-    -- ⭐ WAJIB: character default-nya Archivable=false → Clone() return NIL
     local oldArch = char.Archivable
     char.Archivable = true
     local ok, clone = pcall(function() return char:Clone() end)
     char.Archivable = oldArch
     if not ok or not clone then return end
 
-    -- bersihkan clone: scripts, humanoid, animate, tool
+    -- bersihkan scripts & tool (⚠ Humanoid JANGAN dihapus — dibutuhkan render baju)
     for _, d in ipairs(clone:GetDescendants()) do
         if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
             d:Destroy()
         end
     end
-    local hum = clone:FindFirstChildOfClass("Humanoid")
-    if hum then hum:Destroy() end
-    local anim = clone:FindFirstChild("Animate")
-    if anim then anim:Destroy() end
     for _, d in ipairs(clone:GetChildren()) do
         if d:IsA("Tool") then d:Destroy() end
     end
+
+    -- ⭐ FIX BAJU: Humanoid dipertahankan tapi di-neuter total
+    local hum = clone:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None   -- gak ada nama
+        hum.HealthDisplayType  = Enum.HumanoidHealthDisplayType.AlwaysOff -- gak ada health bar
+        hum.PlatformStand      = true                                     -- gak coba jalan
+        pcall(function() hum.EvaluateStateMachine = false end)
+    end
+
+    -- ⭐ safety ekstra: copy ulang baju dari char asli
+    for _, cls in ipairs({"Shirt", "Pants", "ShirtGraphic"}) do
+        local src = char:FindFirstChildOfClass(cls)
+        if src then
+            local old = clone:FindFirstChildOfClass(cls)
+            if old then old:Destroy() end
+            src:Clone().Parent = clone
+        end
+    end
+
+    -- ⭐ posisi clone: GHOST_DISTANCE studs di BELAKANG char asli
+    clone:PivotTo(hrp.CFrame * CFrame.new(0, 0, GHOST_DISTANCE))
+
     for _, d in ipairs(clone:GetDescendants()) do
         if d:IsA("BasePart") then
             d.Anchored = true
@@ -724,14 +745,24 @@ local function ghostCreateClone(char)
     clone.Name = char.Name
     clone.Parent = workspace
     GhostState.clone = clone
+
+    -- ⭐ camera nempel ke clone
+    local cam = workspace.CurrentCamera
+    local cloneHRP = clone:FindFirstChild("HumanoidRootPart")
+    if cam and cloneHRP then
+        if GhostState.savedCamSubject == nil then
+            GhostState.savedCamSubject = cam.CameraSubject
+        end
+        cam.CameraSubject = cloneHRP
+    end
 end
 
 local function ghostEnable()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    ghostCreateClone(char)  -- clone DULU (masih keliatan normal)
+    ghostCreateClone(char)
     task.wait(0.1)
-    ghostHide(char)         -- baru real char di-invisible
+    ghostHide(char)
     GhostState.enabled = true
 end
 
@@ -742,19 +773,29 @@ local function ghostDisable()
         GhostState.clone:Destroy()
         GhostState.clone = nil
     end
+    -- ⭐ balikin camera ke char asli
+    local cam = workspace.CurrentCamera
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if cam and hum then
+        cam.CameraSubject = hum
+    end
+    GhostState.savedCamSubject = nil
     GhostState.enabled = false
 end
 
 local function initGhostMode()
-    -- respawn → re-apply ghost
     LocalPlayer.CharacterAdded:Connect(function()
+        -- clone lama langsung dihapus biar gak dobel
+        if GhostState.clone then
+            GhostState.clone:Destroy()
+            GhostState.clone = nil
+        end
         if GhostState.enabled then
             task.wait(2)
             pcall(ghostEnable)
         end
     end)
 
-    -- polling loop: ikutin toggle + safety
     task.spawn(function()
         while true do
             task.wait(0.5)
@@ -770,15 +811,19 @@ local function initGhostMode()
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if hrp then
-                    -- clone kehapus server → recreate
                     if GhostState.clone and not GhostState.clone.Parent then
                         pcall(ghostCreateClone, char)
                     end
-                    -- server force-restore transparency → re-hide
                     if GhostState.clone and GhostState.clone.Parent
                         and hrp.Transparency < 1 then
                         pcall(ghostHide, char)
                     end
+                end
+                -- ⭐ camera tetap nempel ke clone (respawn/game reset → balikin otomatis)
+                local cam = workspace.CurrentCamera
+                local cloneHRP = GhostState.clone and GhostState.clone:FindFirstChild("HumanoidRootPart")
+                if cam and cloneHRP and cam.CameraSubject ~= cloneHRP then
+                    cam.CameraSubject = cloneHRP
                 end
             end
         end
