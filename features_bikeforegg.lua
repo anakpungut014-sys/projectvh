@@ -803,7 +803,7 @@ local function ghostCreateClone(char)
     for _, d in ipairs(clone:GetChildren()) do
         if d:IsA("Tool") then d:Destroy() end
     end
-
+    
     -- Humanoid dipertahankan biar BAJU ke-render, di-neuter
     local hum = clone:FindFirstChildOfClass("Humanoid")
     if hum then
@@ -811,6 +811,10 @@ local function ghostCreateClone(char)
         hum.HealthDisplayType  = Enum.HumanoidHealthDisplayType.AlwaysOff
         hum.PlatformStand      = true
         pcall(function() hum.EvaluateStateMachine = false end)
+
+        -- ⭐ FIX: cabut Animator — game gak bisa muter animasi lempar di clone
+        local anim = hum:FindFirstChildOfClass("Animator")
+        if anim then anim:Destroy() end
     end
 
     for _, cls in ipairs({"Shirt", "Pants", "ShirtGraphic"}) do
@@ -833,7 +837,8 @@ local function ghostCreateClone(char)
         end
     end
 
-    clone.Name = char.Name
+    -- ⭐ FIX: nama beda — workspace[namalu] selalu dapat char ASLI, bukan clone
+    clone.Name = char.Name .. "_Ghost"
     clone.Parent = Workspace
     GhostState.clone = clone
 end
