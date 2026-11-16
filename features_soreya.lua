@@ -121,13 +121,38 @@ local RS      = game:GetService("ReplicatedStorage")
 local UIS     = game:GetService("UserInputService")
 local VIM     = game:GetService("VirtualInputManager")
 
-local FishSpeed = {
-    reelMaxTime   = 8,
-    castCooldown  = 0.15,
-    castPowerWait = 0.15,
-    loopDelay     = 0.05,
-    tapsPerFrame  = 5,    -- ⚡⚡ 5 tap TIAP FRAME ≈ 300 tap/detik
-}
+-- ⚡⚡ INSTANT / SUPER FAST REEL
+local function doReelSpam()
+    if FishState.reeling then return end
+    FishState.reeling = true
+    FishState.reelAbort = false
+    local rod = getEquippedRod()
+    FishState.status = "⚡⚡ INSTANT CATCHING..."
+
+    -- Kirim spam tap masif seketika dalam satu siklus singkat untuk bypass bar minigame
+    local startTime = os.clock()
+    while FishState.enabled and not FishState.reelAbort and (os.clock() - startTime < 0.5) do
+        for _ = 1, 100 do
+            tapOnce()
+        end
+        RunService.Heartbeat:Wait()
+    end
+
+    -- Coba paksa trigger remote stop/selesai jika ada
+    if rod then
+        local remotes = getRodRemotes(rod)
+        local miniGame = remotes and remotes:FindFirstChild("MiniGame")
+        if miniGame then
+            pcall(function()
+                -- Memicu penyelesaian minigame ke server (tergantung struktur game)
+                miniGame:FireServer("Success") 
+            end)
+        end
+    end
+
+    FishState.reeling = false
+    FishState.status = "✅ Instan Catch Berhasil! → Cast lagi"
+end
 
 local FishState = {
     enabled = false,
