@@ -5184,20 +5184,6 @@ do
 
     local summitCard, summitContent = makeCard(summitLeft, "Auto Summit", 1)
 
-    local summitDesc = Instance.new("TextLabel")
-    summitDesc.Size = UDim2.new(1, 0, 0, 16)
-    summitDesc.BackgroundTransparency = 1
-    summitDesc.Text = "Auto CP + Summit + BackBC loop otomatis:"
-    summitDesc.TextColor3 = C.Muted
-    summitDesc.Font = Enum.Font.GothamSemibold
-    summitDesc.TextSize = CFG.FONT_MUTED
-    summitDesc.TextXAlignment = Enum.TextXAlignment.Left
-    summitDesc.TextWrapped = true
-    summitDesc.LayoutOrder = 1
-    summitDesc.ZIndex = 3
-    summitDesc.Parent = summitContent
-    registerTheme(summitDesc, "Muted", "TextColor3")
-
     -- ⭐ LABEL "CURRENT CP" (auto-update dari leaderstats)
     local cpCurrentLabel = Instance.new("TextLabel")
     cpCurrentLabel.Size = UDim2.new(1, 0, 0, 20)
@@ -5266,21 +5252,6 @@ do
     end)
     cpDropdown.LayoutOrder = 4
 
-    -- ⭐ STATUS INFO
-    local summitInfo = Instance.new("TextLabel")
-    summitInfo.Size = UDim2.new(1, 0, 0, 28)
-    summitInfo.BackgroundTransparency = 1
-    summitInfo.Text = "Auto Summit follows Leaderstats Checkpoint. Dropdown is override only."
-    summitInfo.TextColor3 = C.Muted
-    summitInfo.Font = Enum.Font.Gotham
-    summitInfo.TextSize = CFG.FONT_MUTED
-    summitInfo.TextXAlignment = Enum.TextXAlignment.Left
-    summitInfo.TextWrapped = true
-    summitInfo.LayoutOrder = 5
-    summitInfo.ZIndex = 3
-    summitInfo.Parent = summitContent
-    registerTheme(summitInfo, "Muted", "TextColor3")
-
     -- ⭐ AUTO-UPDATE: Current CP label + Dropdown
     task.spawn(function()
         local lastCP = -1
@@ -5324,20 +5295,6 @@ do
     pages.AutoFish = fishPage
 
     local fishCard, fishContent = makeCard(fishLeft, "Auto Fish", 1)
-
-    local fishDesc = Instance.new("TextLabel")
-    fishDesc.Size = UDim2.new(1, 0, 0, 16)
-    fishDesc.BackgroundTransparency = 1
-    fishDesc.Text = "Semua fitur fish nyala bareng (equip+cast+reel):"
-    fishDesc.TextColor3 = C.Muted
-    fishDesc.Font = Enum.Font.GothamSemibold
-    fishDesc.TextSize = CFG.FONT_MUTED
-    fishDesc.TextXAlignment = Enum.TextXAlignment.Left
-    fishDesc.TextWrapped = true
-    fishDesc.LayoutOrder = 1
-    fishDesc.ZIndex = 3
-    fishDesc.Parent = fishContent
-    registerTheme(fishDesc, "Muted", "TextColor3")
 
     local fishStatusLbl = Instance.new("TextLabel")
     fishStatusLbl.Size = UDim2.new(1, 0, 0, 16)
