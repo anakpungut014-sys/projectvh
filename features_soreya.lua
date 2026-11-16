@@ -376,7 +376,7 @@ local SummitCfg = {
     StepDistance = 40,
     TPHeight = 5,
     WaitBetweenStep = 0.03,
-    WaitBetweenCP = 0.15,
+    WaitBetweenCP = 3.0,
     WaitAtBackBC = 0.8,
     SummitWaitBeforeReturn = 1.0,
     StartRenderDelay = 2.0,
@@ -420,6 +420,30 @@ local SummitRun = {
 local function summitRoot()
     local ch = LocalPlayer.Character
     return ch and ch:FindFirstChild("HumanoidRootPart")
+end
+
+-- ═══ DETEKSI CP: baca dari Leaderstats "Checkpoint" ═══
+local function summitDetectCurrentCP()
+    local ls = LocalPlayer:FindFirstChild("leaderstats")
+    if not ls then return 1, false end
+
+    local stat = ls:FindFirstChild("Checkpoint")
+    if not stat then return 1, false end
+
+    local cpNum = tonumber(stat.Value) or 1
+    if cpNum < 1 then cpNum = 1 end
+    if cpNum > #SummitCheckpoints then cpNum = #SummitCheckpoints end
+
+    return cpNum, true
+end
+
+-- ═══ NOTIF: "Lu lagi di CP X" ═══
+local function summitNotifyCP(cpNum)
+    local msg = "📍 Lu lagi di CP " .. cpNum
+    if _G.VRILZ_Notify then
+        _G.VRILZ_Notify(msg, "info")
+    end
+    print("[AUTO SUMMIT] " .. msg)
 end
 
 local function summitTpFast(targetPos, label)
@@ -502,19 +526,41 @@ local function summitTpToCP(cp, label, maxRetry)
     return false
 end
 
+-- ═══ BALIK BC — nama objek: Workspace.BackBC.BackBC ═══
 local function summitBackBC()
     local part = nil
-    for _, obj in ipairs(workspace:GetDescendants()) do
-        local n = obj.Name:lower()
-        if n:find("back to bc") or n:find("backtobc") or n:find("back bc") then
-            if obj:IsA("BasePart") then part = obj; break
-            elseif obj:IsA("Model") then
-                local p = obj:FindFirstChildWhichIsA("BasePart", true)
-                if p then part = p; break end
+
+    -- ⭐ Cari langsung ke path yang udah pasti
+    local backBCFolder = workspace:FindFirstChild("BackBC")
+    if backBCFolder then
+        local bcPart = backBCFolder:FindFirstChild("BackBC")
+        if bcPart and bcPart:IsA("BasePart") then
+            part = bcPart
+        end
+    end
+
+    -- ⭐ Fallback: scan kalau path gak ketemu
+    if not part then
+        for _, obj in ipairs(workspace:GetDescendants()) do
+            if obj:IsA("BasePart") then
+                local n = obj.Name:lower()
+                -- "backbc", "back to bc", "backtobc", dll
+                if n == "backbc" or n:find("back to bc")
+                    or n:find("backtobc") or n:find("back bc") then
+                    part = obj
+                    break
+                end
             end
         end
     end
-    if part then SummitBackBCPos = part.Position end
+
+    if part then
+        SummitBackBCPos = part.Position
+        print("[AUTO SUMMIT] 🏠 BackBC found at:", tostring(part.Position))
+    else
+        print("[AUTO SUMMIT] ⚠️ BackBC NOT found, pakai posisi default")
+    end
+
     summitTpFast(SummitBackBCPos, "🏠 BackBC")
     task.wait(SummitCfg.WaitAtBackBC)
 end
@@ -526,47 +572,48 @@ local function summitMainLoop()
         task.wait(1)
     end
 
-    -- ⭐ BACA START CP DARI DROPDOWN UI
-    local startNum = tonumber(Shared.AutoSummit_StartCP) or 1
+    -- ⭐ BACA CP DARI LEADERSTATS (prioritas utama)
+    local detectedCP, valid = summitDetectCurrentCP()
+    local startNum = detectedCP
+    if not valid then
+        startNum = tonumber(Shared.AutoSummit_StartCP) or 1
+    end
     if startNum < 1 then startNum = 1 end
     if startNum > #SummitCheckpoints then startNum = #SummitCheckpoints end
 
     SummitRun.status = "🚀 Mulai dari CP " .. startNum
     print("[AUTO SUMMIT] Start CP:", startNum)
 
+    -- ⭐ NOTIF: "Lu lagi di CP X"
+    summitNotifyCP(startNum)
+
     while SummitRun.enabled do
         SummitRun.loopCount += 1
         local n = SummitRun.loopCount
 
-        if startNum > 1 then
-            SummitRun.status = "⏩ Skip ke CP " .. startNum
-            local targetCP = SummitCheckpoints[startNum]
-            local ok = summitTpToCP(targetCP, "CP " .. startNum .. " (skip)", 8)
-            if not ok then
-                SummitRun.status = "❌ Gagal skip ke CP " .. startNum .. ", fallback CP 1"
-                startNum = 1
-            else
-                task.wait(SummitCfg.WaitBetweenCP)
-            end
-        end
-
+        -- ⭐ Naik CP dari startNum sampai 20 — DELAY 3s PER CP
         for i = startNum, #SummitCheckpoints do
             if not SummitRun.enabled then return end
             local cp = SummitCheckpoints[i]
             SummitRun.status = "🏔️ Loop #" .. n .. " — CP " .. cp.number
+
             local ok = summitTpToCP(cp, "CP " .. cp.number, SummitCfg.MaxRetryPerCP)
+
             if not ok then
                 SummitRun.status = "🔄 CP " .. cp.number .. " gagal, ulangi..."
                 print("[AUTO SUMMIT] 🔄 CP", cp.number, "gagal total, ulangi")
-                task.wait(0.5)
+                task.wait(1.0)
                 i = i - 1
             else
+                SummitRun.status = "⏱️ CP " .. cp.number .. " done, tunggu 3s..."
+                print("[AUTO SUMMIT] ✅ CP", cp.number, "done, wait 3s")
                 task.wait(SummitCfg.WaitBetweenCP)
             end
         end
 
         if not SummitRun.enabled then return end
 
+        -- ⭐ Summit
         SummitRun.status = "⭐ Loop #" .. n .. " — SUMMIT"
         local summitReached = false
         for attempt = 1, 5 do
@@ -592,12 +639,25 @@ local function summitMainLoop()
         task.wait(SummitCfg.SummitWaitBeforeReturn)
         if not SummitRun.enabled then return end
 
+        -- ⭐ Back BC
         SummitRun.status = "🏠 Balik ke BackBC..."
         summitBackBC()
 
         if not SummitRun.enabled then return end
 
-        startNum = 1
+        -- ⭐ LOOP BERIKUTNYA: baca ulang leaderstats
+        local newCP, newValid = summitDetectCurrentCP()
+        if newValid then
+            startNum = newCP
+            SummitRun.status = "🔄 Loop berikutnya dari CP " .. newCP
+            print("[AUTO SUMMIT] 🔄 Next loop from CP", newCP)
+            summitNotifyCP(newCP)
+        else
+            startNum = 1
+            SummitRun.status = "🔄 Loop berikutnya dari CP 1"
+            print("[AUTO SUMMIT] 🔄 Next loop from CP 1")
+        end
+
         task.wait(0.5)
     end
 end
@@ -644,6 +704,24 @@ local function initAutoSummit()
         end
     end)
 
+    -- ⭐ AUTO-UPDATE DROPDOWN UI sesuai leaderstats
+    task.spawn(function()
+        local lastCP = -1
+        while true do
+            task.wait(1.0)
+            local cpNum, valid = summitDetectCurrentCP()
+            if valid and cpNum ~= lastCP then
+                lastCP = cpNum
+                Shared.AutoSummit_StartCP = cpNum
+                -- Update dropdown UI (kalau ada)
+                if _G.VRILZ_UpdateSummitDropdown then
+                    pcall(_G.VRILZ_UpdateSummitDropdown, cpNum)
+                end
+                print("[AUTO SUMMIT] 🔄 Dropdown auto-update ke CP", cpNum)
+            end
+        end
+    end)
+
     -- ⭐ Save function (kalau UI panggil)
     _G.VRILZ_SaveSummitCP = function(num)
         num = tonumber(num) or 1
@@ -657,7 +735,9 @@ local function initAutoSummit()
     end
 
     _G.VRILZ_SummitState = SummitRun
+    _G.VRILZ_SummitDetectCP = summitDetectCurrentCP
 end
+
 -- ============================================================
 -- 🛒 SHOP FEATURES — Auto Sell / Upgrade Rod / Buy Skin
 -- Default: SEMUA RARITY = FALSE (user pilih sendiri)
