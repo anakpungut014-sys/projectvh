@@ -497,7 +497,6 @@ local function summitNotifyCP(cpNum)
     if _G.VRILZ_Notify then
         _G.VRILZ_Notify(msg, "info")
     end
-    print("[AUTO SUMMIT] " .. msg)
 end
 
 -- ═══ TP KE CP — Anchor ON, Turun 10 Studs Per CP ═══
@@ -576,7 +575,6 @@ local function summitTpToCP(cp, label, maxRetry)
         end
         SummitRun.status = string.format("%s ❌ missed (dist: %d), retry %d/%d",
             label, math.floor(dist), attempt, maxRetry)
-        print("[AUTO SUMMIT] ⚠️ CP", cp.number, "missed (dist:", math.floor(dist), "), retry", attempt)
         task.wait(0.2)
     end
 
@@ -620,9 +618,7 @@ local function summitBackBC()
 
     if part then
         SummitBackBCPos = part.Position
-        print("[AUTO SUMMIT] 🏠 BackBC found at:", tostring(part.Position))
     else
-        print("[AUTO SUMMIT] ⚠️ BackBC NOT found, pakai posisi default")
     end
 
     summitTpFast(SummitBackBCPos, "🏠 BackBC")
@@ -646,7 +642,6 @@ local function summitMainLoop()
     if startNum > #SummitCheckpoints then startNum = #SummitCheckpoints end
 
     SummitRun.status = "🚀 Mulai dari CP " .. startNum
-    print("[AUTO SUMMIT] Start CP:", startNum)
 
     -- ⭐ NOTIF: "Lu lagi di CP X"
     summitNotifyCP(startNum)
@@ -665,7 +660,6 @@ local function summitMainLoop()
 
             if not ok then
                 SummitRun.status = "🔄 CP " .. cp.number .. " gagal, ulangi..."
-                print("[AUTO SUMMIT] 🔄 CP", cp.number, "gagal total, ulangi")
                 task.wait(1.0)
                 i = i - 1
             else
@@ -696,7 +690,6 @@ local function summitMainLoop()
             SummitRun.status = "⚠️ Summit gak kesentuh, skip"
         else
             SummitRun.summitCount += 1
-            print("[AUTO SUMMIT] ✅ Summit! Total:", SummitRun.summitCount)
         end
 
         task.wait(SummitCfg.SummitWaitBeforeReturn)
@@ -713,12 +706,10 @@ local function summitMainLoop()
         if newValid then
             startNum = newCP
             SummitRun.status = "🔄 Loop berikutnya dari CP " .. newCP
-            print("[AUTO SUMMIT] 🔄 Next loop from CP", newCP)
             summitNotifyCP(newCP)
         else
             startNum = 1
             SummitRun.status = "🔄 Loop berikutnya dari CP 1"
-            print("[AUTO SUMMIT] 🔄 Next loop from CP 1")
         end
 
         task.wait(0.5)
@@ -735,7 +726,6 @@ local function initAutoSummit()
                 local num = tonumber(content)
                 if num and num >= 1 and num <= 20 then
                     Shared.AutoSummit_StartCP = num
-                    print("[AUTO SUMMIT] Loaded saved CP:", num)
                 end
             end
         end
@@ -783,7 +773,6 @@ local function initAutoSummit()
                 if _G.VRILZ_UpdateSummitDropdown then
                     pcall(_G.VRILZ_UpdateSummitDropdown, cpNum)
                 end
-                print("[AUTO SUMMIT] 🔄 Dropdown auto-update ke CP", cpNum)
             end
         end
     end)
@@ -811,7 +800,6 @@ local function initAutoSummit()
         if writefile then
             pcall(writefile, "vrilz_summit_cp.txt", tostring(num))
         end
-        print("[AUTO SUMMIT] Saved Start CP:", num)
     end
 
     _G.VRILZ_SummitState = SummitRun
