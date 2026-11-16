@@ -548,7 +548,7 @@ local function summitTpFast(targetPos, label)
         task.wait(0.05)
 
         -- ⭐ BARU TURUN 10 STUDS (biar badan nyentuh area CP)
-        r.CFrame = CFrame.new(targetPos + Vector3.new(0, -10, 0))
+        r.CFrame = CFrame.new(targetPos + Vector3.new(0, -12, 0))
         r.Velocity = Vector3.zero
         r.AssemblyLinearVelocity = Vector3.zero
 
