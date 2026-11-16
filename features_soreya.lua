@@ -439,7 +439,7 @@ end
 
 -- ═══ NOTIF: "Lu lagi di CP X" ═══
 local function summitNotifyCP(cpNum)
-    local msg = "📍 Lu lagi di CP " .. cpNum
+    local msg = "📍 You are now at CP " .. cpNum
     if _G.VRILZ_Notify then
         _G.VRILZ_Notify(msg, "info")
     end
