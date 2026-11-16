@@ -5175,7 +5175,7 @@ do
 end
 
 -- ============================================================
--- 🏔 AUTO SUMMIT TAB — 1 toggle, langsung kerja
+-- 🏔 AUTO SUMMIT TAB — toggle + dropdown Start CP
 -- ============================================================
 do
     local summitPage, summitLeft, summitRight = createTwoColumnPage("AutoSummit")
@@ -5197,7 +5197,8 @@ do
     summitDesc.Parent = summitContent
     registerTheme(summitDesc, "Muted", "TextColor3")
 
-        makeToggle(summitContent, "Enable Auto Summit (ALL)", false, function(v)
+    -- ⭐ Toggle Auto Summit
+    makeToggle(summitContent, "Enable Auto Summit (ALL)", false, function(v)
         Shared.AutoSummit_Enabled = v
         if v then
             notify("🏔 Auto Summit: ON", "success")
@@ -5205,6 +5206,65 @@ do
             notify("🏔 Auto Summit: OFF", "info")
         end
     end, "AutoSummit_Enabled")
+
+    -- ⭐ Label Dropdown Start CP
+    local cpLabel = Instance.new("TextLabel")
+    cpLabel.Size = UDim2.new(1, 0, 0, 14)
+    cpLabel.BackgroundTransparency = 1
+    cpLabel.Text = "Start CP:"
+    cpLabel.TextColor3 = C.Muted
+    cpLabel.Font = Enum.Font.GothamBold
+    cpLabel.TextSize = CFG.FONT_MUTED
+    cpLabel.TextXAlignment = Enum.TextXAlignment.Left
+    cpLabel.LayoutOrder = 2
+    cpLabel.ZIndex = 3
+    cpLabel.Parent = summitContent
+    registerTheme(cpLabel, "Muted", "TextColor3")
+
+    -- ⭐ Dropdown Start CP (CP 1-20)
+    local savedCP = 1
+    if readfile and isfile then
+        local ok, exists = pcall(isfile, "vrilz_summit_cp.txt")
+        if ok and exists then
+            local okRead, content = pcall(readfile, "vrilz_summit_cp.txt")
+            if okRead and content then
+                local num = tonumber(content)
+                if num and num >= 1 and num <= 20 then
+                    savedCP = num
+                end
+            end
+        end
+    end
+    Shared.AutoSummit_StartCP = savedCP
+
+    local cpItems = {}
+    for i = 1, 20 do cpItems[i] = "CP " .. i end
+
+    local cpDropdown = makeDropdownGlobal(summitContent, cpItems, "CP " .. savedCP, function(selected)
+        local num = tonumber(selected:match("%d+")) or 1
+        Shared.AutoSummit_StartCP = num
+        if writefile then
+            pcall(writefile, "vrilz_summit_cp.txt", tostring(num))
+        end
+        notify("🏔 Start CP: " .. selected, "info")
+        print("[AUTO SUMMIT] Start CP saved:", num)
+    end)
+    cpDropdown.LayoutOrder = 3
+
+    -- ⭐ Status info
+    local summitInfo = Instance.new("TextLabel")
+    summitInfo.Size = UDim2.new(1, 0, 0, 28)
+    summitInfo.BackgroundTransparency = 1
+    summitInfo.Text = "Pilih CP mulai (1-20). Auto Summit akan TP dari CP itu → Summit → BackBC → loop."
+    summitInfo.TextColor3 = C.Muted
+    summitInfo.Font = Enum.Font.Gotham
+    summitInfo.TextSize = CFG.FONT_MUTED
+    summitInfo.TextXAlignment = Enum.TextXAlignment.Left
+    summitInfo.TextWrapped = true
+    summitInfo.LayoutOrder = 4
+    summitInfo.ZIndex = 3
+    summitInfo.Parent = summitContent
+    registerTheme(summitInfo, "Muted", "TextColor3")
 end
 
 -- ============================================================
