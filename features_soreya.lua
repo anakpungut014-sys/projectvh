@@ -365,18 +365,23 @@ local function initAutoFish()
 end
 
 -- ============================================================
--- 🏔 AUTO SUMMIT — LOGIC TP LANGSUNG + CEPAT (standalone)
--- Gak perlu soreyacp.txt lagi. Cukup Shared.AutoSummit_Enabled = true
+-- 🏔 AUTO SUMMIT v2 — STANDALONE (Baca AutoSummit_StartCP dari UI)
+-- ✅ Gak perlu soreyacp.txt
+-- ✅ Validasi CP wajib kesentuh
+-- ✅ Start CP dari dropdown UI
+-- ✅ Auto-OFF Ghost biar TP jalan
 -- ============================================================
+
 local SummitCfg = {
-    StepDistance = 40,        -- ⚡ lebih gede = lebih cepat (default 25)
+    StepDistance = 40,
     TPHeight = 5,
-    WaitBetweenStep = 0.03,   -- ⚡ lebih cepet (default 0.06)
-    WaitBetweenCP = 0.15,     -- ⚡ lebih cepet (default 0.4)
-    WaitAtBackBC = 0.8,       -- ⚡ lebih cepet (default 1.5)
-    SummitWaitBeforeReturn = 1.0,  -- ⚡ lebih cepet (default 2.0)
-    StartRenderDelay = 2.0,   -- ⚡ lebih cepet (default 5.0)
-    DetectRange = 100,
+    WaitBetweenStep = 0.03,
+    WaitBetweenCP = 0.15,
+    WaitAtBackBC = 0.8,
+    SummitWaitBeforeReturn = 1.0,
+    StartRenderDelay = 2.0,
+    CPTolerance = 25,
+    MaxRetryPerCP = 5,
 }
 
 local SummitCheckpoints = {
@@ -417,25 +422,9 @@ local function summitRoot()
     return ch and ch:FindFirstChild("HumanoidRootPart")
 end
 
-local function summitDetectStart()
-    local root = summitRoot()
-    if not root then return 1 end
-    local pos = root.Position
-    local bestCP, bestDist = nil, math.huge
-    for _, cp in ipairs(SummitCheckpoints) do
-        local d = (pos - cp.position).Magnitude
-        if d < bestDist then bestDist = d; bestCP = cp.number end
-    end
-    if bestDist > SummitCfg.DetectRange then return 1 end
-    return bestCP or 1
-end
-
--- ⚡ TP CEPAT: langsung set CFrame per step, tanpa tween
 local function summitTpFast(targetPos, label)
     local root = summitRoot()
     if not root then return false end
-
-    -- ⭐ SAFETY: unanchor kalau ghost/dll anchor HRP
     if root.Anchored then root.Anchored = false end
 
     local startPos = root.Position
@@ -454,7 +443,6 @@ local function summitTpFast(targetPos, label)
     dir = Vector3.new(dir.X, 0, dir.Z)
     if dir.Magnitude < 1 then dir = Vector3.new(0, 0, -1) else dir = dir.Unit end
 
-    -- ⚡ STEP TP — pakai loop minimal wait
     for i = 1, steps do
         if not SummitRun.enabled then return false end
         local r = summitRoot()
@@ -478,6 +466,42 @@ local function summitTpFast(targetPos, label)
     return true
 end
 
+local function summitVerifyCP(cpPos, tolerance)
+    tolerance = tolerance or SummitCfg.CPTolerance
+    local root = summitRoot()
+    if not root then return false, math.huge end
+    local target = cpPos + Vector3.new(0, SummitCfg.TPHeight, 0)
+    local dist = (root.Position - target).Magnitude
+    return dist <= tolerance, dist
+end
+
+local function summitTpToCP(cp, label, maxRetry)
+    maxRetry = maxRetry or SummitCfg.MaxRetryPerCP
+    for attempt = 1, maxRetry do
+        if not SummitRun.enabled then return false end
+        summitTpFast(cp.position, label .. " (try " .. attempt .. ")")
+        task.wait(0.15)
+        local ok, dist = summitVerifyCP(cp.position)
+        if ok then
+            SummitRun.status = label .. " ✅ (dist: " .. math.floor(dist) .. ")"
+            return true
+        end
+        SummitRun.status = string.format("%s ❌ missed (dist: %d), retry %d/%d",
+            label, math.floor(dist), attempt, maxRetry)
+        print("[AUTO SUMMIT] ⚠️ CP", cp.number, "missed (dist:", math.floor(dist), "), retry", attempt)
+        task.wait(0.2)
+    end
+
+    local root = summitRoot()
+    if root then
+        root.CFrame = CFrame.new(cp.position + Vector3.new(0, SummitCfg.TPHeight, 0))
+        task.wait(0.3)
+        local ok, dist = summitVerifyCP(cp.position, 30)
+        return ok
+    end
+    return false
+end
+
 local function summitBackBC()
     local part = nil
     for _, obj in ipairs(workspace:GetDescendants()) do
@@ -496,53 +520,108 @@ local function summitBackBC()
 end
 
 local function summitMainLoop()
-    -- ⚡ Render delay lebih pendek
     for i = math.floor(SummitCfg.StartRenderDelay), 1, -1 do
         if not SummitRun.enabled then return end
         SummitRun.status = "⏳ Render... (" .. i .. "s)"
         task.wait(1)
     end
 
-    local startNum = summitDetectStart()
+    -- ⭐ BACA START CP DARI DROPDOWN UI
+    local startNum = tonumber(Shared.AutoSummit_StartCP) or 1
+    if startNum < 1 then startNum = 1 end
+    if startNum > #SummitCheckpoints then startNum = #SummitCheckpoints end
+
     SummitRun.status = "🚀 Mulai dari CP " .. startNum
+    print("[AUTO SUMMIT] Start CP:", startNum)
 
     while SummitRun.enabled do
         SummitRun.loopCount += 1
         local n = SummitRun.loopCount
 
-        -- ⚡ Naik CP — pakai TP cepat
+        if startNum > 1 then
+            SummitRun.status = "⏩ Skip ke CP " .. startNum
+            local targetCP = SummitCheckpoints[startNum]
+            local ok = summitTpToCP(targetCP, "CP " .. startNum .. " (skip)", 8)
+            if not ok then
+                SummitRun.status = "❌ Gagal skip ke CP " .. startNum .. ", fallback CP 1"
+                startNum = 1
+            else
+                task.wait(SummitCfg.WaitBetweenCP)
+            end
+        end
+
         for i = startNum, #SummitCheckpoints do
             if not SummitRun.enabled then return end
             local cp = SummitCheckpoints[i]
             SummitRun.status = "🏔️ Loop #" .. n .. " — CP " .. cp.number
-            summitTpFast(cp.position, "CP " .. cp.number)
-            task.wait(SummitCfg.WaitBetweenCP)
+            local ok = summitTpToCP(cp, "CP " .. cp.number, SummitCfg.MaxRetryPerCP)
+            if not ok then
+                SummitRun.status = "🔄 CP " .. cp.number .. " gagal, ulangi..."
+                print("[AUTO SUMMIT] 🔄 CP", cp.number, "gagal total, ulangi")
+                task.wait(0.5)
+                i = i - 1
+            else
+                task.wait(SummitCfg.WaitBetweenCP)
+            end
         end
 
         if not SummitRun.enabled then return end
 
-        -- ⚡ Summit
         SummitRun.status = "⭐ Loop #" .. n .. " — SUMMIT"
-        summitTpFast(SummitTopPos, "SUMMIT")
-        task.wait(SummitCfg.SummitWaitBeforeReturn)
-        SummitRun.summitCount += 1
-        print("[AUTO SUMMIT] ✅ Summit! Total:", SummitRun.summitCount)
+        local summitReached = false
+        for attempt = 1, 5 do
+            if not SummitRun.enabled then return end
+            summitTpFast(SummitTopPos, "SUMMIT (try " .. attempt .. ")")
+            task.wait(0.2)
+            local root = summitRoot()
+            if root then
+                local dist = (root.Position - (SummitTopPos + Vector3.new(0, SummitCfg.TPHeight, 0))).Magnitude
+                if dist <= 30 then
+                    summitReached = true
+                    break
+                end
+            end
+        end
+        if not summitReached then
+            SummitRun.status = "⚠️ Summit gak kesentuh, skip"
+        else
+            SummitRun.summitCount += 1
+            print("[AUTO SUMMIT] ✅ Summit! Total:", SummitRun.summitCount)
+        end
 
+        task.wait(SummitCfg.SummitWaitBeforeReturn)
         if not SummitRun.enabled then return end
 
-        -- ⚡ Balik BC
         SummitRun.status = "🏠 Balik ke BackBC..."
         summitBackBC()
 
         if not SummitRun.enabled then return end
 
         startNum = 1
-        task.wait(0.5)  -- ⚡ jeda antar loop lebih cepet
+        task.wait(0.5)
     end
 end
 
--- ⭐ BRIDGE: baca Shared.AutoSummit_Enabled → jalanin logic TP
 local function initAutoSummit()
+    -- Load saved CP
+    if readfile and isfile then
+        local ok, exists = pcall(isfile, "vrilz_summit_cp.txt")
+        if ok and exists then
+            local okRead, content = pcall(readfile, "vrilz_summit_cp.txt")
+            if okRead and content then
+                local num = tonumber(content)
+                if num and num >= 1 and num <= 20 then
+                    Shared.AutoSummit_StartCP = num
+                    print("[AUTO SUMMIT] Loaded saved CP:", num)
+                end
+            end
+        end
+    end
+    if not Shared.AutoSummit_StartCP then
+        Shared.AutoSummit_StartCP = 1
+    end
+
+    -- ⭐ Bridge: baca Shared.AutoSummit_Enabled → jalanin loop
     task.spawn(function()
         while true do
             task.wait(0.3)
@@ -550,7 +629,6 @@ local function initAutoSummit()
             local wantOn = Shared.AutoSummit_Enabled == true
 
             if wantOn and not SummitRun.enabled then
-                -- ⚠️ SAFETY: Ghost Mode anchor HRP → TP gak jalan
                 if Shared.GhostMode_Enabled == true then
                     Shared.GhostMode_Enabled = false
                     print("[AUTO SUMMIT] 🔓 Ghost OFF dulu biar TP jalan")
@@ -566,10 +644,20 @@ local function initAutoSummit()
         end
     end)
 
-    -- ⭐ Update status ke _G biar UI bisa baca
+    -- ⭐ Save function (kalau UI panggil)
+    _G.VRILZ_SaveSummitCP = function(num)
+        num = tonumber(num) or 1
+        if num < 1 then num = 1 end
+        if num > 20 then num = 20 end
+        Shared.AutoSummit_StartCP = num
+        if writefile then
+            pcall(writefile, "vrilz_summit_cp.txt", tostring(num))
+        end
+        print("[AUTO SUMMIT] Saved Start CP:", num)
+    end
+
     _G.VRILZ_SummitState = SummitRun
 end
-
 -- ============================================================
 -- 🛒 SHOP FEATURES — Auto Sell / Upgrade Rod / Buy Skin
 -- Default: SEMUA RARITY = FALSE (user pilih sendiri)
