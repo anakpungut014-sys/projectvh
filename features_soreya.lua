@@ -365,49 +365,209 @@ local function initAutoFish()
 end
 
 -- ============================================================
--- 🏔 AUTO SUMMIT BRIDGE — nyambungin toggle UI ke Auto CP script
+-- 🏔 AUTO SUMMIT — LOGIC TP LANGSUNG + CEPAT (standalone)
+-- Gak perlu soreyacp.txt lagi. Cukup Shared.AutoSummit_Enabled = true
 -- ============================================================
-local function initAutoSummit()
-    local wasOn = false
-    local VIM = game:GetService("VirtualInputManager")
+local SummitCfg = {
+    StepDistance = 40,        -- ⚡ lebih gede = lebih cepat (default 25)
+    TPHeight = 5,
+    WaitBetweenStep = 0.03,   -- ⚡ lebih cepet (default 0.06)
+    WaitBetweenCP = 0.15,     -- ⚡ lebih cepet (default 0.4)
+    WaitAtBackBC = 0.8,       -- ⚡ lebih cepet (default 1.5)
+    SummitWaitBeforeReturn = 1.0,  -- ⚡ lebih cepet (default 2.0)
+    StartRenderDelay = 2.0,   -- ⚡ lebih cepet (default 5.0)
+    DetectRange = 100,
+}
 
+local SummitCheckpoints = {
+    {number = 1,  position = Vector3.new(464, 455, -8946)},
+    {number = 2,  position = Vector3.new(450, 500, -9568)},
+    {number = 3,  position = Vector3.new(398, 640, -10114)},
+    {number = 4,  position = Vector3.new(487, 649, -10681)},
+    {number = 5,  position = Vector3.new(1089, 736, -11156)},
+    {number = 6,  position = Vector3.new(974, 746, -11809)},
+    {number = 7,  position = Vector3.new(392, 896, -11839)},
+    {number = 8,  position = Vector3.new(-326, 859, -11738)},
+    {number = 9,  position = Vector3.new(-870, 864, -11737)},
+    {number = 10, position = Vector3.new(-1282, 868, -12094)},
+    {number = 11, position = Vector3.new(-1311, 900, -12834)},
+    {number = 12, position = Vector3.new(-2327, 925, -12673)},
+    {number = 13, position = Vector3.new(-2309, 928, -11857)},
+    {number = 14, position = Vector3.new(-2445, 973, -11058)},
+    {number = 15, position = Vector3.new(-3480, 993, -11015)},
+    {number = 16, position = Vector3.new(-4226, 1012, -11018)},
+    {number = 17, position = Vector3.new(-4651, 1091, -11665)},
+    {number = 18, position = Vector3.new(-5544, 1113, -11652)},
+    {number = 19, position = Vector3.new(-6767, 1106, -11507)},
+    {number = 20, position = Vector3.new(-6761, 1115, -10801)},
+}
+
+local SummitTopPos = Vector3.new(-6767.21, 1340.40, -10082.37)
+local SummitBackBCPos = Vector3.new(-6834.07, 1317.09, -9902.57)
+
+local SummitRun = {
+    enabled = false,
+    status = "⏸️ Idle",
+    loopCount = 0,
+    summitCount = 0,
+}
+
+local function summitRoot()
+    local ch = LocalPlayer.Character
+    return ch and ch:FindFirstChild("HumanoidRootPart")
+end
+
+local function summitDetectStart()
+    local root = summitRoot()
+    if not root then return 1 end
+    local pos = root.Position
+    local bestCP, bestDist = nil, math.huge
+    for _, cp in ipairs(SummitCheckpoints) do
+        local d = (pos - cp.position).Magnitude
+        if d < bestDist then bestDist = d; bestCP = cp.number end
+    end
+    if bestDist > SummitCfg.DetectRange then return 1 end
+    return bestCP or 1
+end
+
+-- ⚡ TP CEPAT: langsung set CFrame per step, tanpa tween
+local function summitTpFast(targetPos, label)
+    local root = summitRoot()
+    if not root then return false end
+
+    -- ⭐ SAFETY: unanchor kalau ghost/dll anchor HRP
+    if root.Anchored then root.Anchored = false end
+
+    local startPos = root.Position
+    local target = targetPos + Vector3.new(0, SummitCfg.TPHeight, 0)
+    local totalDist = (target - startPos).Magnitude
+
+    if totalDist <= SummitCfg.StepDistance then
+        root.CFrame = CFrame.new(target)
+        root.Velocity = Vector3.zero
+        root.AssemblyLinearVelocity = Vector3.zero
+        return true
+    end
+
+    local steps = math.ceil(totalDist / SummitCfg.StepDistance)
+    local dir = (target - startPos)
+    dir = Vector3.new(dir.X, 0, dir.Z)
+    if dir.Magnitude < 1 then dir = Vector3.new(0, 0, -1) else dir = dir.Unit end
+
+    -- ⚡ STEP TP — pakai loop minimal wait
+    for i = 1, steps do
+        if not SummitRun.enabled then return false end
+        local r = summitRoot()
+        if not r then return false end
+        local dist = math.min(SummitCfg.StepDistance * i, totalDist)
+        local pos = startPos + dir * dist + Vector3.new(0, SummitCfg.TPHeight, 0)
+        pos = Vector3.new(pos.X, target.Y, pos.Z)
+        r.CFrame = CFrame.new(pos)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+        SummitRun.status = string.format("%s [%d/%d]", label or "TP", i, steps)
+        task.wait(SummitCfg.WaitBetweenStep)
+    end
+
+    local r = summitRoot()
+    if r then
+        r.CFrame = CFrame.new(target)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+    end
+    return true
+end
+
+local function summitBackBC()
+    local part = nil
+    for _, obj in ipairs(workspace:GetDescendants()) do
+        local n = obj.Name:lower()
+        if n:find("back to bc") or n:find("backtobc") or n:find("back bc") then
+            if obj:IsA("BasePart") then part = obj; break
+            elseif obj:IsA("Model") then
+                local p = obj:FindFirstChildWhichIsA("BasePart", true)
+                if p then part = p; break end
+            end
+        end
+    end
+    if part then SummitBackBCPos = part.Position end
+    summitTpFast(SummitBackBCPos, "🏠 BackBC")
+    task.wait(SummitCfg.WaitAtBackBC)
+end
+
+local function summitMainLoop()
+    -- ⚡ Render delay lebih pendek
+    for i = math.floor(SummitCfg.StartRenderDelay), 1, -1 do
+        if not SummitRun.enabled then return end
+        SummitRun.status = "⏳ Render... (" .. i .. "s)"
+        task.wait(1)
+    end
+
+    local startNum = summitDetectStart()
+    SummitRun.status = "🚀 Mulai dari CP " .. startNum
+
+    while SummitRun.enabled do
+        SummitRun.loopCount += 1
+        local n = SummitRun.loopCount
+
+        -- ⚡ Naik CP — pakai TP cepat
+        for i = startNum, #SummitCheckpoints do
+            if not SummitRun.enabled then return end
+            local cp = SummitCheckpoints[i]
+            SummitRun.status = "🏔️ Loop #" .. n .. " — CP " .. cp.number
+            summitTpFast(cp.position, "CP " .. cp.number)
+            task.wait(SummitCfg.WaitBetweenCP)
+        end
+
+        if not SummitRun.enabled then return end
+
+        -- ⚡ Summit
+        SummitRun.status = "⭐ Loop #" .. n .. " — SUMMIT"
+        summitTpFast(SummitTopPos, "SUMMIT")
+        task.wait(SummitCfg.SummitWaitBeforeReturn)
+        SummitRun.summitCount += 1
+        print("[AUTO SUMMIT] ✅ Summit! Total:", SummitRun.summitCount)
+
+        if not SummitRun.enabled then return end
+
+        -- ⚡ Balik BC
+        SummitRun.status = "🏠 Balik ke BackBC..."
+        summitBackBC()
+
+        if not SummitRun.enabled then return end
+
+        startNum = 1
+        task.wait(0.5)  -- ⚡ jeda antar loop lebih cepet
+    end
+end
+
+-- ⭐ BRIDGE: baca Shared.AutoSummit_Enabled → jalanin logic TP
+local function initAutoSummit()
     task.spawn(function()
         while true do
             task.wait(0.3)
-            local wantOn = Shared and Shared.AutoSummit_Enabled == true
+            if not Shared then continue end
+            local wantOn = Shared.AutoSummit_Enabled == true
 
-            if wantOn ~= wasOn then
-                local pg = LocalPlayer:FindFirstChild("PlayerGui")
-                local gui = pg and pg:FindFirstChild("VrilzAutoCP")
-
-                if gui then
-                    for _, d in ipairs(gui:GetDescendants()) do
-                        if d:IsA("TextButton") and d.Text then
-                            local isStart = d.Text:find("START AUTO LOOP") ~= nil
-                            local isStop  = d.Text:find("STOP AUTO LOOP")  ~= nil
-                            if isStart or isStop then
-                                local isRunning = isStop
-                                if isRunning ~= wantOn then
-                                    -- ⭐ Klik BENERAN pakai VirtualInputManager
-                                    pcall(function()
-                                        local pos = d.AbsolutePosition
-                                        local size = d.AbsoluteSize
-                                        local cx = pos.X + size.X / 2
-                                        local cy = pos.Y + size.Y / 2
-                                        VIM:SendMouseButtonEvent(cx, cy, 0, true, game, 0)
-                                        task.wait(0.05)
-                                        VIM:SendMouseButtonEvent(cx, cy, 0, false, game, 0)
-                                    end)
-                                end
-                                break
-                            end
-                        end
-                    end
-                    wasOn = wantOn
+            if wantOn and not SummitRun.enabled then
+                -- ⚠️ SAFETY: Ghost Mode anchor HRP → TP gak jalan
+                if Shared.GhostMode_Enabled == true then
+                    Shared.GhostMode_Enabled = false
+                    print("[AUTO SUMMIT] 🔓 Ghost OFF dulu biar TP jalan")
+                    task.wait(0.8)
                 end
+                SummitRun.enabled = true
+                SummitRun.status = "🚀 Starting..."
+                task.spawn(summitMainLoop)
+            elseif not wantOn and SummitRun.enabled then
+                SummitRun.enabled = false
+                SummitRun.status = "⏹ Stopping..."
             end
         end
     end)
+
+    -- ⭐ Update status ke _G biar UI bisa baca
+    _G.VRILZ_SummitState = SummitRun
 end
 
 -- ============================================================
