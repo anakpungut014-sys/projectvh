@@ -1034,6 +1034,7 @@ local function notify(text, type)
     end)
 end
 
+_G.VRILZ_Notify = notify
 -- ====== CARD (RIPPLE SAJA) ======
 local function makeCard(parent, title, layoutOrder)
     local card = Instance.new("Frame")
@@ -5175,7 +5176,7 @@ do
 end
 
 -- ============================================================
--- 🏔 AUTO SUMMIT TAB — toggle + dropdown Start CP
+-- 🏔 AUTO SUMMIT TAB — toggle + dropdown + current CP label
 -- ============================================================
 do
     local summitPage, summitLeft, summitRight = createTwoColumnPage("AutoSummit")
@@ -5197,6 +5198,20 @@ do
     summitDesc.Parent = summitContent
     registerTheme(summitDesc, "Muted", "TextColor3")
 
+    -- ⭐ LABEL "CURRENT CP" (auto-update dari leaderstats)
+    local cpCurrentLabel = Instance.new("TextLabel")
+    cpCurrentLabel.Size = UDim2.new(1, 0, 0, 20)
+    cpCurrentLabel.BackgroundTransparency = 1
+    cpCurrentLabel.Text = "📍 Current CP: --"
+    cpCurrentLabel.TextColor3 = C.Accent
+    cpCurrentLabel.Font = Enum.Font.GothamBold
+    cpCurrentLabel.TextSize = CFG.FONT_MED
+    cpCurrentLabel.TextXAlignment = Enum.TextXAlignment.Left
+    cpCurrentLabel.LayoutOrder = 2
+    cpCurrentLabel.ZIndex = 3
+    cpCurrentLabel.Parent = summitContent
+    registerTheme(cpCurrentLabel, "Accent", "TextColor3")
+
     -- ⭐ Toggle Auto Summit
     makeToggle(summitContent, "Enable Auto Summit (ALL)", false, function(v)
         Shared.AutoSummit_Enabled = v
@@ -5211,12 +5226,12 @@ do
     local cpLabel = Instance.new("TextLabel")
     cpLabel.Size = UDim2.new(1, 0, 0, 14)
     cpLabel.BackgroundTransparency = 1
-    cpLabel.Text = "Start CP:"
+    cpLabel.Text = "Start CP (override):"
     cpLabel.TextColor3 = C.Muted
     cpLabel.Font = Enum.Font.GothamBold
     cpLabel.TextSize = CFG.FONT_MUTED
     cpLabel.TextXAlignment = Enum.TextXAlignment.Left
-    cpLabel.LayoutOrder = 2
+    cpLabel.LayoutOrder = 3
     cpLabel.ZIndex = 3
     cpLabel.Parent = summitContent
     registerTheme(cpLabel, "Muted", "TextColor3")
@@ -5249,22 +5264,56 @@ do
         notify("🏔 Start CP: " .. selected, "info")
         print("[AUTO SUMMIT] Start CP saved:", num)
     end)
-    cpDropdown.LayoutOrder = 3
+    cpDropdown.LayoutOrder = 4
 
-    -- ⭐ Status info
+    -- ⭐ STATUS INFO
     local summitInfo = Instance.new("TextLabel")
     summitInfo.Size = UDim2.new(1, 0, 0, 28)
     summitInfo.BackgroundTransparency = 1
-    summitInfo.Text = "Pilih CP mulai (1-20). Auto Summit akan TP dari CP itu → Summit → BackBC → loop."
+    summitInfo.Text = "Auto Summit follows Leaderstats Checkpoint. Dropdown is override only."
     summitInfo.TextColor3 = C.Muted
     summitInfo.Font = Enum.Font.Gotham
     summitInfo.TextSize = CFG.FONT_MUTED
     summitInfo.TextXAlignment = Enum.TextXAlignment.Left
     summitInfo.TextWrapped = true
-    summitInfo.LayoutOrder = 4
+    summitInfo.LayoutOrder = 5
     summitInfo.ZIndex = 3
     summitInfo.Parent = summitContent
     registerTheme(summitInfo, "Muted", "TextColor3")
+
+    -- ⭐ AUTO-UPDATE: Current CP label + Dropdown
+    task.spawn(function()
+        local lastCP = -1
+        while summitContent.Parent do
+            task.wait(0.5)
+            local ls = game.Players.LocalPlayer:FindFirstChild("leaderstats")
+            local stat = ls and ls:FindFirstChild("Checkpoint")
+            if stat then
+                local cpNum = tonumber(stat.Value) or 1
+                if cpNum ~= lastCP then
+                    lastCP = cpNum
+                    cpCurrentLabel.Text = "📍 Current CP: " .. cpNum
+                    -- Update dropdown juga
+                    Shared.AutoSummit_StartCP = cpNum
+                    if _G.VRILZ_UpdateSummitDropdown then
+                        pcall(_G.VRILZ_UpdateSummitDropdown, cpNum)
+                    end
+                end
+            else
+                cpCurrentLabel.Text = "📍 Current CP: --"
+            end
+        end
+    end)
+
+    -- ⭐ REGISTER update function buat Features
+    _G.VRILZ_UpdateSummitDropdown = function(num)
+        if cpDropdown then
+            local lbl = cpDropdown:FindFirstChildOfClass("TextLabel")
+            if lbl then
+                lbl.Text = "CP " .. tostring(num)
+            end
+        end
+    end
 end
 
 -- ============================================================
