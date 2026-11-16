@@ -500,7 +500,7 @@ local function summitNotifyCP(cpNum)
     print("[AUTO SUMMIT] " .. msg)
 end
 
--- ═══ TP KE CP — Anchor ON, Turun 10 Studs dari Posisi CP ═══
+-- ═══ TP KE CP — Anchor ON, Turun 10 Studs Per CP ═══
 local function summitTpFast(targetPos, label)
     local root = summitRoot()
     if not root then return false end
@@ -508,12 +508,12 @@ local function summitTpFast(targetPos, label)
     -- ⭐ TARGET = posisi CP, TAPI turun 10 studs
     local target = targetPos + Vector3.new(0, -10, 0)
 
-    -- ⭐ ANCHOR ON (gak pernah unanchor)
+    -- ⭐ ANCHOR ON (gak pernah unanchor, gak bisa jatuh)
     root.Anchored = true
     root.Velocity = Vector3.zero
     root.AssemblyLinearVelocity = Vector3.zero
 
-    -- ⭐ LANGSUNG TP KE TARGET (gak per step)
+    -- ⭐ LANGSUNG TP KE TARGET (turun 10 studs dari CP)
     root.CFrame = CFrame.new(target)
 
     SummitRun.status = label or "TP"
