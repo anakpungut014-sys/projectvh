@@ -422,6 +422,60 @@ local function summitRoot()
     return ch and ch:FindFirstChild("HumanoidRootPart")
 end
 
+-- ═══ KUNCI char: FULL FREEZE ═══
+local SummitSaved = {
+    walk = nil, jump = nil, jumpHeight = nil,
+    platformStand = nil, autoRotate = nil,
+}
+
+local function summitLockChar()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+
+    if hum then
+        if SummitSaved.walk == nil then SummitSaved.walk = hum.WalkSpeed end
+        if SummitSaved.jump == nil then SummitSaved.jump = hum.JumpPower end
+        if SummitSaved.jumpHeight == nil then SummitSaved.jumpHeight = hum.JumpHeight end
+        if SummitSaved.platformStand == nil then SummitSaved.platformStand = hum.PlatformStand end
+        if SummitSaved.autoRotate == nil then SummitSaved.autoRotate = hum.AutoRotate end
+
+        hum.WalkSpeed     = 0
+        hum.JumpPower     = 0
+        hum.JumpHeight    = 0
+        hum.PlatformStand = true
+        hum.AutoRotate    = false
+    end
+    if hrp then
+        hrp.Anchored = true
+        hrp.Velocity = Vector3.zero
+        hrp.AssemblyLinearVelocity = Vector3.zero
+    end
+end
+
+local function summitUnlockChar()
+    local char = LocalPlayer.Character
+    if not char then return end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    local hrp = char:FindFirstChild("HumanoidRootPart")
+
+    if hum then
+        if SummitSaved.walk ~= nil then hum.WalkSpeed = SummitSaved.walk end
+        if SummitSaved.jump ~= nil then hum.JumpPower = SummitSaved.jump end
+        if SummitSaved.jumpHeight ~= nil then hum.JumpHeight = SummitSaved.jumpHeight end
+        if SummitSaved.platformStand ~= nil then hum.PlatformStand = SummitSaved.platformStand end
+        if SummitSaved.autoRotate ~= nil then hum.AutoRotate = SummitSaved.autoRotate end
+    end
+    if hrp then hrp.Anchored = false end
+
+    SummitSaved.walk = nil
+    SummitSaved.jump = nil
+    SummitSaved.jumpHeight = nil
+    SummitSaved.platformStand = nil
+    SummitSaved.autoRotate = nil
+end
+
 -- ═══ DETEKSI CP: baca dari Leaderstats "Checkpoint" ═══
 local function summitDetectCurrentCP()
     local ls = LocalPlayer:FindFirstChild("leaderstats")
@@ -481,11 +535,15 @@ local function summitTpFast(targetPos, label)
         task.wait(SummitCfg.WaitBetweenStep)
     end
 
-    local r = summitRoot()
+        local r = summitRoot()
     if r then
         r.CFrame = CFrame.new(target)
         r.Velocity = Vector3.zero
         r.AssemblyLinearVelocity = Vector3.zero
+        -- ⭐ RE-ANCHOR setelah TP (biar gak jatuh)
+        if SummitRun.enabled then
+            r.Anchored = true
+        end
     end
     return true
 end
@@ -591,7 +649,7 @@ local function summitMainLoop()
         SummitRun.loopCount += 1
         local n = SummitRun.loopCount
 
-        -- ⭐ Naik CP dari startNum sampai 20 — DELAY 3s PER CP
+        -- ⭐ Naik CP dari startNum sampai 20 — DELAY 2s PER CP
         for i = startNum, #SummitCheckpoints do
             if not SummitRun.enabled then return end
             local cp = SummitCheckpoints[i]
@@ -605,8 +663,7 @@ local function summitMainLoop()
                 task.wait(1.0)
                 i = i - 1
             else
-                SummitRun.status = "⏱️ CP " .. cp.number .. " done, tunggu 3s..."
-                print("[AUTO SUMMIT] ✅ CP", cp.number, "done, wait 3s")
+            SummitRun.status = "⏱️ CP " .. cp.number .. " done, tunggu 2s..."
                 task.wait(SummitCfg.WaitBetweenCP)
             end
         end
@@ -691,15 +748,18 @@ local function initAutoSummit()
             if wantOn and not SummitRun.enabled then
                 if Shared.GhostMode_Enabled == true then
                     Shared.GhostMode_Enabled = false
-                    print("[AUTO SUMMIT] 🔓 Ghost OFF dulu biar TP jalan")
                     task.wait(0.8)
                 end
+                -- ⭐ KUNCI char
+                summitLockChar()
                 SummitRun.enabled = true
                 SummitRun.status = "🚀 Starting..."
                 task.spawn(summitMainLoop)
             elseif not wantOn and SummitRun.enabled then
                 SummitRun.enabled = false
                 SummitRun.status = "⏹ Stopping..."
+                -- ⭐ BUKA kunci char
+                summitUnlockChar()
             end
         end
     end)
@@ -722,6 +782,20 @@ local function initAutoSummit()
         end
     end)
 
+    -- ⭐ Respawn safety: re-lock kalau char respawn saat ON
+    LocalPlayer.CharacterAdded:Connect(function()
+        SummitSaved.walk = nil
+        SummitSaved.jump = nil
+        SummitSaved.jumpHeight = nil
+        SummitSaved.platformStand = nil
+        SummitSaved.autoRotate = nil
+        if SummitRun.enabled then
+            task.wait(2)
+            summitLockChar()
+        end
+    end)
+
+    
     -- ⭐ Save function (kalau UI panggil)
     _G.VRILZ_SaveSummitCP = function(num)
         num = tonumber(num) or 1
