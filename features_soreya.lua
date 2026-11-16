@@ -209,14 +209,14 @@ local function tapOnce()
     end
 end
 
--- ═══ INSTANT CATCH — pakai internal MiniGameHandler ═══
+-- ═══ INSTANT CATCH v2 — cooldown-aware, break instan via GetState ═══
 local function doReelSpam()
     if FishState.reeling then return end
     FishState.reeling = true
     FishState.reelAbort = false
     local rod = getEquippedRod()
     local start = os.clock()
-    local taps = 0
+    local taps, accepted = 0, 0
     FishState.status = "⚡ INSTANT REEL..."
 
     if not FishMiniGame then
@@ -225,16 +225,14 @@ local function doReelSpam()
         return
     end
 
-    -- ⚡⚡ SET DRAIN RATE GILA-GILAAN (1 tap = habis)
-    pcall(function() FishMiniGame:SetClickDrainRate(99999) end)
-    pcall(function() FishMiniGame:SetClickDrainRate(1e9) end) -- double attempt
-
     local miss, minigameSeen = 0, false
+    local lastClickCount = 0
+    local lastTapTime = 0
 
     while FishState.enabled and not FishState.reelAbort
-        and os.clock() - start < FishSpeed.reelMaxTime do
+        and os.clock() - start < 3 do  -- max 3 detik (harusnya <1s)
 
-        -- cek aktif pakai API resmi, bukan value
+        -- cek aktif
         local active = false
         pcall(function() active = FishMiniGame:IsActive() end)
         if not active and rod then
@@ -248,24 +246,42 @@ local function doReelSpam()
             if miss >= 2 then break end
         end
 
-        -- ⚡ TAP — coba semua metode, yang penting kena
-        for _ = 1, FishSpeed.tapsPerFrame do
-            pcall(function() FishMiniGame:MobileTap() end)
-            taps += 1
+        -- ⚡ CEK STATE — break instan kalau selesai
+        local st
+        pcall(function() st = FishMiniGame:GetState() end)
+        if st then
+            local cc  = tonumber(st.clickCount) or 0
+            local tcn = tonumber(st.totalClicksNeeded) or 5
+            local prog = tonumber(st.progress) or 0
+
+            if cc > lastClickCount then
+                accepted = cc
+                lastClickCount = cc
+            end
+
+            -- ✅ BREAK INSTAN begitu progress penuh
+            if cc >= tcn or prog >= 1 then
+                FishState.status = string.format("✅ Caught! (%d tap)", taps)
+                break
+            end
         end
 
-        -- ⚡ hold juga (kalau game support, drain lebih agresif)
+        -- ⚡ TAP cooldown-aware: 1 tap tiap 0.10s (cooldown game ~0.15s)
+        if os.clock() - lastTapTime >= 0.10 then
+            pcall(function() FishMiniGame:MobileTap() end)
+            taps += 1
+            lastTapTime = os.clock()
+        end
+
+        -- hold pressure (gak ganggu cooldown tap)
         pcall(function() FishMiniGame:MobileHoldDown() end)
-        pcall(function() FishMiniGame:MobileHoldUp() end)
 
         RunService.RenderStepped:Wait()
     end
 
-    -- restore drain rate biar gak weird di catch berikutnya
-    pcall(function() FishMiniGame:SetClickDrainRate(1) end)
-
     FishState.reeling = false
-    FishState.status = string.format("✅ Reel %.2fs (%d tap)", os.clock() - start, taps)
+    FishState.status = string.format("✅ Reel %.2fs (%d tap, %d accepted)",
+        os.clock() - start, taps, accepted)
 end
 
 local fishHookedRods = {}
