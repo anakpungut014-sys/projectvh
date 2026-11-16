@@ -521,6 +521,38 @@ local function summitTpFast(targetPos, label)
     return true
 end
 
+    local steps = math.ceil(totalDist / SummitCfg.StepDistance)
+    local dir = (target - startPos)
+    dir = Vector3.new(dir.X, 0, dir.Z)
+    if dir.Magnitude < 1 then dir = Vector3.new(0, 0, -1) else dir = dir.Unit end
+
+    for i = 1, steps do
+        if not SummitRun.enabled then return false end
+        local r = summitRoot()
+        if not r then return false end
+        local dist = math.min(SummitCfg.StepDistance * i, totalDist)
+        local pos = startPos + dir * dist + Vector3.new(0, SummitCfg.TPHeight, 0)
+        pos = Vector3.new(pos.X, target.Y, pos.Z)
+        r.CFrame = CFrame.new(pos)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+        SummitRun.status = string.format("%s [%d/%d]", label or "TP", i, steps)
+        task.wait(SummitCfg.WaitBetweenStep)
+    end
+
+        local r = summitRoot()
+    if r then
+        r.CFrame = CFrame.new(target)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+        -- ⭐ RE-ANCHOR setelah TP (biar gak jatuh)
+        if SummitRun.enabled then
+            r.Anchored = true
+        end
+    end
+    return true
+end
+
 local function summitVerifyCP(cpPos, tolerance)
     tolerance = tolerance or SummitCfg.CPTolerance
     local root = summitRoot()
