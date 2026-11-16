@@ -209,7 +209,7 @@ local function tapOnce()
     end
 end
 
--- ⚡⚡ REEL — 5 TAP PER FRAME (nembus batas 60 tap/detik)
+-- ═══ INSTANT CATCH — pakai internal MiniGameHandler ═══
 local function doReelSpam()
     if FishState.reeling then return end
     FishState.reeling = true
@@ -217,37 +217,55 @@ local function doReelSpam()
     local rod = getEquippedRod()
     local start = os.clock()
     local taps = 0
-    FishState.status = "⚡⚡ MULTI-TAP REEL..."
+    FishState.status = "⚡ INSTANT REEL..."
 
-    local miss = 0
-    local minigameSeen = false
+    if not FishMiniGame then
+        FishState.reeling = false
+        FishState.status = "❌ MiniGameHandler nil"
+        return
+    end
 
-    while FishState.enabled
-        and not FishState.reelAbort
+    -- ⚡⚡ SET DRAIN RATE GILA-GILAAN (1 tap = habis)
+    pcall(function() FishMiniGame:SetClickDrainRate(99999) end)
+    pcall(function() FishMiniGame:SetClickDrainRate(1e9) end) -- double attempt
+
+    local miss, minigameSeen = 0, false
+
+    while FishState.enabled and not FishState.reelAbort
         and os.clock() - start < FishSpeed.reelMaxTime do
 
-        if rod then
-            if getStatusValue(rod, "MiniGameActive") then
-                minigameSeen = true
-                miss = 0
-            elseif minigameSeen then
-                miss += 1
-                if miss >= 2 then break end
-            end
+        -- cek aktif pakai API resmi, bukan value
+        local active = false
+        pcall(function() active = FishMiniGame:IsActive() end)
+        if not active and rod then
+            active = getStatusValue(rod, "MiniGameActive")
         end
 
-        -- ⚡⚡ INTI: beberapa tap dalam 1 frame
+        if active then
+            minigameSeen = true; miss = 0
+        elseif minigameSeen then
+            miss += 1
+            if miss >= 2 then break end
+        end
+
+        -- ⚡ TAP — coba semua metode, yang penting kena
         for _ = 1, FishSpeed.tapsPerFrame do
-            tapOnce()
+            pcall(function() FishMiniGame:MobileTap() end)
             taps += 1
         end
 
-        RunService.Heartbeat:Wait()
+        -- ⚡ hold juga (kalau game support, drain lebih agresif)
+        pcall(function() FishMiniGame:MobileHoldDown() end)
+        pcall(function() FishMiniGame:MobileHoldUp() end)
+
+        RunService.RenderStepped:Wait()
     end
 
-    local dur = os.clock() - start
+    -- restore drain rate biar gak weird di catch berikutnya
+    pcall(function() FishMiniGame:SetClickDrainRate(1) end)
+
     FishState.reeling = false
-    FishState.status = string.format("✅ Reel %.1fs (%d tap) → cast lagi", dur, taps)
+    FishState.status = string.format("✅ Reel %.2fs (%d tap)", os.clock() - start, taps)
 end
 
 local fishHookedRods = {}
