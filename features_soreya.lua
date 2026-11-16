@@ -539,21 +539,42 @@ local function summitTpFast(targetPos, label)
         task.wait(SummitCfg.WaitBetweenStep)
     end
 
-    -- ⭐ SAMPAI DI CP — diam sebentar biar stabil
+        -- ⭐ SAMPAI DI CP — langsung jatuh natural, TANPA diam
     local r = summitRoot()
     if r then
         r.CFrame = CFrame.new(target)
         r.Velocity = Vector3.zero
         r.AssemblyLinearVelocity = Vector3.zero
-        task.wait(0.05)
 
-        -- ⭐ BARU TURUN 10 STUDS (biar badan nyentuh area CP)
-        r.CFrame = CFrame.new(targetPos + Vector3.new(0, -12, 0))
-        r.Velocity = Vector3.zero
-        r.AssemblyLinearVelocity = Vector3.zero
+        -- ⭐ UNANCHOR langsung biar jatuh natural (tanpa wait)
+        r.Anchored = false
 
-        if SummitRun.enabled then
-            r.Anchored = true
+        local dropStartY = r.Position.Y
+        local dropElapsed = 0
+        local dropTimeout = 2.0  -- safety max 2 detik
+
+        while dropElapsed < dropTimeout do
+            if not SummitRun.enabled then break end
+            local rr = summitRoot()
+            if not rr then break end
+
+            -- ⭐ Udah turun 12 studs? Berhenti
+            if (dropStartY - rr.Position.Y) >= 12 then break end
+
+            -- ⭐ Udah nyentuh tanah / diam? Berhenti
+            local vel = rr.AssemblyLinearVelocity
+            if vel.Magnitude < 0.5 and dropElapsed > 0.3 then break end
+
+            task.wait(0.05)
+            dropElapsed += 0.05
+        end
+
+        -- ⭐ Setelah jatuh (max 12 studs) → ANCHOR ON
+        local rFinal = summitRoot()
+        if rFinal and SummitRun.enabled then
+            rFinal.Anchored = true
+            rFinal.Velocity = Vector3.zero
+            rFinal.AssemblyLinearVelocity = Vector3.zero
         end
     end
     return true
