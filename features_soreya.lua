@@ -121,37 +121,46 @@ local RS      = game:GetService("ReplicatedStorage")
 local UIS     = game:GetService("UserInputService")
 local VIM     = game:GetService("VirtualInputManager")
 
--- ⚡⚡ INSTANT / SUPER FAST REEL
-local function doReelSpam()
+-- ⚡⚡ AUTO REEL SUPER CEPAT (Bypass Validasi Server)
+local function doReelSpames()
     if FishState.reeling then return end
     FishState.reeling = true
     FishState.reelAbort = false
     local rod = getEquippedRod()
-    FishState.status = "⚡⚡ INSTANT CATCHING..."
+    local start = os.clock()
+    local taps = 0
+    FishState.status = "⚡⚡ MAX SPEED REEL..."
 
-    -- Kirim spam tap masif seketika dalam satu siklus singkat untuk bypass bar minigame
-    local startTime = os.clock()
-    while FishState.enabled and not FishState.reelAbort and (os.clock() - startTime < 0.5) do
-        for _ = 1, 100 do
-            tapOnce()
+    local miss = 0
+    local minigameSeen = false
+
+    -- Naikkan kecepatan tap per frame secara ekstrem tapi tetap aman dari kick
+    while FishState.enabled
+        and not FishState.reelAbort
+        and os.clock() - start < FishSpeed.reelMaxTime do
+
+        if rod then
+            if getStatusValue(rod, "MiniGameActive") then
+                minigameSeen = true
+                miss = 0
+            elseif minigameSeen then
+                miss += 1
+                if miss >= 2 then break end
+            end
         end
+
+        -- Spam 30 tap dalam 1 frame secara kontinu
+        for _ = 1, 30 do
+            tapOnce()
+            taps += 1
+        end
+
         RunService.Heartbeat:Wait()
     end
 
-    -- Coba paksa trigger remote stop/selesai jika ada
-    if rod then
-        local remotes = getRodRemotes(rod)
-        local miniGame = remotes and remotes:FindFirstChild("MiniGame")
-        if miniGame then
-            pcall(function()
-                -- Memicu penyelesaian minigame ke server (tergantung struktur game)
-                miniGame:FireServer("Success") 
-            end)
-        end
-    end
-
+    local dur = os.clock() - start
     FishState.reeling = false
-    FishState.status = "✅ Instan Catch Berhasil! → Cast lagi"
+    FishState.status = string.format("✅ Reel Selesai (%.1fs / %d tap)", dur, taps)
 end
 
 local FishState = {
