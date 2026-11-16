@@ -115,14 +115,9 @@ end
 end
 
 -- ============================================================
--- 🎣 AUTO FISH v5 — MULTI-TAP PER FRAME
+-- 🎣 AUTO FISH v5 — MAX SPEED REEL (SUPER CEPAT)
 -- ============================================================
-local RS      = game:GetService("ReplicatedStorage")
-local UIS     = game:GetService("UserInputService")
-local VIM     = game:GetService("VirtualInputManager")
-
--- ⚡⚡ AUTO REEL SUPER CEPAT (Bypass Validasi Server)
-local function doReelSpames()
+local function doReelSpam()
     if FishState.reeling then return end
     FishState.reeling = true
     FishState.reelAbort = false
@@ -134,7 +129,6 @@ local function doReelSpames()
     local miss = 0
     local minigameSeen = false
 
-    -- Naikkan kecepatan tap per frame secara ekstrem tapi tetap aman dari kick
     while FishState.enabled
         and not FishState.reelAbort
         and os.clock() - start < FishSpeed.reelMaxTime do
@@ -149,8 +143,8 @@ local function doReelSpames()
             end
         end
 
-        -- Spam 30 tap dalam 1 frame secara kontinu
-        for _ = 1, 30 do
+        -- ⚡⚡ Spam 35 tap sekaligus tiap frame biar minigame langsung selesai dalam sekejap
+        for _ = 1, 35 do
             tapOnce()
             taps += 1
         end
@@ -160,7 +154,7 @@ local function doReelSpames()
 
     local dur = os.clock() - start
     FishState.reeling = false
-    FishState.status = string.format("✅ Reel Selesai (%.1fs / %d tap)", dur, taps)
+    FishState.status = string.format("✅ Reel Cepat %.1fs (%d tap) → cast lagi", dur, taps)
 end
 
 local FishState = {
