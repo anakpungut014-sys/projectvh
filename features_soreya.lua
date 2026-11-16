@@ -589,6 +589,7 @@ local function summitTpToCP(cp, label, maxRetry)
 end
 
 -- ═══ BALIK BC — nama objek: Workspace.BackBC.BackBC ═══
+-- ═══ BALIK BC — nama objek: Workspace.BackBC.BackBC ═══
 local function summitBackBC()
     local part = nil
 
@@ -606,7 +607,6 @@ local function summitBackBC()
         for _, obj in ipairs(workspace:GetDescendants()) do
             if obj:IsA("BasePart") then
                 local n = obj.Name:lower()
-                -- "backbc", "back to bc", "backtobc", dll
                 if n == "backbc" or n:find("back to bc")
                     or n:find("backtobc") or n:find("back bc") then
                     part = obj
@@ -618,7 +618,6 @@ local function summitBackBC()
 
     if part then
         SummitBackBCPos = part.Position
-    else
     end
 
     summitTpFast(SummitBackBCPos, "🏠 BackBC")
