@@ -23,20 +23,17 @@ function Features.startAntiAFK()
     if not Shared then Shared = {} end
     if Shared.AntiAFK_Enabled == nil then Shared.AntiAFK_Enabled = true end
 
-    -- ⭐ State lokal, aman dari race condition
     local _actionBusy = false
 
-local function isAnyFeatureBusy()
-    return false
-end
+    local function isAnyFeatureBusy()
+        return false
+    end
 
-    -- ⭐ ACTION: NGASIH INPUT BENERAN (movement + jump + mouse)
     local function doAntiAFKAction()
         if Shared.AntiAFK_Enabled == false then return end
         if _actionBusy then return end
         _actionBusy = true
 
-        -- ⭐ 1) VirtualUser capture (wajib, biar Roblox detect activity)
         pcall(function()
             VirtualUser:CaptureController()
             VirtualUser:Button2Down(Vector2.new(0, 0))
@@ -44,12 +41,10 @@ end
             VirtualUser:Button2Up(Vector2.new(0, 0))
         end)
 
-        -- ⭐ 2) MOVEMENT BENERAN — gerak karakter, BUKAN cuma mouse
         if not isAnyFeatureBusy() then
             local char = LocalPlayer.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
             if hum and hum.Health > 0 and not hum.SeatPart and not hum.PlatformStand then
-                -- Gerak ke 4 arah bergantian biar server detect movement
                 local dirs = {
                     Vector3.new(0, 0, -1),
                     Vector3.new(1, 0, 0),
@@ -62,7 +57,6 @@ end
                     pcall(function() h:Move(d, false) end)
                     task.wait(0.15)
                 end
-                -- Reset movement
                 local h2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
                 if h2 and not h2.SeatPart then
                     pcall(function() h2:Move(Vector3.new(0,0,0), false) end)
@@ -70,7 +64,6 @@ end
             end
         end
 
-        -- ⭐ 3) Jump sekali (kalo aman) — bikin server detect "player aktif"
         if not isAnyFeatureBusy() then
             local char = LocalPlayer.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -79,7 +72,6 @@ end
             end
         end
 
-        -- ⭐ 4) Mouse move (kalo ada)
         if type(mousemoverel) == "function" then
             pcall(function() mousemoverel(10, 10) end)
             task.wait(0.05)
@@ -89,8 +81,6 @@ end
         task.delay(0.3, function() _actionBusy = false end)
     end
 
-    -- ═══ 1. IDLED LISTENER — TANPA THROTTLE 30s ═══
-    -- ⭐ Roblox fire Idled ~20s sekali. Jangan pernah skip.
     LocalPlayer.Idled:Connect(function()
         task.spawn(function()
             if Shared.AntiAFK_Enabled == false then return end
@@ -98,17 +88,15 @@ end
         end)
     end)
 
-    -- ═══ 2. PERIODIC 60s — lebih aman dari 90s ═══
     task.spawn(function()
-        task.wait(20) -- delay awal
+        task.wait(20)
         while true do
             task.wait(60)
             if Shared.AntiAFK_Enabled == false then continue end
-            doAntiAFKAction()  -- ⭐ LANGSUNG panggil, jangan task.spawn (biar gak numpuk)
+            doAntiAFKAction()
         end
     end)
 
-    -- ═══ 3. RESPAWN SAFETY ═══
     LocalPlayer.CharacterAdded:Connect(function()
         _actionBusy = false
     end)
@@ -117,45 +105,17 @@ end
 -- ============================================================
 -- 🎣 AUTO FISH v5 — MAX SPEED REEL (SUPER CEPAT)
 -- ============================================================
-local function doReelSpam()
-    if FishState.reeling then return end
-    FishState.reeling = true
-    FishState.reelAbort = false
-    local rod = getEquippedRod()
-    local start = os.clock()
-    local taps = 0
-    FishState.status = "⚡⚡ MAX SPEED REEL..."
+local RS      = game:GetService("ReplicatedStorage")
+local UIS     = game:GetService("UserInputService")
+local VIM     = game:GetService("VirtualInputManager")
 
-    local miss = 0
-    local minigameSeen = false
-
-    while FishState.enabled
-        and not FishState.reelAbort
-        and os.clock() - start < FishSpeed.reelMaxTime do
-
-        if rod then
-            if getStatusValue(rod, "MiniGameActive") then
-                minigameSeen = true
-                miss = 0
-            elseif minigameSeen then
-                miss += 1
-                if miss >= 2 then break end
-            end
-        end
-
-        -- ⚡⚡ Spam 35 tap sekaligus tiap frame biar minigame langsung selesai dalam sekejap
-        for _ = 1, 35 do
-            tapOnce()
-            taps += 1
-        end
-
-        RunService.Heartbeat:Wait()
-    end
-
-    local dur = os.clock() - start
-    FishState.reeling = false
-    FishState.status = string.format("✅ Reel Cepat %.1fs (%d tap) → cast lagi", dur, taps)
-end
+local FishSpeed = {
+    reelMaxTime   = 8,
+    castCooldown  = 0.15,
+    castPowerWait = 0.15,
+    loopDelay     = 0.05,
+    tapsPerFrame  = 35,    -- ⚡⚡ 35 tap TIAP FRAME (Super Ngebut)
+}
 
 local FishState = {
     enabled = false,
@@ -237,7 +197,7 @@ local function tapOnce()
     end
 end
 
--- ⚡⚡ REEL — 5 TAP PER FRAME (nembus batas 60 tap/detik)
+-- ⚡⚡ REEL — MAX SPEED SPAM
 local function doReelSpam()
     if FishState.reeling then return end
     FishState.reeling = true
@@ -245,7 +205,7 @@ local function doReelSpam()
     local rod = getEquippedRod()
     local start = os.clock()
     local taps = 0
-    FishState.status = "⚡⚡ MULTI-TAP REEL..."
+    FishState.status = "⚡⚡ MAX SPEED REEL..."
 
     local miss = 0
     local minigameSeen = false
@@ -264,7 +224,6 @@ local function doReelSpam()
             end
         end
 
-        -- ⚡⚡ INTI: beberapa tap dalam 1 frame
         for _ = 1, FishSpeed.tapsPerFrame do
             tapOnce()
             taps += 1
@@ -275,7 +234,7 @@ local function doReelSpam()
 
     local dur = os.clock() - start
     FishState.reeling = false
-    FishState.status = string.format("✅ Reel %.1fs (%d tap) → cast lagi", dur, taps)
+    FishState.status = string.format("✅ Reel Cepat %.1fs (%d tap) → cast lagi", dur, taps)
 end
 
 local fishHookedRods = {}
@@ -379,12 +338,10 @@ local function initAutoFish()
                     FishState.autoReel    = true
                     FishState.reelAbort   = false
                     FishState.enabled     = true
-                    -- ⭐ AUTO FISH ON → GHOST IKUT ON
                     Shared.GhostMode_Enabled = true
                 else
                     FishState.enabled   = false
                     FishState.reelAbort = true
-                    -- ⭐ AUTO FISH OFF → GHOST IKUT OFF (char balik normal)
                     Shared.GhostMode_Enabled = false
                 end
             end
@@ -393,7 +350,7 @@ local function initAutoFish()
 end
 
 -- ============================================================
--- 🏔 AUTO SUMMIT BRIDGE — nyambungin toggle UI ke Auto CP script
+-- 🏔 AUTO SUMMIT BRIDGE
 -- ============================================================
 local function initAutoSummit()
     local wasOn = false
@@ -416,7 +373,6 @@ local function initAutoSummit()
                             if isStart or isStop then
                                 local isRunning = isStop
                                 if isRunning ~= wantOn then
-                                    -- ⭐ Klik BENERAN pakai VirtualInputManager
                                     pcall(function()
                                         local pos = d.AbsolutePosition
                                         local size = d.AbsoluteSize
@@ -439,8 +395,7 @@ local function initAutoSummit()
 end
 
 -- ============================================================
--- 🛒 SHOP FEATURES — Auto Sell / Upgrade Rod / Buy Skin
--- Default: SEMUA RARITY = FALSE (user pilih sendiri)
+-- 🛒 SHOP FEATURES
 -- ============================================================
 local ShopSpeed = { loopDelay = 1.0 }
 
@@ -448,7 +403,6 @@ local ShopState = {
     autoSell      = false,
     autoUpgradeRod= false,
     autoBuySkin   = false,
-    -- ⭐ DEFAULT NONE
     sellRarities  = {
         Common=false, Uncommon=false, Rare=false, Epic=false,
         Legendary=false, Mythic=false, SECRET=false, FORGOTTEN=false,
@@ -457,7 +411,6 @@ local ShopState = {
     stats  = { sold=0, koinsEarned=0, rodsUpgraded=0, skinsBought=0, lastError="" },
 }
 
-local RS = game:GetService("ReplicatedStorage")
 local ShopRemotes = {}
 pcall(function()
     local M = RS:WaitForChild("Remote"):WaitForChild("Mancing")
@@ -502,7 +455,6 @@ local function shouldSell(rarity)
 end
 
 local function doAutoSell()
-    -- Safety: kalau gak ada rarity dipilih → jangan jual
     local any = false
     for _, v in pairs(ShopState.sellRarities) do
         if v == true then any = true break end
@@ -650,12 +602,9 @@ _G.VRILZ_ShopUI = {
 local function initShop() startShopLoop() end
 
 -- ============================================================
--- 👻 GHOST MODE v3 — Real char invisible + DIKUNCI di tempat
--- Clone berbaju diem 15 studs + camera di clone
--- Real char gak bisa gerak/lompat sampai ghost di-OFF kan
+-- 👻 GHOST MODE v3
 -- ============================================================
-
-local GHOST_DISTANCE = 15 -- jarak clone dari char asli (studs)
+local GHOST_DISTANCE = 15
 
 local GhostState = {
     enabled         = false,
@@ -667,7 +616,6 @@ local GhostState = {
     savedJump       = nil,
 }
 
--- ═══ KUNCI real char: anchor HRP + WalkSpeed/Jump 0 ═══
 local function ghostLock(char)
     local hum = char:FindFirstChildOfClass("Humanoid")
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -676,12 +624,11 @@ local function ghostLock(char)
         if GhostState.savedJump == nil then GhostState.savedJump = hum.JumpPower end
         hum.WalkSpeed  = 0
         hum.JumpPower  = 0
-        hum.JumpHeight = 0 -- game yang pakai JumpHeight juga ke-cover
+        hum.JumpHeight = 0
     end
     if hrp then hrp.Anchored = true end
 end
 
--- ═══ BUKA kunci ═══
 local function ghostUnlock(char)
     local hum = char:FindFirstChildOfClass("Humanoid")
     local hrp = char:FindFirstChild("HumanoidRootPart")
@@ -770,7 +717,6 @@ local function ghostCreateClone(char)
         if d:IsA("Tool") then d:Destroy() end
     end
 
-    -- Humanoid clone dipertahankan (biar baju ke-render) tapi di-neuter
     local hum = clone:FindFirstChildOfClass("Humanoid")
     if hum then
         hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
@@ -779,7 +725,6 @@ local function ghostCreateClone(char)
         pcall(function() hum.EvaluateStateMachine = false end)
     end
 
-    -- safety ekstra: copy ulang baju dari char asli
     for _, cls in ipairs({"Shirt", "Pants", "ShirtGraphic"}) do
         local src = char:FindFirstChildOfClass(cls)
         if src then
@@ -789,7 +734,6 @@ local function ghostCreateClone(char)
         end
     end
 
-    -- clone 15 studs di belakang char asli
     clone:PivotTo(hrp.CFrame * CFrame.new(0, 0, GHOST_DISTANCE))
 
     for _, d in ipairs(clone:GetDescendants()) do
@@ -804,7 +748,6 @@ local function ghostCreateClone(char)
     clone.Parent = workspace
     GhostState.clone = clone
 
-    -- camera nempel ke clone
     local cam = workspace.CurrentCamera
     local cloneHRP = clone:FindFirstChild("HumanoidRootPart")
     if cam and cloneHRP then
@@ -818,14 +761,14 @@ local function ghostEnable()
     ghostCreateClone(char)
     task.wait(0.1)
     ghostHide(char)
-    ghostLock(char)   -- ⭐ KUNCI real char
+    ghostLock(char)
     GhostState.enabled = true
 end
 
 local function ghostDisable()
     local char = LocalPlayer.Character
     if char then
-        ghostUnlock(char)  -- ⭐ BUKA kunci dulu
+        ghostUnlock(char)
         ghostRestore(char)
     end
     if GhostState.clone then
@@ -846,7 +789,6 @@ local function initGhostMode()
             GhostState.clone:Destroy()
             GhostState.clone = nil
         end
-        -- reset lock state (char baru = nilai default)
         GhostState.savedWalk = nil
         GhostState.savedJump = nil
         if GhostState.enabled then
@@ -870,22 +812,18 @@ local function initGhostMode()
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
                 if hrp then
-                    -- clone kehapus → recreate
                     if GhostState.clone and not GhostState.clone.Parent then
                         pcall(ghostCreateClone, char)
                     end
-                    -- server force-restore transparency → re-hide
                     if GhostState.clone and GhostState.clone.Parent
                         and hrp.Transparency < 1 then
                         pcall(ghostHide, char)
                     end
-                    -- ⭐ RE-ASSERT LOCK: game/fitur lain ubah speed atau unanchor → balikin
                     local hum = char:FindFirstChildOfClass("Humanoid")
                     if hum and (hum.WalkSpeed ~= 0 or not hrp.Anchored) then
                         pcall(ghostLock, char)
                     end
                 end
-                -- camera tetap nempel clone
                 local cam = workspace.CurrentCamera
                 local cloneHRP = GhostState.clone and GhostState.clone:FindFirstChild("HumanoidRootPart")
                 if cam and cloneHRP and cam.CameraSubject ~= cloneHRP then
@@ -902,7 +840,6 @@ end
 function Features.Init(sharedState)
     Shared = sharedState
 
-    -- ⭐ update _G refs SEKARANG (Shared udah beneran ada)
     _G.VRILZ_Shared = Shared
     _G.VRILZ_UI_Shared = Shared
 
@@ -911,29 +848,27 @@ function Features.Init(sharedState)
         Features.startAntiAFK()
     end
 
-    -- ⭐ TAMBAH INI
     if not Features._autoFishStarted then
         Features._autoFishStarted = true
         pcall(initAutoFish)
     end
 
-    -- ⭐ AUTO SUMMIT
     if not Features._autoSummitStarted then
         Features._autoSummitStarted = true
         pcall(initAutoSummit)
     end
-        -- ⭐ SHOP
+
     if not Features._shopStarted then
         Features._shopStarted = true
         pcall(initShop)
     end
-    -- ⭐ GHOST MODE  ← TAMBAH INI
+
     if not Features._ghostStarted then
         Features._ghostStarted = true
         pcall(initGhostMode)
     end
 end
 
-    _G.VRILZ_Features = Features
+_G.VRILZ_Features = Features
 
 return Features
