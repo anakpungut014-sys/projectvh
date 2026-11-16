@@ -499,32 +499,31 @@ local function summitNotifyCP(cpNum)
     end
 end
 
--- ═══ TP KE CP — Anchor ON, Turun 10 Studs Per CP ═══
 local function summitTpFast(targetPos, label)
     local root = summitRoot()
     if not root then return false end
 
-    -- ⭐ TARGET = posisi CP, TAPI turun 10 studs
-    local target = targetPos + Vector3.new(0, -10, 0)
+    -- ⭐ Fly ke CP asli (di atas CP, biar aman gak nyangkut)
+    local target = targetPos + Vector3.new(0, SummitCfg.TPHeight, 0)
 
-    -- ⭐ ANCHOR ON (gak pernah unanchor, gak bisa jatuh)
+    -- ⭐ ANCHOR ON
     root.Anchored = true
     root.Velocity = Vector3.zero
     root.AssemblyLinearVelocity = Vector3.zero
 
-    -- ⭐ LANGSUNG TP KE TARGET (turun 10 studs dari CP)
-    root.CFrame = CFrame.new(target)
-
-    SummitRun.status = label or "TP"
-    task.wait(0.1)
-
-    return true
-end
-
+    -- ⭐ STEP-BY-STEP FLY ke CP
+    local startPos  = root.Position
+    local totalDist = (target - startPos).Magnitude
     local steps = math.ceil(totalDist / SummitCfg.StepDistance)
+    if steps < 1 then steps = 1 end
+
     local dir = (target - startPos)
     dir = Vector3.new(dir.X, 0, dir.Z)
-    if dir.Magnitude < 1 then dir = Vector3.new(0, 0, -1) else dir = dir.Unit end
+    if dir.Magnitude < 1 then
+        dir = Vector3.new(0, 0, -1)
+    else
+        dir = dir.Unit
+    end
 
     for i = 1, steps do
         if not SummitRun.enabled then return false end
@@ -540,12 +539,19 @@ end
         task.wait(SummitCfg.WaitBetweenStep)
     end
 
-        local r = summitRoot()
+    -- ⭐ SAMPAI DI CP — diam sebentar biar stabil
+    local r = summitRoot()
     if r then
         r.CFrame = CFrame.new(target)
         r.Velocity = Vector3.zero
         r.AssemblyLinearVelocity = Vector3.zero
-        -- ⭐ RE-ANCHOR setelah TP (biar gak jatuh)
+        task.wait(0.05)
+
+        -- ⭐ BARU TURUN 10 STUDS (biar badan nyentuh area CP)
+        r.CFrame = CFrame.new(targetPos + Vector3.new(0, -10, 0))
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+
         if SummitRun.enabled then
             r.Anchored = true
         end
