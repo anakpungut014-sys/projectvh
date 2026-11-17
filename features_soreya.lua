@@ -880,6 +880,82 @@ local function initAutoSummit()
 end
 
 -- ============================================================
+-- 👥 PLAYER TP — TP ke player lain + list player online
+-- ============================================================
+local PlayerTP = {
+    enabled = false,
+    selectedTarget = nil,
+    status = "⏸️ Idle",
+}
+
+local function getPlayerList()
+    local list = {}
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer then
+            table.insert(list, p)
+        end
+    end
+    return list
+end
+
+local function teleportToPlayer(targetName)
+    if not targetName then return false end
+    local target = Players:FindFirstChild(targetName)
+    if not target then
+        PlayerTP.status = "❌ Player gak ketemu: " .. targetName
+        return false
+    end
+    local char = target.Character
+    local hrp = char and char:FindFirstChild("HumanoidRootPart")
+    if not hrp then
+        PlayerTP.status = "❌ Target gak punya HRP"
+        return false
+    end
+    local myRoot = summitRoot()
+    if not myRoot then
+        PlayerTP.status = "❌ Lu gak punya HRP"
+        return false
+    end
+
+    -- Simpen posisi asal
+    local oldPos = myRoot.CFrame
+    local oldAnchored = myRoot.Anchored
+
+    -- TP
+    myRoot.Anchored = true
+    myRoot.CFrame = hrp.CFrame + Vector3.new(0, 3, 0)
+    myRoot.Velocity = Vector3.zero
+    myRoot.AssemblyLinearVelocity = Vector3.zero
+
+    task.wait(0.2)
+    myRoot.Anchored = oldAnchored
+
+    PlayerTP.status = "✅ TP ke " .. targetName
+    PlayerTP.selectedTarget = targetName
+    if _G.VRILZ_Notify then
+        _G.VRILZ_Notify("📍 TP ke " .. targetName, "success")
+    end
+    return true
+end
+
+_G.VRILZ_PlayerTP = PlayerTP
+_G.VRILZ_PlayerTPUI = {
+    getPlayers = function()
+        local out = {}
+        for _, p in ipairs(getPlayerList()) do
+            table.insert(out, {
+                name = p.Name,
+                displayName = p.DisplayName,
+                userId = p.UserId,
+            })
+        end
+        return out
+    end,
+    tpTo = function(name) return teleportToPlayer(name) end,
+    getStatus = function() return PlayerTP.status end,
+}
+
+-- ============================================================
 -- 🛒 SHOP FEATURES — Auto Sell / Upgrade Rod / Buy Skin
 -- Default: SEMUA RARITY = FALSE (user pilih sendiri)
 -- ============================================================
@@ -1372,6 +1448,13 @@ function Features.Init(sharedState)
     if not Features._ghostStarted then
         Features._ghostStarted = true
         pcall(initGhostMode)
+    end
+        -- ⭐ PLAYER TP
+    if not Features._playerTPStarted then
+        Features._playerTPStarted = true
+        pcall(function()
+            -- PlayerTP udah otomatis jalan, gak perlu init
+        end)
     end
 end
 
