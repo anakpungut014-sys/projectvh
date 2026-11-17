@@ -514,8 +514,9 @@ local function summitDetectCPByPosition(radius)
     return nil, bestDist
 end
 
--- ═══ VALIDASI: posisi real vs leaderstats ═══
--- Return: (cpYangHarusDikejar, alasan)
+-- ═══ VALIDASI: posisi real vs leaderstats (PAKAI KOORDINAT CP) ═══
+-- Logika: kalau posisi real lebih MAJU dari leaderstats → balik ke CP berikutnya
+-- Contoh: leaderstats 7, posisi CP 10 → balik ke CP 8
 local function summitResolveStartCP()
     local lsCP, lsValid = summitDetectCurrentCP()
     local posCP = summitDetectCPByPosition(80)
@@ -527,29 +528,19 @@ local function summitResolveStartCP()
     end
 
     -- ⭐ KASUS UTAMA: posisi real lebih MAJU dari leaderstats
-    -- Berarti ada CP yang kelewat (belum kesentuh)
+    -- → balik ke CP berikutnya (lsCP + 1)
     if posCP and posCP > lsCP then
-        -- ⭐ SELALU balik ke CP pertama yang belum kesentuh
-        -- Yaitu lsCP + 1 (CP berikutnya setelah leaderstats)
         local harusnya = lsCP + 1
         if harusnya > #SummitCheckpoints then
             harusnya = #SummitCheckpoints
         end
         return harusnya, string.format(
-            "posisi CP %d, leaderstats CP %d → balik ke CP %d (belum kesentuh)",
+            "posisi CP %d, leaderstats CP %d → balik ke CP %d",
             posCP, lsCP, harusnya
         )
     end
 
-    -- ⭐ KASUS 2: posisi real di belakang leaderstats (misal abis TP)
-    -- Pakai leaderstats aja
-    if posCP and posCP < lsCP then
-        return lsCP, string.format(
-            "posisi CP %d di belakang leaderstats CP %d → pakai leaderstats",
-            posCP, lsCP
-        )
-    end
-
+    -- ⭐ Posisi real di belakang / sama dengan leaderstats → pakai leaderstats
     return lsCP, "leaderstats"
 end
 
@@ -738,18 +729,6 @@ local function summitMainLoop()
                 for i = startNum, #SummitCheckpoints do
             if not SummitRun.enabled then return end
             local cp = SummitCheckpoints[i]
-
-            -- ⭐ SKIP kalau posisi real udah lewat CP ini
-            local root = summitRoot()
-            if root then
-                local d = (root.Position - cp.position).Magnitude
-                local nextCP = SummitCheckpoints[i + 1]
-                local dNext = nextCP and (root.Position - nextCP.position).Magnitude or math.huge
-                if dNext < 40 and d > 40 then
-                    SummitRun.status = "⏭️ CP " .. cp.number .. " udah lewat, skip"
-                    continue
-                end
-            end
 
             SummitRun.status = "🏔️ Loop #" .. n .. " — CP " .. cp.number
 
