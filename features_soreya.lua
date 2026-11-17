@@ -491,6 +491,63 @@ local function summitDetectCurrentCP()
     return cpNum, true
 end
 
+-- ═══ DETEKSI CP DARI POSISI REAL (bukan cuma leaderstats) ═══
+local function summitDetectCPByPosition(radius)
+    radius = radius or 60
+    local root = summitRoot()
+    if not root then return nil end
+
+    local pos = root.Position
+    local best, bestDist = nil, math.huge
+
+    for _, cp in ipairs(SummitCheckpoints) do
+        local d = (pos - cp.position).Magnitude
+        if d < bestDist then
+            bestDist = d
+            best = cp
+        end
+    end
+
+    if best and bestDist <= radius then
+        return best.number, bestDist
+    end
+    return nil, bestDist
+end
+
+-- ═══ VALIDASI: posisi real vs leaderstats ═══
+-- Return: (cpYangHarusDikejar, alasan)
+local function summitResolveStartCP()
+    local lsCP, lsValid = summitDetectCurrentCP()
+    local posCP, posDist = summitDetectCPByPosition(80)
+
+    -- Kalau leaderstats gak ada → pakai posisi / setting UI
+    if not lsValid then
+        if posCP then return posCP, "posisi (no leaderstats)" end
+        return tonumber(Shared.AutoSummit_StartCP) or 1, "setting UI"
+    end
+
+    -- Kalau posisi real lebih MAJU dari leaderstats → ada CP kelewat
+    if posCP and posCP > lsCP then
+        local missing = nil
+        local root = summitRoot()
+        for n = lsCP + 1, posCP - 1 do
+            local cp = SummitCheckpoints[n]
+            if cp and root then
+                local d = (root.Position - cp.position).Magnitude
+                if d > 40 then
+                    missing = n
+                    break
+                end
+            end
+        end
+        if missing then
+            return missing, string.format("posisi CP %d, leaderstats %d → balik ke CP %d", posCP, lsCP, missing)
+        end
+    end
+
+    return lsCP, "leaderstats"
+end
+
 -- ═══ NOTIF: "Lu lagi di CP X" ═══
 local function summitNotifyCP(cpNum)
     local msg = "📍 You are now at CP " .. cpNum
@@ -658,17 +715,13 @@ local function summitMainLoop()
         task.wait(1)
     end
 
-    -- ⭐ BACA CP DARI LEADERSTATS (prioritas utama)
-    local detectedCP, valid = summitDetectCurrentCP()
-    local startNum = detectedCP
-    if not valid then
-        startNum = tonumber(Shared.AutoSummit_StartCP) or 1
-    end
+        -- ⭐ RESOLVE CP: leaderstats + validasi posisi real
+    local startNum, reason = summitResolveStartCP()
     if startNum < 1 then startNum = 1 end
     if startNum > #SummitCheckpoints then startNum = #SummitCheckpoints end
 
-    SummitRun.status = "🚀 Mulai dari CP " .. startNum
-
+    SummitRun.status = "🚀 Mulai dari CP " .. startNum .. " (" .. reason .. ")"
+    
     -- ⭐ NOTIF: "Lu lagi di CP X"
     summitNotifyCP(startNum)
 
@@ -677,9 +730,22 @@ local function summitMainLoop()
         local n = SummitRun.loopCount
 
         -- ⭐ Naik CP dari startNum sampai 20 — DELAY 2s PER CP
-        for i = startNum, #SummitCheckpoints do
+                for i = startNum, #SummitCheckpoints do
             if not SummitRun.enabled then return end
             local cp = SummitCheckpoints[i]
+
+            -- ⭐ SKIP kalau posisi real udah lewat CP ini
+            local root = summitRoot()
+            if root then
+                local d = (root.Position - cp.position).Magnitude
+                local nextCP = SummitCheckpoints[i + 1]
+                local dNext = nextCP and (root.Position - nextCP.position).Magnitude or math.huge
+                if dNext < 40 and d > 40 then
+                    SummitRun.status = "⏭️ CP " .. cp.number .. " udah lewat, skip"
+                    continue
+                end
+            end
+
             SummitRun.status = "🏔️ Loop #" .. n .. " — CP " .. cp.number
 
             local ok = summitTpToCP(cp, "CP " .. cp.number, SummitCfg.MaxRetryPerCP)
@@ -727,16 +793,11 @@ local function summitMainLoop()
 
         if not SummitRun.enabled then return end
 
-        -- ⭐ LOOP BERIKUTNYA: baca ulang leaderstats
-        local newCP, newValid = summitDetectCurrentCP()
-        if newValid then
-            startNum = newCP
-            SummitRun.status = "🔄 Loop berikutnya dari CP " .. newCP
-            summitNotifyCP(newCP)
-        else
-            startNum = 1
-            SummitRun.status = "🔄 Loop berikutnya dari CP 1"
-        end
+                -- ⭐ LOOP BERIKUTNYA: resolve ulang (leaderstats + posisi)
+        local newCP, newReason = summitResolveStartCP()
+        startNum = newCP
+        SummitRun.status = "🔄 Loop berikutnya dari CP " .. newCP .. " (" .. newReason .. ")"
+        summitNotifyCP(newCP)
 
         task.wait(0.5)
     end
