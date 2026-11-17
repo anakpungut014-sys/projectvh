@@ -518,7 +518,7 @@ end
 -- Return: (cpYangHarusDikejar, alasan)
 local function summitResolveStartCP()
     local lsCP, lsValid = summitDetectCurrentCP()
-    local posCP, posDist = summitDetectCPByPosition(80)
+    local posCP = summitDetectCPByPosition(80)
 
     -- Kalau leaderstats gak ada → pakai posisi / setting UI
     if not lsValid then
@@ -526,23 +526,28 @@ local function summitResolveStartCP()
         return tonumber(Shared.AutoSummit_StartCP) or 1, "setting UI"
     end
 
-    -- Kalau posisi real lebih MAJU dari leaderstats → ada CP kelewat
+    -- ⭐ KASUS UTAMA: posisi real lebih MAJU dari leaderstats
+    -- Berarti ada CP yang kelewat (belum kesentuh)
     if posCP and posCP > lsCP then
-        local missing = nil
-        local root = summitRoot()
-        for n = lsCP + 1, posCP - 1 do
-            local cp = SummitCheckpoints[n]
-            if cp and root then
-                local d = (root.Position - cp.position).Magnitude
-                if d > 40 then
-                    missing = n
-                    break
-                end
-            end
+        -- ⭐ SELALU balik ke CP pertama yang belum kesentuh
+        -- Yaitu lsCP + 1 (CP berikutnya setelah leaderstats)
+        local harusnya = lsCP + 1
+        if harusnya > #SummitCheckpoints then
+            harusnya = #SummitCheckpoints
         end
-        if missing then
-            return missing, string.format("posisi CP %d, leaderstats %d → balik ke CP %d", posCP, lsCP, missing)
-        end
+        return harusnya, string.format(
+            "posisi CP %d, leaderstats CP %d → balik ke CP %d (belum kesentuh)",
+            posCP, lsCP, harusnya
+        )
+    end
+
+    -- ⭐ KASUS 2: posisi real di belakang leaderstats (misal abis TP)
+    -- Pakai leaderstats aja
+    if posCP and posCP < lsCP then
+        return lsCP, string.format(
+            "posisi CP %d di belakang leaderstats CP %d → pakai leaderstats",
+            posCP, lsCP
+        )
     end
 
     return lsCP, "leaderstats"
