@@ -491,9 +491,9 @@ local function summitDetectCurrentCP()
     return cpNum, true
 end
 
--- ═══ DETEKSI CP DARI POSISI REAL (bukan cuma leaderstats) ═══
-local function summitDetectCPByPosition(radius)
-    radius = radius or 60
+-- ═══ DETEKSI CP DARI POSISI REAL (TANPA RADIUS) ═══
+-- Selalu return CP terdekat, gak peduli jaraknya
+local function summitDetectCPByPosition()
     local root = summitRoot()
     if not root then return nil end
 
@@ -508,18 +508,20 @@ local function summitDetectCPByPosition(radius)
         end
     end
 
-    if best and bestDist <= radius then
+    if best then
         return best.number, bestDist
     end
-    return nil, bestDist
+    return nil
 end
 
 -- ═══ VALIDASI: posisi real vs leaderstats (PAKAI KOORDINAT CP) ═══
 -- Logika: kalau posisi real lebih MAJU dari leaderstats → balik ke CP berikutnya
--- Contoh: leaderstats 7, posisi CP 10 → balik ke CP 8
+-- Contoh: leaderstats 9, posisi CP 11 → balik ke CP 10
+--         leaderstats 7, posisi CP 9  → balik ke CP 8
+--         leaderstats 4, posisi CP 6  → balik ke CP 5
 local function summitResolveStartCP()
     local lsCP, lsValid = summitDetectCurrentCP()
-    local posCP = summitDetectCPByPosition(80)
+    local posCP = summitDetectCPByPosition()
 
     -- Kalau leaderstats gak ada → pakai posisi / setting UI
     if not lsValid then
