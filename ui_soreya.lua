@@ -6888,10 +6888,232 @@ do
     end, "Shop_AutoBuySkin_Enabled")
 end
 
+-- ============================================================
+-- 👥 TAB: PLAYER LIST — avatar + nama server, klik = TP
+-- ============================================================
+do
+    -- ═══ PAGE (scrolling) ═══
+    local playerPage = Instance.new("ScrollingFrame")
+    playerPage.Name = "PlayerPage"
+    playerPage.Size = UDim2.fromScale(1, 1)
+    playerPage.BackgroundTransparency = 1
+    playerPage.BorderSizePixel = 0
+    playerPage.ScrollBarThickness = 4
+    playerPage.ScrollBarImageColor3 = C.Accent
+    playerPage.CanvasSize = UDim2.new(0, 0, 0, 0)
+    playerPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    playerPage.ZIndex = 1
+    playerPage.Parent = nil   -- nanti di-reparent oleh registerTab
+    pages.Player = playerPage
+    registerTheme(playerPage, "Accent", "ScrollBarImageColor3")
+
+    local pagePad = Instance.new("UIPadding")
+    pagePad.PaddingTop = UDim.new(0, 10)
+    pagePad.PaddingBottom = UDim.new(0, 10)
+    pagePad.PaddingLeft = UDim.new(0, 10)
+    pagePad.PaddingRight = UDim.new(0, 10)
+    pagePad.Parent = playerPage
+
+    local pageLayout = Instance.new("UIListLayout")
+    pageLayout.Padding = UDim.new(0, CFG.CARD_GAP)
+    pageLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    pageLayout.Parent = playerPage
+
+    -- ═══ CARD ═══
+    local playerCard, playerContent = makeCard(playerPage, "👥 PLAYER LIST", 1)
+
+    -- status
+    local statusLbl = Instance.new("TextLabel")
+    statusLbl.Size = UDim2.new(1, 0, 0, 18)
+    statusLbl.BackgroundTransparency = 1
+    statusLbl.Text = "Scanning..."
+    statusLbl.TextColor3 = C.Muted
+    statusLbl.Font = Enum.Font.GothamMedium
+    statusLbl.TextSize = CFG.FONT_MUTED
+    statusLbl.TextXAlignment = Enum.TextXAlignment.Left
+    statusLbl.LayoutOrder = 1
+    statusLbl.Parent = playerContent
+    registerTheme(statusLbl, "Muted", "TextColor3")
+
+    -- list container
+    local listFrame = Instance.new("Frame")
+    listFrame.Size = UDim2.new(1, 0, 0, 0)
+    listFrame.AutomaticSize = Enum.AutomaticSize.Y
+    listFrame.BackgroundTransparency = 1
+    listFrame.LayoutOrder = 2
+    listFrame.Parent = playerContent
+
+    local listLayout = Instance.new("UIListLayout")
+    listLayout.Padding = UDim.new(0, 6)
+    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    listLayout.Parent = listFrame
+
+    local emptyLbl = Instance.new("TextLabel")
+    emptyLbl.Size = UDim2.new(1, 0, 0, 36)
+    emptyLbl.BackgroundTransparency = 1
+    emptyLbl.Text = "😴 Tidak ada player lain"
+    emptyLbl.TextColor3 = C.Muted
+    emptyLbl.Font = Enum.Font.GothamMedium
+    emptyLbl.TextSize = CFG.FONT_MUTED
+    emptyLbl.LayoutOrder = 1
+    emptyLbl.Parent = listFrame
+    registerTheme(emptyLbl, "Muted", "TextColor3")
+
+    -- ═══ RENDER ═══
+    local function renderPlayerList()
+        for _, ch in ipairs(listFrame:GetChildren()) do
+            if ch:IsA("TextButton") and ch.Name == "PlayerRow" then
+                ch:Destroy()
+            end
+        end
+
+        local PS = _G.VRILZ_PlayersState
+        local list = PS and PS.list or {}
+
+        if #list == 0 then
+            emptyLbl.Visible = true
+            statusLbl.Text = "😴 Tidak ada player lain"
+            return
+        end
+        emptyLbl.Visible = false
+        statusLbl.Text = string.format("👥 %d player online", #list)
+
+        for i, entry in ipairs(list) do
+            local plr = entry.player
+            if plr and plr.Parent then
+                local row = Instance.new("TextButton")
+                row.Name = "PlayerRow"
+                row.Size = UDim2.new(1, 0, 0, 46)
+                row.BackgroundColor3 = C.Surface3
+                row.BackgroundTransparency = 0.4
+                row.Text = ""
+                row.AutoButtonColor = false
+                row.LayoutOrder = i + 10
+                row.Parent = listFrame
+                registerTheme(row, "Surface3", "BackgroundColor3")
+
+                local rc = Instance.new("UICorner")
+                rc.CornerRadius = UDim.new(0, 8)
+                rc.Parent = row
+
+                local rs = Instance.new("UIStroke")
+                rs.Color = C.Accent
+                rs.Thickness = 1
+                rs.Transparency = 0.7
+                rs.Parent = row
+                registerTheme(rs, "Accent", "Color")
+
+                -- avatar
+                local av = Instance.new("Frame")
+                av.Size = UDim2.fromOffset(34, 34)
+                av.Position = UDim2.new(0, 6, 0.5, -17)
+                av.BackgroundColor3 = C.Surface2
+                av.BorderSizePixel = 0
+                av.Parent = row
+                registerTheme(av, "Surface2", "BackgroundColor3")
+                local avc = Instance.new("UICorner")
+                avc.CornerRadius = UDim.new(1, 0)
+                avc.Parent = av
+
+                local img = Instance.new("ImageLabel")
+                img.Size = UDim2.fromScale(1, 1)
+                img.BackgroundTransparency = 1
+                img.Image = entry.thumb or ""
+                img.Parent = av
+                local imgc = Instance.new("UICorner")
+                imgc.CornerRadius = UDim.new(1, 0)
+                imgc.Parent = img
+
+                -- nama
+                local nameLbl = Instance.new("TextLabel")
+                nameLbl.Size = UDim2.new(1, -52, 0, 18)
+                nameLbl.Position = UDim2.new(0, 48, 0, 6)
+                nameLbl.BackgroundTransparency = 1
+                nameLbl.Text = plr.DisplayName
+                nameLbl.TextColor3 = C.Text
+                nameLbl.Font = Enum.Font.GothamBold
+                nameLbl.TextSize = CFG.FONT_LABEL
+                nameLbl.TextXAlignment = Enum.TextXAlignment.Left
+                nameLbl.TextTruncate = Enum.TextTruncate.AtEnd
+                nameLbl.Parent = row
+                registerTheme(nameLbl, "Text", "TextColor3")
+
+                local userLbl = Instance.new("TextLabel")
+                userLbl.Size = UDim2.new(1, -52, 0, 14)
+                userLbl.Position = UDim2.new(0, 48, 0, 24)
+                userLbl.BackgroundTransparency = 1
+                userLbl.Text = "@" .. plr.Name
+                userLbl.TextColor3 = C.Muted
+                userLbl.Font = Enum.Font.GothamMedium
+                userLbl.TextSize = CFG.FONT_MUTED
+                userLbl.TextXAlignment = Enum.TextXAlignment.Left
+                userLbl.TextTruncate = Enum.TextTruncate.AtEnd
+                userLbl.Parent = row
+                registerTheme(userLbl, "Muted", "TextColor3")
+
+                row.MouseEnter:Connect(function()
+                    TweenService:Create(row, TweenInfo.new(0.15), {BackgroundTransparency = 0.15}):Play()
+                    TweenService:Create(rs, TweenInfo.new(0.15), {Transparency = 0.3}):Play()
+                end)
+                row.MouseLeave:Connect(function()
+                    TweenService:Create(row, TweenInfo.new(0.15), {BackgroundTransparency = 0.4}):Play()
+                    TweenService:Create(rs, TweenInfo.new(0.15), {Transparency = 0.7}):Play()
+                end)
+
+                row.MouseButton1Click:Connect(function()
+                    if _G.VRILZ_PlayersUI and _G.VRILZ_PlayersUI.teleportTo then
+                        _G.VRILZ_PlayersUI.teleportTo(plr)
+                        notify("📍 Teleport ke " .. plr.DisplayName, "info")
+                    else
+                        notify("❌ Feature Players belum aktif", "error")
+                    end
+                end)
+            end
+        end
+    end
+
+    task.spawn(function()
+        while playerCard.Parent do
+            task.wait(1.5)
+            pcall(renderPlayerList)
+        end
+    end)
+
+    local scanBtn = Instance.new("TextButton")
+    scanBtn.Size = UDim2.new(1, 0, 0, CFG.ACTION_H)
+    scanBtn.BackgroundColor3 = C.Accent
+    scanBtn.Text = "🔄 Scan Players"
+    scanBtn.TextColor3 = Color3.new(1, 1, 1)
+    scanBtn.Font = Enum.Font.GothamBold
+    scanBtn.TextSize = CFG.FONT_LABEL
+    scanBtn.BorderSizePixel = 0
+    scanBtn.LayoutOrder = 3
+    scanBtn.Parent = playerContent
+    registerTheme(scanBtn, "Accent", "BackgroundColor3")
+
+    local sc = Instance.new("UICorner")
+    sc.CornerRadius = UDim.new(0, 8)
+    sc.Parent = scanBtn
+
+    scanBtn.MouseButton1Click:Connect(function()
+        if _G.VRILZ_PlayersUI then
+            _G.VRILZ_PlayersUI.scan()
+            notify("🔄 Scanning players...", "info")
+        end
+    end)
+
+    task.defer(function()
+        if _G.VRILZ_PlayersUI then _G.VRILZ_PlayersUI.scan() end
+        task.wait(1)
+        pcall(renderPlayerList)
+    end)
+end
+
 registerTab("Info", "129516985087314", "Info", true)
 registerTab("AutoSummit", "127064137622496", "Auto Summit", true)
 registerTab("AutoFish", "118895892824960", "Auto Fish", true)
 registerTab("Shop", "101498199599518", "Shop", true)
+registerTab("Player", "85209430814229", "Player", true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Webhook", "78129393420657", "Webhook", true)
 registerTab("Settings", "97834340359225", "Settings", true)
@@ -9828,6 +10050,7 @@ task.spawn(function()
             "rbxassetid://127064137622496",  -- AutoSummit
             "rbxassetid://118895892824960",  -- AutoFish
             "rbxassetid://101498199599518",  -- Shop
+            "rbxassetid://85209430814229",  -- Player
             "rbxassetid://83047761221446",   -- Live Chat
             "rbxassetid://78129393420657",   -- Webhook
             "rbxassetid://97834340359225",   -- Settings
