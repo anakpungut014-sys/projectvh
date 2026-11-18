@@ -6888,10 +6888,334 @@ do
     end, "Shop_AutoBuySkin_Enabled")
 end
 
+-- ============================================================
+-- 👤 TP PLAYER TAB
+-- Realtime players yang benar-benar ada di server Roblox
+-- ============================================================
+do
+    local tpPlayerPage = Instance.new("Frame")
+    tpPlayerPage.Name = "TpPlayer"
+    tpPlayerPage.Size = UDim2.fromScale(1, 1)
+    tpPlayerPage.BackgroundTransparency = 1
+    tpPlayerPage.BorderSizePixel = 0
+    tpPlayerPage.Visible = false
+    tpPlayerPage.ZIndex = 7
+    tpPlayerPage.Parent = pageHolder
+    pages.TpPlayer = tpPlayerPage
+
+    -- HEADER
+    local tpHeader = Instance.new("TextLabel")
+    tpHeader.Size = UDim2.new(1, -20, 0, 34)
+    tpHeader.Position = UDim2.fromOffset(10, 6)
+    tpHeader.BackgroundTransparency = 1
+    tpHeader.Text = "👤 TP PLAYER"
+    tpHeader.TextColor3 = C.Text
+    tpHeader.Font = Enum.Font.GothamBold
+    tpHeader.TextSize = IS_MOBILE and 13 or 15
+    tpHeader.TextXAlignment = Enum.TextXAlignment.Left
+    tpHeader.ZIndex = 8
+    tpHeader.Parent = tpPlayerPage
+    registerTheme(tpHeader, "Text", "TextColor3")
+
+    -- INFO SERVER
+    local tpInfo = Instance.new("TextLabel")
+    tpInfo.Size = UDim2.new(1, -20, 0, 22)
+    tpInfo.Position = UDim2.fromOffset(10, 38)
+    tpInfo.BackgroundTransparency = 1
+    tpInfo.Text = "Players di server ini"
+    tpInfo.TextColor3 = C.Muted
+    tpInfo.Font = Enum.Font.GothamSemibold
+    tpInfo.TextSize = CFG.FONT_MUTED
+    tpInfo.TextXAlignment = Enum.TextXAlignment.Left
+    tpInfo.ZIndex = 8
+    tpInfo.Parent = tpPlayerPage
+    registerTheme(tpInfo, "Muted", "TextColor3")
+
+    -- PLAYER LIST
+    local tpList = Instance.new("ScrollingFrame")
+    tpList.Name = "PlayerList"
+    tpList.Size = UDim2.new(1, -20, 1, -70)
+    tpList.Position = UDim2.fromOffset(10, 65)
+    tpList.BackgroundTransparency = 1
+    tpList.BorderSizePixel = 0
+    tpList.ScrollBarThickness = 4
+    tpList.ScrollBarImageColor3 = C.Accent
+    tpList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    tpList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    tpList.ZIndex = 8
+    tpList.Parent = tpPlayerPage
+    registerTheme(tpList, "Accent", "ScrollBarImageColor3")
+
+    local tpLayout = Instance.new("UIListLayout")
+    tpLayout.Padding = UDim.new(0, 7)
+    tpLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    tpLayout.Parent = tpList
+
+    local tpPadding = Instance.new("UIPadding")
+    tpPadding.PaddingBottom = UDim.new(0, 8)
+    tpPadding.Parent = tpList
+
+    local playerRows = {}
+
+    -- TELEPORT KE BELAKANG PLAYER
+    local function teleportBehind(targetPlayer)
+        if not targetPlayer or targetPlayer == LocalPlayer then
+            return
+        end
+
+        local myCharacter = LocalPlayer.Character
+        local targetCharacter = targetPlayer.Character
+
+        if not myCharacter or not targetCharacter then
+            notify("❌ Character tidak ditemukan", "error")
+            return
+        end
+
+        local myRoot = myCharacter:FindFirstChild("HumanoidRootPart")
+        local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
+
+        if not myRoot or not targetRoot then
+            notify("❌ HumanoidRootPart tidak ditemukan", "error")
+            return
+        end
+
+        -- Posisi tepat di belakang target
+        myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 3)
+
+        notify(
+            "✓ Teleport ke belakang " .. targetPlayer.DisplayName,
+            "success"
+        )
+    end
+
+    -- BUAT ROW PLAYER
+    local function createPlayerRow(player)
+        if not player or player == LocalPlayer then
+            return
+        end
+
+        if playerRows[player] then
+            return
+        end
+
+        local row = Instance.new("TextButton")
+        row.Name = "Player_" .. player.UserId
+        row.Size = UDim2.new(1, -4, 0, IS_MOBILE and 58 or 64)
+        row.BackgroundColor3 = C.Surface2
+        row.BackgroundTransparency = 0.08
+        row.BorderSizePixel = 0
+        row.Text = ""
+        row.AutoButtonColor = false
+        row.ZIndex = 9
+        row.Parent = tpList
+        registerTheme(row, "Surface2", "BackgroundColor3")
+
+        local rowCorner = Instance.new("UICorner")
+        rowCorner.CornerRadius = UDim.new(0, 10)
+        rowCorner.Parent = row
+
+        local rowStroke = Instance.new("UIStroke")
+        rowStroke.Color = C.Accent
+        rowStroke.Thickness = 1
+        rowStroke.Transparency = 0.8
+        rowStroke.Parent = row
+        registerTheme(rowStroke, "Accent", "Color")
+
+        -- AVATAR
+        local avatarSize = IS_MOBILE and 42 or 48
+
+        local avatar = Instance.new("ImageLabel")
+        avatar.Name = "Avatar"
+        avatar.Size = UDim2.fromOffset(avatarSize, avatarSize)
+        avatar.Position = UDim2.new(0, 8, 0.5, -avatarSize / 2)
+        avatar.BackgroundColor3 = C.Surface3
+        avatar.BorderSizePixel = 0
+        avatar.ZIndex = 10
+        avatar.Parent = row
+        registerTheme(avatar, "Surface3", "BackgroundColor3")
+
+        local avatarCorner = Instance.new("UICorner")
+        avatarCorner.CornerRadius = UDim.new(1, 0)
+        avatarCorner.Parent = avatar
+
+        -- LOAD AVATAR ROBLOX
+        task.spawn(function()
+            local ok, image = pcall(function()
+                return Players:GetUserThumbnailAsync(
+                    player.UserId,
+                    Enum.ThumbnailType.HeadShot,
+                    Enum.ThumbnailSize.Size100x100
+                )
+            end)
+
+            if ok and image and avatar and avatar.Parent then
+                avatar.Image = image
+            end
+        end)
+
+        -- DISPLAY NAME
+        local displayName = Instance.new("TextLabel")
+        displayName.Size = UDim2.new(
+            1,
+            -(avatarSize + 25),
+            0,
+            22
+        )
+        displayName.Position = UDim2.fromOffset(
+            avatarSize + 18,
+            IS_MOBILE and 9 or 10
+        )
+        displayName.BackgroundTransparency = 1
+        displayName.Text = player.DisplayName
+        displayName.TextColor3 = C.Text
+        displayName.Font = Enum.Font.GothamBold
+        displayName.TextSize = IS_MOBILE and 12 or 13
+        displayName.TextXAlignment = Enum.TextXAlignment.Left
+        displayName.TextTruncate = Enum.TextTruncate.AtEnd
+        displayName.ZIndex = 10
+        displayName.Parent = row
+        registerTheme(displayName, "Text", "TextColor3")
+
+        -- USERNAME
+        local username = Instance.new("TextLabel")
+        username.Size = UDim2.new(
+            1,
+            -(avatarSize + 25),
+            0,
+            18
+        )
+        username.Position = UDim2.fromOffset(
+            avatarSize + 18,
+            IS_MOBILE and 30 or 34
+        )
+        username.BackgroundTransparency = 1
+        username.Text = "@" .. player.Name
+        username.TextColor3 = C.Muted
+        username.Font = Enum.Font.GothamSemibold
+        username.TextSize = IS_MOBILE and 9 or 10
+        username.TextXAlignment = Enum.TextXAlignment.Left
+        username.TextTruncate = Enum.TextTruncate.AtEnd
+        username.ZIndex = 10
+        username.Parent = row
+        registerTheme(username, "Muted", "TextColor3")
+
+        -- TP ICON/TEXT
+        local tpLabel = Instance.new("TextLabel")
+        tpLabel.Size = UDim2.fromOffset(IS_MOBILE and 42 or 50, 24)
+        tpLabel.Position = UDim2.new(
+            1,
+            -(IS_MOBILE and 50 or 58),
+            0.5,
+            -12
+        )
+        tpLabel.BackgroundColor3 = C.Accent
+        tpLabel.BackgroundTransparency = 0.15
+        tpLabel.Text = "TP"
+        tpLabel.TextColor3 = Color3.new(1, 1, 1)
+        tpLabel.Font = Enum.Font.GothamBold
+        tpLabel.TextSize = IS_MOBILE and 9 or 10
+        tpLabel.ZIndex = 11
+        tpLabel.Parent = row
+        registerTheme(tpLabel, "Accent", "BackgroundColor3")
+
+        local tpLabelCorner = Instance.new("UICorner")
+        tpLabelCorner.CornerRadius = UDim.new(0, 7)
+        tpLabelCorner.Parent = tpLabel
+
+        -- KLIK PLAYER
+        row.MouseButton1Click:Connect(function()
+            teleportBehind(player)
+        end)
+
+        -- HOVER
+        row.MouseEnter:Connect(function()
+            if row and row.Parent then
+                TweenService:Create(
+                    row,
+                    TweenInfo.new(0.12),
+                    {BackgroundTransparency = 0}
+                ):Play()
+            end
+        end)
+
+        row.MouseLeave:Connect(function()
+            if row and row.Parent then
+                TweenService:Create(
+                    row,
+                    TweenInfo.new(0.12),
+                    {BackgroundTransparency = 0.08}
+                ):Play()
+            end
+        end)
+
+        playerRows[player] = row
+    end
+
+    -- HAPUS PLAYER DARI LIST
+    local function removePlayerRow(player)
+        local row = playerRows[player]
+
+        if row then
+            playerRows[player] = nil
+            pcall(function()
+                row:Destroy()
+            end)
+        end
+    end
+
+    -- REFRESH SEMUA PLAYER
+    local function refreshPlayers()
+        local currentPlayers = {}
+
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player ~= LocalPlayer then
+                currentPlayers[player] = true
+
+                if not playerRows[player] then
+                    createPlayerRow(player)
+                end
+            end
+        end
+
+        -- Hapus yang sudah tidak ada
+        for player, row in pairs(playerRows) do
+            if not currentPlayers[player] then
+                removePlayerRow(player)
+            end
+        end
+
+        local count = 0
+
+        for player in pairs(currentPlayers) do
+            count = count + 1
+        end
+
+        tpInfo.Text = tostring(count) .. " player di server"
+    end
+
+    -- PLAYER JOIN
+    Players.PlayerAdded:Connect(function(player)
+        if player ~= LocalPlayer then
+            createPlayerRow(player)
+            refreshPlayers()
+        end
+    end)
+
+    -- PLAYER LEAVE
+    Players.PlayerRemoving:Connect(function(player)
+        removePlayerRow(player)
+        task.defer(refreshPlayers)
+    end)
+
+    -- PLAYER YANG SUDAH ADA DI SERVER
+    refreshPlayers()
+end
+
 registerTab("Info", "129516985087314", "Info", true)
 registerTab("AutoSummit", "127064137622496", "Auto Summit", true)
 registerTab("AutoFish", "118895892824960", "Auto Fish", true)
 registerTab("Shop", "101498199599518", "Shop", true)
+registerTab("TpPlayer", "85209430814229", "Tp Player", true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Webhook", "78129393420657", "Webhook", true)
 registerTab("Settings", "97834340359225", "Settings", true)
@@ -9828,6 +10152,7 @@ task.spawn(function()
             "rbxassetid://127064137622496",  -- AutoSummit
             "rbxassetid://118895892824960",  -- AutoFish
             "rbxassetid://101498199599518",  -- Shop
+            "rbxassetid://85209430814229",  -- Tp Player
             "rbxassetid://83047761221446",   -- Live Chat
             "rbxassetid://78129393420657",   -- Webhook
             "rbxassetid://97834340359225",   -- Settings
