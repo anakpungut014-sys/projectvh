@@ -6889,7 +6889,7 @@ do
 end
 
 -- ============================================================
--- 👤 TP PLAYER TAB — v4 (polished UI + click feedback + English)
+-- 👤 TP PLAYER TAB — v5 (badge result: Success / Failed + UI)
 -- ============================================================
 do
     local tpPlayerPage = Instance.new("Frame")
@@ -6973,45 +6973,53 @@ do
 
     local playerRows = {}
 
-    -- ========================================================
-    -- Helper
-    -- ========================================================
     local function makePassive(gui)
         pcall(function() gui.Active = false end)
         pcall(function() gui.Selectable = false end)
     end
 
     -- ========================================================
-    -- Badge state helper
+    -- BADGE STATE — text lengkap: TP / ... / Success / Failed
     -- ========================================================
     local function setBadgeState(badge, label, state)
         if not badge or not badge.Parent then return end
+
         if state == "idle" then
-            TweenService:Create(badge, TweenInfo.new(0.15),
+            TweenService:Create(badge, TweenInfo.new(0.18),
                 {BackgroundColor3 = C.Accent, BackgroundTransparency = 0.05}):Play()
             label.Text = "TP"
             label.TextColor3 = Color3.new(1, 1, 1)
+            label.TextSize = IS_MOBILE and 10 or 11
+            if badge:FindFirstChild("UIGradient") then
+                badge.UIGradient.Enabled = true
+            end
+
         elseif state == "loading" then
-            TweenService:Create(badge, TweenInfo.new(0.15),
+            TweenService:Create(badge, TweenInfo.new(0.18),
                 {BackgroundColor3 = Color3.fromRGB(255, 190, 70), BackgroundTransparency = 0}):Play()
             label.Text = "..."
             label.TextColor3 = Color3.new(1, 1, 1)
+            label.TextSize = IS_MOBILE and 11 or 12
+
         elseif state == "success" then
-            TweenService:Create(badge, TweenInfo.new(0.15),
-                {BackgroundColor3 = Color3.fromRGB(80, 210, 120), BackgroundTransparency = 0}):Play()
-            label.Text = "✓"
+            TweenService:Create(badge, TweenInfo.new(0.18),
+                {BackgroundColor3 = Color3.fromRGB(60, 200, 110), BackgroundTransparency = 0}):Play()
+            label.Text = "Success"
             label.TextColor3 = Color3.new(1, 1, 1)
-            task.delay(0.9, function()
+            label.TextSize = IS_MOBILE and 9 or 10
+            task.delay(1.4, function()
                 if badge and badge.Parent and label and label.Parent then
                     setBadgeState(badge, label, "idle")
                 end
             end)
+
         elseif state == "failed" then
-            TweenService:Create(badge, TweenInfo.new(0.15),
-                {BackgroundColor3 = Color3.fromRGB(235, 75, 75), BackgroundTransparency = 0}):Play()
-            label.Text = "✗"
+            TweenService:Create(badge, TweenInfo.new(0.18),
+                {BackgroundColor3 = Color3.fromRGB(230, 70, 70), BackgroundTransparency = 0}):Play()
+            label.Text = "Failed"
             label.TextColor3 = Color3.new(1, 1, 1)
-            task.delay(0.9, function()
+            label.TextSize = IS_MOBILE and 9 or 10
+            task.delay(1.4, function()
                 if badge and badge.Parent and label and label.Parent then
                     setBadgeState(badge, label, "idle")
                 end
@@ -7120,10 +7128,10 @@ do
                 RunService.Heartbeat:Wait()
             end
 
-            -- Verify: cek jarak akhir ke target
+            -- Verify
             if myRoot and myRoot.Parent and targetRoot and targetRoot.Parent then
                 local finalDist = (myRoot.Position - targetRoot.Position).Magnitude
-                success = finalDist < 10
+                success = finalDist < 15
             end
 
             if success then
@@ -7145,7 +7153,7 @@ do
         if not player or player == LocalPlayer then return end
         if playerRows[player] then return end
 
-        local rowHeight = IS_MOBILE and 60 or 66
+        local rowHeight = IS_MOBILE and 62 or 68
 
         local row = Instance.new("TextButton")
         row.Name = "Player_" .. player.UserId
@@ -7174,14 +7182,14 @@ do
         registerTheme(rowStroke, "Accent", "Color")
 
         -- ===== AVATAR =====
-        local avatarSize = IS_MOBILE and 44 or 48
+        local avatarSize = IS_MOBILE and 46 or 50
         local pad = 10
 
         local avatarRing = Instance.new("Frame")
         avatarRing.Size = UDim2.fromOffset(avatarSize + 4, avatarSize + 4)
         avatarRing.Position = UDim2.new(0, pad - 2, 0.5, -(avatarSize + 4) / 2)
         avatarRing.BackgroundColor3 = C.Accent
-        avatarRing.BackgroundTransparency = 0.5
+        avatarRing.BackgroundTransparency = 0.45
         avatarRing.BorderSizePixel = 0
         avatarRing.ZIndex = 9
         avatarRing.Parent = row
@@ -7224,8 +7232,8 @@ do
         local textX = pad + avatarSize + 12
 
         local displayName = Instance.new("TextLabel")
-        displayName.Size = UDim2.new(1, -(textX + (IS_MOBILE and 72 or 84)), 0, 22)
-        displayName.Position = UDim2.fromOffset(textX, IS_MOBILE and 9 or 12)
+        displayName.Size = UDim2.new(1, -(textX + 100), 0, 22)
+        displayName.Position = UDim2.fromOffset(textX, IS_MOBILE and 10 or 13)
         displayName.BackgroundTransparency = 1
         displayName.Text = player.DisplayName
         displayName.TextColor3 = C.Text
@@ -7240,8 +7248,8 @@ do
         registerTheme(displayName, "Text", "TextColor3")
 
         local subRow = Instance.new("Frame")
-        subRow.Size = UDim2.new(1, -(textX + (IS_MOBILE and 72 or 84)), 0, 16)
-        subRow.Position = UDim2.fromOffset(textX, IS_MOBILE and 31 or 36)
+        subRow.Size = UDim2.new(1, -(textX + 100), 0, 16)
+        subRow.Position = UDim2.fromOffset(textX, IS_MOBILE and 32 or 37)
         subRow.BackgroundTransparency = 1
         subRow.ZIndex = 10
         subRow.Parent = row
@@ -7276,8 +7284,8 @@ do
         username.Parent = subRow
         registerTheme(username, "Muted", "TextColor3")
 
-        -- ===== BADGE =====
-        local badgeW = IS_MOBILE and 50 or 58
+        -- ===== BADGE (lebih lebar biar "Success"/"Failed" muat) =====
+        local badgeW = IS_MOBILE and 64 or 72
         local badgeH = 30
 
         local badge = Instance.new("Frame")
@@ -7294,6 +7302,19 @@ do
         local badgeCorner = Instance.new("UICorner")
         badgeCorner.CornerRadius = UDim.new(1, 0)
         badgeCorner.Parent = badge
+
+        -- gradient accent biar nggak polos
+        local badgeGradient = Instance.new("UIGradient")
+        badgeGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(220, 220, 220)),
+        })
+        badgeGradient.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.75),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+        badgeGradient.Rotation = 45
+        badgeGradient.Parent = badge
 
         local badgeLabel = Instance.new("TextLabel")
         badgeLabel.Size = UDim2.fromScale(1, 1)
