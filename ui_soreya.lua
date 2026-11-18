@@ -6957,36 +6957,65 @@ do
 
     local playerRows = {}
 
-    -- TELEPORT KE BELAKANG PLAYER
-    local function teleportBehind(targetPlayer)
-        if not targetPlayer or targetPlayer == LocalPlayer then
-            return
-        end
+-- ============================================================
+-- TELEPORT KE BELAKANG PLAYER (RAW, 3 studs, tanpa cek jarak)
+-- ============================================================
+local RunService = game:GetService("RunService")
 
-        local myCharacter = LocalPlayer.Character
-        local targetCharacter = targetPlayer.Character
-
-        if not myCharacter or not targetCharacter then
-            notify("❌ Character tidak ditemukan", "error")
-            return
-        end
-
-        local myRoot = myCharacter:FindFirstChild("HumanoidRootPart")
-        local targetRoot = targetCharacter:FindFirstChild("HumanoidRootPart")
-
-        if not myRoot or not targetRoot then
-            notify("❌ HumanoidRootPart tidak ditemukan", "error")
-            return
-        end
-
-        -- Posisi tepat di belakang target
-        myRoot.CFrame = targetRoot.CFrame * CFrame.new(0, 0, 3)
-
-        notify(
-            "✓ Teleport ke belakang " .. targetPlayer.DisplayName,
-            "success"
-        )
+local function teleportBehind(targetPlayer)
+    if not targetPlayer or targetPlayer == LocalPlayer then
+        return
     end
+
+    local myChar = LocalPlayer.Character
+    local targetChar = targetPlayer.Character
+
+    if not myChar or not targetChar then
+        notify("❌ Character tidak ditemukan", "error")
+        return
+    end
+
+    -- Posisi 3 studs di belakang target (pakai Pivot = anti gagal walau root beda nama)
+    local behindCF = targetChar:GetPivot() * CFrame.new(0, 0, 3)
+
+    -- Lepas dari seat/kendaraan biar ga ketarik balik
+    local myHum = myChar:FindFirstChildOfClass("Humanoid")
+    if myHum then
+        myHum.Sit = false
+    end
+
+    local myRoot = myChar:FindFirstChild("HumanoidRootPart") or myChar.PrimaryPart
+
+    -- Nolkan velocity SEBELUM TP (biar momentum ga narik balik)
+    if myRoot then
+        myRoot.AssemblyLinearVelocity = Vector3.zero
+        myRoot.AssemblyAngularVelocity = Vector3.zero
+    end
+
+    -- TP SELURUH CHARACTER sekaligus (bukan cuma root part)
+    local ok = pcall(function()
+        myChar:PivotTo(behindCF)
+    end)
+
+    if not ok then
+        notify("❌ Gagal teleport", "error")
+        return
+    end
+
+    -- KUNCI posisi beberapa frame -> cegah snap-back ("tp dikit doang")
+    task.spawn(function()
+        for _ = 1, 8 do
+            RunService.Heartbeat:Wait()
+            if myRoot and myRoot.Parent then
+                myRoot.CFrame = behindCF
+                myRoot.AssemblyLinearVelocity = Vector3.zero
+                myRoot.AssemblyAngularVelocity = Vector3.zero
+            end
+        end
+    end)
+
+    notify("✓ Teleport ke belakang " .. targetPlayer.DisplayName, "success")
+end
 
     -- BUAT ROW PLAYER
     local function createPlayerRow(player)
