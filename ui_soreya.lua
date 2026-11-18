@@ -6889,8 +6889,7 @@ do
 end
 
 -- ============================================================
--- 👤 TP PLAYER TAB
--- Realtime players yang benar-benar ada di server Roblox
+-- 👤 TP PLAYER TAB — v3 (English notify + polished UI)
 -- ============================================================
 do
     local tpPlayerPage = Instance.new("Frame")
@@ -6903,237 +6902,259 @@ do
     tpPlayerPage.Parent = pageHolder
     pages.TpPlayer = tpPlayerPage
 
+    -- ========================================================
     -- HEADER
+    -- ========================================================
+    local headerWrap = Instance.new("Frame")
+    headerWrap.Size = UDim2.new(1, -20, 0, 46)
+    headerWrap.Position = UDim2.fromOffset(10, 6)
+    headerWrap.BackgroundTransparency = 1
+    headerWrap.ZIndex = 8
+    headerWrap.Parent = tpPlayerPage
+
     local tpHeader = Instance.new("TextLabel")
-    tpHeader.Size = UDim2.new(1, -20, 0, 34)
-    tpHeader.Position = UDim2.fromOffset(10, 6)
+    tpHeader.Size = UDim2.new(1, 0, 0, 24)
+    tpHeader.Position = UDim2.fromOffset(0, 0)
     tpHeader.BackgroundTransparency = 1
-    tpHeader.Text = "👤 TP PLAYER"
+    tpHeader.Text = "👤  TP PLAYER"
     tpHeader.TextColor3 = C.Text
     tpHeader.Font = Enum.Font.GothamBold
     tpHeader.TextSize = IS_MOBILE and 13 or 15
     tpHeader.TextXAlignment = Enum.TextXAlignment.Left
+    tpHeader.Active = false
+    tpHeader.Selectable = false
     tpHeader.ZIndex = 8
-    tpHeader.Parent = tpPlayerPage
+    tpHeader.Parent = headerWrap
     registerTheme(tpHeader, "Text", "TextColor3")
 
-    -- INFO SERVER
     local tpInfo = Instance.new("TextLabel")
-    tpInfo.Size = UDim2.new(1, -20, 0, 22)
-    tpInfo.Position = UDim2.fromOffset(10, 38)
+    tpInfo.Size = UDim2.new(1, 0, 0, 18)
+    tpInfo.Position = UDim2.fromOffset(0, 24)
     tpInfo.BackgroundTransparency = 1
-    tpInfo.Text = "Players di server ini"
+    tpInfo.Text = "Loading players..."
     tpInfo.TextColor3 = C.Muted
     tpInfo.Font = Enum.Font.GothamSemibold
     tpInfo.TextSize = CFG.FONT_MUTED
     tpInfo.TextXAlignment = Enum.TextXAlignment.Left
+    tpInfo.Active = false
+    tpInfo.Selectable = false
     tpInfo.ZIndex = 8
-    tpInfo.Parent = tpPlayerPage
+    tpInfo.Parent = headerWrap
     registerTheme(tpInfo, "Muted", "TextColor3")
 
+    -- ========================================================
     -- PLAYER LIST
+    -- ========================================================
     local tpList = Instance.new("ScrollingFrame")
     tpList.Name = "PlayerList"
-    tpList.Size = UDim2.new(1, -20, 1, -70)
-    tpList.Position = UDim2.fromOffset(10, 65)
+    tpList.Size = UDim2.new(1, -20, 1, -68)
+    tpList.Position = UDim2.fromOffset(10, 58)
     tpList.BackgroundTransparency = 1
     tpList.BorderSizePixel = 0
     tpList.ScrollBarThickness = 4
     tpList.ScrollBarImageColor3 = C.Accent
     tpList.CanvasSize = UDim2.new(0, 0, 0, 0)
     tpList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    tpList.ScrollingDirection = Enum.ScrollingDirection.Y
+    tpList.ElasticBehavior = Enum.ElasticBehavior.WhenScrollable
     tpList.ZIndex = 8
     tpList.Parent = tpPlayerPage
     registerTheme(tpList, "Accent", "ScrollBarImageColor3")
 
     local tpLayout = Instance.new("UIListLayout")
-    tpLayout.Padding = UDim.new(0, 7)
+    tpLayout.Padding = UDim.new(0, 8)
     tpLayout.SortOrder = Enum.SortOrder.LayoutOrder
     tpLayout.Parent = tpList
 
     local tpPadding = Instance.new("UIPadding")
-    tpPadding.PaddingBottom = UDim.new(0, 8)
+    tpPadding.PaddingBottom = UDim.new(0, 10)
+    tpPadding.PaddingTop = UDim.new(0, 4)
     tpPadding.Parent = tpList
 
     local playerRows = {}
 
--- ============================================================
--- TELEPORT BERTAHAP KE BELAKANG PLAYER (3 studs)
--- Fix: TP jauh sekarang pakai step teleport biar lolos
--- validasi server Roblox (anti-teleport / network ownership)
--- ============================================================
-local RunService = game:GetService("RunService")
-
--- Token buat batalkan lock lama kalau ada TP baru
-local tpToken = 0
-local tpBusy = false
-
-local function teleportBehind(targetPlayer)
-    if not targetPlayer or targetPlayer == LocalPlayer then
-        return
-    end
-
-    if tpBusy then
-        notify("⏳ Masih proses TP, tunggu bentar...", "warn")
-        return
-    end
-
-    -- Ambil character SEKALI
-    local myChar = LocalPlayer.Character
-    local targetChar = targetPlayer.Character
-
-    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then
-        notify("❌ Character lu belum ada", "error")
-        return
-    end
-
-    if not targetChar or not targetChar:FindFirstChild("HumanoidRootPart") then
-        notify("❌ " .. targetPlayer.DisplayName .. " lagi mati / belum spawn", "error")
-        return
-    end
-
-    local targetRoot = targetChar.HumanoidRootPart
-
-    -- StreamingEnabled guard: paksa load area target dulu
-    if workspace.StreamingEnabled then
-        pcall(function()
-            LocalPlayer:RequestStreamAroundAsync(targetRoot.Position)
-        end)
-        task.wait(0.35)
-    end
-
-    -- Re-fetch setelah stream (posisi bisa berubah)
-    myChar = LocalPlayer.Character
-    targetChar = targetPlayer.Character
-    if not myChar or not myChar:FindFirstChild("HumanoidRootPart")
-        or not targetChar or not targetChar:FindFirstChild("HumanoidRootPart") then
-        notify("❌ Target / character hilang saat proses TP", "error")
-        return
-    end
-
-    local myRoot = myChar.HumanoidRootPart
-    targetRoot = targetChar.HumanoidRootPart
-
-    -- Lepas seat biar gak ketarik balik
-    local myHum = myChar:FindFirstChildOfClass("Humanoid")
-    if myHum then
-        myHum.Sit = false
-    end
-
-    -- Nolkan velocity
-    myRoot.AssemblyLinearVelocity = Vector3.zero
-    myRoot.AssemblyAngularVelocity = Vector3.zero
-
-    -- Posisi 3 studs di belakang target
-    local destCF = targetRoot.CFrame * CFrame.new(0, 0, 3)
-    local startPos = myRoot.CFrame.Position
-    local dist = (destCF.Position - startPos).Magnitude
-
-    tpToken += 1
-    local myToken = tpToken
-    tpBusy = true
-
-    task.spawn(function()
-        -- Step teleport: pecah jadi hop kecil biar lolos validasi server
-        local stepSize = 50
-        local steps = math.clamp(math.ceil(dist / stepSize), 1, 60)
-
-        for i = 1, steps do
-            if tpToken ~= myToken then
-                tpBusy = false
-                return -- ada TP baru, stop
-            end
-            if not myRoot or not myRoot.Parent then
-                tpBusy = false
-                return
-            end
-
-            local t = i / steps
-            local pos = startPos:Lerp(destCF.Position, t)
-            myRoot.CFrame = CFrame.new(pos) * (destCF - destCF.Position)
-            myRoot.AssemblyLinearVelocity = Vector3.zero
-            myRoot.AssemblyAngularVelocity = Vector3.zero
-
-            RunService.Heartbeat:Wait()
+    -- ========================================================
+    -- Helper: make child UI passive so clicks pass to row button
+    -- ========================================================
+    local function makePassive(gui)
+        if gui:IsA("TextLabel") or gui:IsA("ImageLabel") or gui:IsA("Frame") then
+            pcall(function() gui.Active = false end)
+            pcall(function() gui.Selectable = false end)
         end
+    end
 
-        -- Snap final ke posisi persis di belakang target
-        if tpToken ~= myToken then
-            tpBusy = false
+    -- ========================================================
+    -- TELEPORT (step-based, same logic as your v2)
+    -- ========================================================
+    local RunService = game:GetService("RunService")
+    local tpToken = 0
+    local tpBusy = false
+
+    local function teleportBehind(targetPlayer)
+        if not targetPlayer or targetPlayer == LocalPlayer then return end
+        if tpBusy then
+            notify("⏳ Teleport in progress, please wait...", "warn")
             return
         end
 
-        -- Final lock singkat (biar gak ke-snap balik)
-        for _ = 1, 5 do
-            if tpToken ~= myToken then
+        local myChar = LocalPlayer.Character
+        if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then
+            notify("❌ Your character is not ready", "error")
+            return
+        end
+
+        local targetChar = targetPlayer.Character
+        if not targetChar or not targetChar:FindFirstChild("HumanoidRootPart") then
+            notify("❌ " .. targetPlayer.DisplayName .. " is not spawned yet", "error")
+            return
+        end
+
+        tpBusy = true
+        tpToken += 1
+        local myToken = tpToken
+
+        task.spawn(function()
+            -- Phase 1: stream target area if needed
+            if workspace.StreamingEnabled then
+                pcall(function()
+                    LocalPlayer:RequestStreamAroundAsync(
+                        targetPlayer.Character and targetPlayer.Character.HumanoidRootPart.Position
+                        or Vector3.zero
+                    )
+                end)
+                for _ = 1, 6 do
+                    if tpToken ~= myToken then tpBusy = false return end
+                    RunService.Heartbeat:Wait()
+                end
+            end
+
+            -- Phase 2: re-fetch (positions may change)
+            myChar = LocalPlayer.Character
+            targetChar = targetPlayer.Character
+            if not myChar or not myChar:FindFirstChild("HumanoidRootPart")
+                or not targetChar or not targetChar:FindFirstChild("HumanoidRootPart") then
+                notify("❌ Target disappeared during teleport", "error")
                 tpBusy = false
                 return
             end
-            if myRoot and myRoot.Parent then
-                myRoot.CFrame = destCF
+
+            local myRoot = myChar.HumanoidRootPart
+            local targetRoot = targetChar.HumanoidRootPart
+
+            local myHum = myChar:FindFirstChildOfClass("Humanoid")
+            if myHum then myHum.Sit = false end
+
+            local destCF = targetRoot.CFrame * CFrame.new(0, 0, 3)
+            local startPos = myRoot.CFrame.Position
+            local dist = (destCF.Position - startPos).Magnitude
+
+            -- Phase 3: step teleport
+            local stepSize = 20
+            local steps = math.clamp(math.ceil(dist / stepSize), 1, 80)
+
+            for i = 1, steps do
+                if tpToken ~= myToken then tpBusy = false return end
+                if not myRoot or not myRoot.Parent then tpBusy = false return end
+
+                local t = i / steps
+                local eased = 1 - (1 - t) ^ 2
+                local pos = startPos:Lerp(destCF.Position, eased)
+
+                myRoot.CFrame = CFrame.new(pos) * (myRoot.CFrame - myRoot.CFrame.Position)
                 myRoot.AssemblyLinearVelocity = Vector3.zero
                 myRoot.AssemblyAngularVelocity = Vector3.zero
+
+                RunService.Heartbeat:Wait()
             end
-            RunService.Heartbeat:Wait()
-        end
 
-        tpBusy = false
-    end)
+            if tpToken ~= myToken then tpBusy = false return end
 
-    notify("✓ TP ke belakang " .. targetPlayer.DisplayName, "success")
-end
+            -- Phase 4: final snap
+            for _ = 1, 8 do
+                if tpToken ~= myToken then tpBusy = false return end
+                if myRoot and myRoot.Parent then
+                    myRoot.CFrame = destCF
+                    myRoot.AssemblyLinearVelocity = Vector3.zero
+                    myRoot.AssemblyAngularVelocity = Vector3.zero
+                end
+                RunService.Heartbeat:Wait()
+            end
 
-    -- BUAT ROW PLAYER
+            tpBusy = false
+            notify("✓ Teleported behind " .. targetPlayer.DisplayName, "success")
+        end)
+    end
+
+    -- ========================================================
+    -- CREATE PLAYER ROW
+    -- ========================================================
     local function createPlayerRow(player)
-        if not player or player == LocalPlayer then
-            return
-        end
+        if not player or player == LocalPlayer then return end
+        if playerRows[player] then return end
 
-        if playerRows[player] then
-            return
-        end
+        local rowHeight = IS_MOBILE and 58 or 64
 
         local row = Instance.new("TextButton")
         row.Name = "Player_" .. player.UserId
-        row.Size = UDim2.new(1, -4, 0, IS_MOBILE and 58 or 64)
+        row.Size = UDim2.new(1, -4, 0, rowHeight)
         row.BackgroundColor3 = C.Surface2
-        row.BackgroundTransparency = 0.08
+        row.BackgroundTransparency = 0.05
         row.BorderSizePixel = 0
         row.Text = ""
         row.AutoButtonColor = false
+        row.Active = true
+        row.Selectable = true
+        row.ClipsDescendants = false
         row.ZIndex = 9
         row.Parent = tpList
         registerTheme(row, "Surface2", "BackgroundColor3")
 
         local rowCorner = Instance.new("UICorner")
-        rowCorner.CornerRadius = UDim.new(0, 10)
+        rowCorner.CornerRadius = UDim.new(0, 12)
         rowCorner.Parent = row
 
         local rowStroke = Instance.new("UIStroke")
         rowStroke.Color = C.Accent
         rowStroke.Thickness = 1
-        rowStroke.Transparency = 0.8
+        rowStroke.Transparency = 0.88
         rowStroke.Parent = row
         registerTheme(rowStroke, "Accent", "Color")
 
-        -- AVATAR
-        local avatarSize = IS_MOBILE and 42 or 48
+        -- ===== AVATAR with ring =====
+        local avatarSize = IS_MOBILE and 42 or 46
+        local pad = 9
+
+        -- outer accent ring
+        local avatarRing = Instance.new("Frame")
+        avatarRing.Size = UDim2.fromOffset(avatarSize + 4, avatarSize + 4)
+        avatarRing.Position = UDim2.new(0, pad - 2, 0.5, -(avatarSize + 4) / 2)
+        avatarRing.BackgroundColor3 = C.Accent
+        avatarRing.BackgroundTransparency = 0.55
+        avatarRing.BorderSizePixel = 0
+        avatarRing.ZIndex = 9
+        avatarRing.Parent = row
+        makePassive(avatarRing)
+        registerTheme(avatarRing, "Accent", "BackgroundColor3")
+
+        local ringCorner = Instance.new("UICorner")
+        ringCorner.CornerRadius = UDim.new(1, 0)
+        ringCorner.Parent = avatarRing
 
         local avatar = Instance.new("ImageLabel")
         avatar.Name = "Avatar"
         avatar.Size = UDim2.fromOffset(avatarSize, avatarSize)
-        avatar.Position = UDim2.new(0, 8, 0.5, -avatarSize / 2)
+        avatar.Position = UDim2.new(0, pad, 0.5, -avatarSize / 2)
         avatar.BackgroundColor3 = C.Surface3
         avatar.BorderSizePixel = 0
         avatar.ZIndex = 10
         avatar.Parent = row
+        makePassive(avatar)
         registerTheme(avatar, "Surface3", "BackgroundColor3")
 
         local avatarCorner = Instance.new("UICorner")
         avatarCorner.CornerRadius = UDim.new(1, 0)
         avatarCorner.Parent = avatar
 
-        -- LOAD AVATAR ROBLOX
         task.spawn(function()
             local ok, image = pcall(function()
                 return Players:GetUserThumbnailAsync(
@@ -7142,16 +7163,17 @@ end
                     Enum.ThumbnailSize.Size100x100
                 )
             end)
-
             if ok and image and avatar and avatar.Parent then
                 avatar.Image = image
             end
         end)
 
-        -- DISPLAY NAME
+        -- ===== TEXT =====
+        local textX = pad + avatarSize + 12
+
         local displayName = Instance.new("TextLabel")
-        displayName.Size = UDim2.new(1, -(avatarSize + 25), 0, 22)
-        displayName.Position = UDim2.fromOffset(avatarSize + 18, IS_MOBILE and 9 or 10)
+        displayName.Size = UDim2.new(1, -(textX + (IS_MOBILE and 70 or 80)), 0, 20)
+        displayName.Position = UDim2.fromOffset(textX, IS_MOBILE and 9 or 12)
         displayName.BackgroundTransparency = 1
         displayName.Text = player.DisplayName
         displayName.TextColor3 = C.Text
@@ -7159,14 +7181,37 @@ end
         displayName.TextSize = IS_MOBILE and 12 or 13
         displayName.TextXAlignment = Enum.TextXAlignment.Left
         displayName.TextTruncate = Enum.TextTruncate.AtEnd
+        displayName.Active = false
+        displayName.Selectable = false
         displayName.ZIndex = 10
         displayName.Parent = row
         registerTheme(displayName, "Text", "TextColor3")
 
-        -- USERNAME
+        -- username + status dot row
+        local subRow = Instance.new("Frame")
+        subRow.Size = UDim2.new(1, -(textX + (IS_MOBILE and 70 or 80)), 0, 16)
+        subRow.Position = UDim2.fromOffset(textX, IS_MOBILE and 30 or 34)
+        subRow.BackgroundTransparency = 1
+        subRow.ZIndex = 10
+        subRow.Parent = row
+        makePassive(subRow)
+
+        local statusDot = Instance.new("Frame")
+        statusDot.Size = UDim2.fromOffset(6, 6)
+        statusDot.Position = UDim2.new(0, 0, 0.5, -3)
+        statusDot.BackgroundColor3 = Color3.fromRGB(80, 220, 120)
+        statusDot.BorderSizePixel = 0
+        statusDot.ZIndex = 10
+        statusDot.Parent = subRow
+        makePassive(statusDot)
+
+        local dotCorner = Instance.new("UICorner")
+        dotCorner.CornerRadius = UDim.new(1, 0)
+        dotCorner.Parent = statusDot
+
         local username = Instance.new("TextLabel")
-        username.Size = UDim2.new(1, -(avatarSize + 25), 0, 18)
-        username.Position = UDim2.fromOffset(avatarSize + 18, IS_MOBILE and 30 or 34)
+        username.Size = UDim2.new(1, -12, 1, 0)
+        username.Position = UDim2.fromOffset(12, 0)
         username.BackgroundTransparency = 1
         username.Text = "@" .. player.Name
         username.TextColor3 = C.Muted
@@ -7174,69 +7219,90 @@ end
         username.TextSize = IS_MOBILE and 9 or 10
         username.TextXAlignment = Enum.TextXAlignment.Left
         username.TextTruncate = Enum.TextTruncate.AtEnd
+        username.Active = false
+        username.Selectable = false
         username.ZIndex = 10
-        username.Parent = row
+        username.Parent = subRow
         registerTheme(username, "Muted", "TextColor3")
 
-        -- TP ICON/TEXT
-        local tpLabel = Instance.new("TextLabel")
-        tpLabel.Size = UDim2.fromOffset(IS_MOBILE and 42 or 50, 24)
-        tpLabel.Position = UDim2.new(1, -(IS_MOBILE and 50 or 58), 0.5, -12)
-        tpLabel.BackgroundColor3 = C.Accent
-        tpLabel.BackgroundTransparency = 0.15
-        tpLabel.Text = "TP"
-        tpLabel.TextColor3 = Color3.new(1, 1, 1)
-        tpLabel.Font = Enum.Font.GothamBold
-        tpLabel.TextSize = IS_MOBILE and 9 or 10
-        tpLabel.ZIndex = 11
-        tpLabel.Parent = row
-        registerTheme(tpLabel, "Accent", "BackgroundColor3")
+        -- ===== BADGE "TP" =====
+        local badgeW = IS_MOBILE and 48 or 56
+        local badgeH = 28
 
-        local tpLabelCorner = Instance.new("UICorner")
-        tpLabelCorner.CornerRadius = UDim.new(0, 7)
-        tpLabelCorner.Parent = tpLabel
+        local badge = Instance.new("Frame")
+        badge.Size = UDim2.fromOffset(badgeW, badgeH)
+        badge.Position = UDim2.new(1, -(badgeW + 12), 0.5, -badgeH / 2)
+        badge.BackgroundColor3 = C.Accent
+        badge.BackgroundTransparency = 0.05
+        badge.BorderSizePixel = 0
+        badge.ZIndex = 10
+        badge.Parent = row
+        makePassive(badge)
+        registerTheme(badge, "Accent", "BackgroundColor3")
 
-        -- KLIK PLAYER
+        local badgeCorner = Instance.new("UICorner")
+        badgeCorner.CornerRadius = UDim.new(1, 0)
+        badgeCorner.Parent = badge
+
+        local badgeLabel = Instance.new("TextLabel")
+        badgeLabel.Size = UDim2.fromScale(1, 1)
+        badgeLabel.BackgroundTransparency = 1
+        badgeLabel.Text = "TP"
+        badgeLabel.TextColor3 = Color3.new(1, 1, 1)
+        badgeLabel.Font = Enum.Font.GothamBold
+        badgeLabel.TextSize = IS_MOBILE and 10 or 11
+        badgeLabel.Active = false
+        badgeLabel.Selectable = false
+        badgeLabel.ZIndex = 11
+        badgeLabel.Parent = badge
+
+        -- ===== CLICK = TP =====
         row.MouseButton1Click:Connect(function()
             teleportBehind(player)
         end)
 
-        -- HOVER
+        -- ===== HOVER =====
         row.MouseEnter:Connect(function()
             if row and row.Parent then
-                TweenService:Create(row, TweenInfo.new(0.12), {BackgroundTransparency = 0}):Play()
+                TweenService:Create(row, TweenInfo.new(0.12),
+                    {BackgroundTransparency = 0}):Play()
+                TweenService:Create(rowStroke, TweenInfo.new(0.12),
+                    {Transparency = 0.4}):Play()
+                TweenService:Create(badge, TweenInfo.new(0.12),
+                    {BackgroundTransparency = -0.1}):Play()
             end
         end)
 
         row.MouseLeave:Connect(function()
             if row and row.Parent then
-                TweenService:Create(row, TweenInfo.new(0.12), {BackgroundTransparency = 0.08}):Play()
+                TweenService:Create(row, TweenInfo.new(0.12),
+                    {BackgroundTransparency = 0.05}):Play()
+                TweenService:Create(rowStroke, TweenInfo.new(0.12),
+                    {Transparency = 0.88}):Play()
+                TweenService:Create(badge, TweenInfo.new(0.12),
+                    {BackgroundTransparency = 0.05}):Play()
             end
         end)
 
         playerRows[player] = row
     end
 
-    -- HAPUS PLAYER DARI LIST
+    -- ========================================================
+    -- REMOVE / REFRESH
+    -- ========================================================
     local function removePlayerRow(player)
         local row = playerRows[player]
-
         if row then
             playerRows[player] = nil
-            pcall(function()
-                row:Destroy()
-            end)
+            pcall(function() row:Destroy() end)
         end
     end
 
-    -- REFRESH SEMUA PLAYER
     local function refreshPlayers()
         local currentPlayers = {}
-
         for _, player in ipairs(Players:GetPlayers()) do
             if player ~= LocalPlayer then
                 currentPlayers[player] = true
-
                 if not playerRows[player] then
                     createPlayerRow(player)
                 end
@@ -7250,14 +7316,10 @@ end
         end
 
         local count = 0
-        for _ in pairs(currentPlayers) do
-            count = count + 1
-        end
-
-        tpInfo.Text = tostring(count) .. " player di server"
+        for _ in pairs(currentPlayers) do count = count + 1 end
+        tpInfo.Text = count .. (count == 1 and " player in server" or " players in server")
     end
 
-    -- PLAYER JOIN
     Players.PlayerAdded:Connect(function(player)
         if player ~= LocalPlayer then
             createPlayerRow(player)
@@ -7265,13 +7327,11 @@ end
         end
     end)
 
-    -- PLAYER LEAVE
     Players.PlayerRemoving:Connect(function(player)
         removePlayerRow(player)
         task.defer(refreshPlayers)
     end)
 
-    -- PLAYER YANG SUDAH ADA DI SERVER
     refreshPlayers()
 end
 
