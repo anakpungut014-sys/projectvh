@@ -6958,19 +6958,27 @@ do
     local playerRows = {}
 
 -- ============================================================
--- TELEPORT INSTAN KE BELAKANG PLAYER (3 studs, klik = langsung)
+-- TELEPORT BERTAHAP KE BELAKANG PLAYER (3 studs)
+-- Fix: TP jauh sekarang pakai step teleport biar lolos
+-- validasi server Roblox (anti-teleport / network ownership)
 -- ============================================================
 local RunService = game:GetService("RunService")
 
 -- Token buat batalkan lock lama kalau ada TP baru
 local tpToken = 0
+local tpBusy = false
 
 local function teleportBehind(targetPlayer)
     if not targetPlayer or targetPlayer == LocalPlayer then
         return
     end
 
-    -- Cek SEKALI, gak pake loop nunggu
+    if tpBusy then
+        notify("⏳ Masih proses TP, tunggu bentar...", "warn")
+        return
+    end
+
+    -- Ambil character SEKALI
     local myChar = LocalPlayer.Character
     local targetChar = targetPlayer.Character
 
@@ -6984,8 +6992,27 @@ local function teleportBehind(targetPlayer)
         return
     end
 
-    -- Posisi 3 studs di belakang target
-    local behindCF = targetChar.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+    local targetRoot = targetChar.HumanoidRootPart
+
+    -- StreamingEnabled guard: paksa load area target dulu
+    if workspace.StreamingEnabled then
+        pcall(function()
+            LocalPlayer:RequestStreamAroundAsync(targetRoot.Position)
+        end)
+        task.wait(0.35)
+    end
+
+    -- Re-fetch setelah stream (posisi bisa berubah)
+    myChar = LocalPlayer.Character
+    targetChar = targetPlayer.Character
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart")
+        or not targetChar or not targetChar:FindFirstChild("HumanoidRootPart") then
+        notify("❌ Target / character hilang saat proses TP", "error")
+        return
+    end
+
+    local myRoot = myChar.HumanoidRootPart
+    targetRoot = targetChar.HumanoidRootPart
 
     -- Lepas seat biar gak ketarik balik
     local myHum = myChar:FindFirstChildOfClass("Humanoid")
@@ -6993,29 +7020,64 @@ local function teleportBehind(targetPlayer)
         myHum.Sit = false
     end
 
-    local myRoot = myChar.HumanoidRootPart
-
     -- Nolkan velocity
     myRoot.AssemblyLinearVelocity = Vector3.zero
     myRoot.AssemblyAngularVelocity = Vector3.zero
 
-    -- TP INSTAN, tanpa nunggu apa pun
-    myChar:PivotTo(behindCF)
+    -- Posisi 3 studs di belakang target
+    local destCF = targetRoot.CFrame * CFrame.new(0, 0, 3)
+    local startPos = myRoot.CFrame.Position
+    local dist = (destCF.Position - startPos).Magnitude
 
-    -- Lock posisi singkat (jalan di background, GAK blokir klik baru)
-    -- Kalau user TP lagi ke player lain, lock lama otomatis berhenti
     tpToken += 1
     local myToken = tpToken
+    tpBusy = true
 
     task.spawn(function()
-        for _ = 1, 5 do
-            RunService.Heartbeat:Wait()
-            if tpToken ~= myToken then return end -- ada TP baru, stop lock lama
-            if myRoot and myRoot.Parent then
-                myRoot.CFrame = behindCF
-                myRoot.AssemblyLinearVelocity = Vector3.zero
+        -- Step teleport: pecah jadi hop kecil biar lolos validasi server
+        local stepSize = 50
+        local steps = math.clamp(math.ceil(dist / stepSize), 1, 60)
+
+        for i = 1, steps do
+            if tpToken ~= myToken then
+                tpBusy = false
+                return -- ada TP baru, stop
             end
+            if not myRoot or not myRoot.Parent then
+                tpBusy = false
+                return
+            end
+
+            local t = i / steps
+            local pos = startPos:Lerp(destCF.Position, t)
+            myRoot.CFrame = CFrame.new(pos) * (destCF - destCF.Position)
+            myRoot.AssemblyLinearVelocity = Vector3.zero
+            myRoot.AssemblyAngularVelocity = Vector3.zero
+
+            RunService.Heartbeat:Wait()
         end
+
+        -- Snap final ke posisi persis di belakang target
+        if tpToken ~= myToken then
+            tpBusy = false
+            return
+        end
+
+        -- Final lock singkat (biar gak ke-snap balik)
+        for _ = 1, 5 do
+            if tpToken ~= myToken then
+                tpBusy = false
+                return
+            end
+            if myRoot and myRoot.Parent then
+                myRoot.CFrame = destCF
+                myRoot.AssemblyLinearVelocity = Vector3.zero
+                myRoot.AssemblyAngularVelocity = Vector3.zero
+            end
+            RunService.Heartbeat:Wait()
+        end
+
+        tpBusy = false
     end)
 
     notify("✓ TP ke belakang " .. targetPlayer.DisplayName, "success")
