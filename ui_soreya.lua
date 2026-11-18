@@ -6889,7 +6889,7 @@ do
 end
 
 -- ============================================================
--- 👤 TP PLAYER TAB — v3 (English notify + polished UI)
+-- 👤 TP PLAYER TAB — v4 (polished UI + click feedback + English)
 -- ============================================================
 do
     local tpPlayerPage = Instance.new("Frame")
@@ -6906,7 +6906,7 @@ do
     -- HEADER
     -- ========================================================
     local headerWrap = Instance.new("Frame")
-    headerWrap.Size = UDim2.new(1, -20, 0, 46)
+    headerWrap.Size = UDim2.new(1, -20, 0, 48)
     headerWrap.Position = UDim2.fromOffset(10, 6)
     headerWrap.BackgroundTransparency = 1
     headerWrap.ZIndex = 8
@@ -6947,8 +6947,8 @@ do
     -- ========================================================
     local tpList = Instance.new("ScrollingFrame")
     tpList.Name = "PlayerList"
-    tpList.Size = UDim2.new(1, -20, 1, -68)
-    tpList.Position = UDim2.fromOffset(10, 58)
+    tpList.Size = UDim2.new(1, -20, 1, -70)
+    tpList.Position = UDim2.fromOffset(10, 60)
     tpList.BackgroundTransparency = 1
     tpList.BorderSizePixel = 0
     tpList.ScrollBarThickness = 4
@@ -6974,47 +6974,84 @@ do
     local playerRows = {}
 
     -- ========================================================
-    -- Helper: make child UI passive so clicks pass to row button
+    -- Helper
     -- ========================================================
     local function makePassive(gui)
-        if gui:IsA("TextLabel") or gui:IsA("ImageLabel") or gui:IsA("Frame") then
-            pcall(function() gui.Active = false end)
-            pcall(function() gui.Selectable = false end)
+        pcall(function() gui.Active = false end)
+        pcall(function() gui.Selectable = false end)
+    end
+
+    -- ========================================================
+    -- Badge state helper
+    -- ========================================================
+    local function setBadgeState(badge, label, state)
+        if not badge or not badge.Parent then return end
+        if state == "idle" then
+            TweenService:Create(badge, TweenInfo.new(0.15),
+                {BackgroundColor3 = C.Accent, BackgroundTransparency = 0.05}):Play()
+            label.Text = "TP"
+            label.TextColor3 = Color3.new(1, 1, 1)
+        elseif state == "loading" then
+            TweenService:Create(badge, TweenInfo.new(0.15),
+                {BackgroundColor3 = Color3.fromRGB(255, 190, 70), BackgroundTransparency = 0}):Play()
+            label.Text = "..."
+            label.TextColor3 = Color3.new(1, 1, 1)
+        elseif state == "success" then
+            TweenService:Create(badge, TweenInfo.new(0.15),
+                {BackgroundColor3 = Color3.fromRGB(80, 210, 120), BackgroundTransparency = 0}):Play()
+            label.Text = "✓"
+            label.TextColor3 = Color3.new(1, 1, 1)
+            task.delay(0.9, function()
+                if badge and badge.Parent and label and label.Parent then
+                    setBadgeState(badge, label, "idle")
+                end
+            end)
+        elseif state == "failed" then
+            TweenService:Create(badge, TweenInfo.new(0.15),
+                {BackgroundColor3 = Color3.fromRGB(235, 75, 75), BackgroundTransparency = 0}):Play()
+            label.Text = "✗"
+            label.TextColor3 = Color3.new(1, 1, 1)
+            task.delay(0.9, function()
+                if badge and badge.Parent and label and label.Parent then
+                    setBadgeState(badge, label, "idle")
+                end
+            end)
         end
     end
 
     -- ========================================================
-    -- TELEPORT (step-based, same logic as your v2)
+    -- TELEPORT
     -- ========================================================
     local RunService = game:GetService("RunService")
     local tpToken = 0
-    local tpBusy = false
 
-    local function teleportBehind(targetPlayer)
-        if not targetPlayer or targetPlayer == LocalPlayer then return end
-        if tpBusy then
-            notify("⏳ Teleport in progress, please wait...", "warn")
-            return
+    local function teleportBehind(targetPlayer, badge, badgeLabel)
+        if not targetPlayer or targetPlayer == LocalPlayer then
+            return false
         end
 
         local myChar = LocalPlayer.Character
         if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then
             notify("❌ Your character is not ready", "error")
-            return
+            setBadgeState(badge, badgeLabel, "failed")
+            return false
         end
 
         local targetChar = targetPlayer.Character
         if not targetChar or not targetChar:FindFirstChild("HumanoidRootPart") then
             notify("❌ " .. targetPlayer.DisplayName .. " is not spawned yet", "error")
-            return
+            setBadgeState(badge, badgeLabel, "failed")
+            return false
         end
 
-        tpBusy = true
         tpToken += 1
         local myToken = tpToken
+        setBadgeState(badge, badgeLabel, "loading")
 
         task.spawn(function()
-            -- Phase 1: stream target area if needed
+            local success = false
+
+            -- Phase 1: stream
             if workspace.StreamingEnabled then
                 pcall(function()
                     LocalPlayer:RequestStreamAroundAsync(
@@ -7023,18 +7060,18 @@ do
                     )
                 end)
                 for _ = 1, 6 do
-                    if tpToken ~= myToken then tpBusy = false return end
+                    if tpToken ~= myToken then return end
                     RunService.Heartbeat:Wait()
                 end
             end
 
-            -- Phase 2: re-fetch (positions may change)
+            -- Phase 2: re-fetch
             myChar = LocalPlayer.Character
             targetChar = targetPlayer.Character
             if not myChar or not myChar:FindFirstChild("HumanoidRootPart")
                 or not targetChar or not targetChar:FindFirstChild("HumanoidRootPart") then
                 notify("❌ Target disappeared during teleport", "error")
-                tpBusy = false
+                setBadgeState(badge, badgeLabel, "failed")
                 return
             end
 
@@ -7053,8 +7090,11 @@ do
             local steps = math.clamp(math.ceil(dist / stepSize), 1, 80)
 
             for i = 1, steps do
-                if tpToken ~= myToken then tpBusy = false return end
-                if not myRoot or not myRoot.Parent then tpBusy = false return end
+                if tpToken ~= myToken then return end
+                if not myRoot or not myRoot.Parent then
+                    setBadgeState(badge, badgeLabel, "failed")
+                    return
+                end
 
                 local t = i / steps
                 local eased = 1 - (1 - t) ^ 2
@@ -7067,11 +7107,11 @@ do
                 RunService.Heartbeat:Wait()
             end
 
-            if tpToken ~= myToken then tpBusy = false return end
+            if tpToken ~= myToken then return end
 
             -- Phase 4: final snap
             for _ = 1, 8 do
-                if tpToken ~= myToken then tpBusy = false return end
+                if tpToken ~= myToken then return end
                 if myRoot and myRoot.Parent then
                     myRoot.CFrame = destCF
                     myRoot.AssemblyLinearVelocity = Vector3.zero
@@ -7080,9 +7120,22 @@ do
                 RunService.Heartbeat:Wait()
             end
 
-            tpBusy = false
-            notify("✓ Teleported behind " .. targetPlayer.DisplayName, "success")
+            -- Verify: cek jarak akhir ke target
+            if myRoot and myRoot.Parent and targetRoot and targetRoot.Parent then
+                local finalDist = (myRoot.Position - targetRoot.Position).Magnitude
+                success = finalDist < 10
+            end
+
+            if success then
+                setBadgeState(badge, badgeLabel, "success")
+                notify("✓ Teleported behind " .. targetPlayer.DisplayName, "success")
+            else
+                setBadgeState(badge, badgeLabel, "failed")
+                notify("✗ Teleport failed — target moved or out of range", "error")
+            end
         end)
+
+        return true
     end
 
     -- ========================================================
@@ -7092,7 +7145,7 @@ do
         if not player or player == LocalPlayer then return end
         if playerRows[player] then return end
 
-        local rowHeight = IS_MOBILE and 58 or 64
+        local rowHeight = IS_MOBILE and 60 or 66
 
         local row = Instance.new("TextButton")
         row.Name = "Player_" .. player.UserId
@@ -7110,26 +7163,25 @@ do
         registerTheme(row, "Surface2", "BackgroundColor3")
 
         local rowCorner = Instance.new("UICorner")
-        rowCorner.CornerRadius = UDim.new(0, 12)
+        rowCorner.CornerRadius = UDim.new(0, 14)
         rowCorner.Parent = row
 
         local rowStroke = Instance.new("UIStroke")
         rowStroke.Color = C.Accent
         rowStroke.Thickness = 1
-        rowStroke.Transparency = 0.88
+        rowStroke.Transparency = 0.85
         rowStroke.Parent = row
         registerTheme(rowStroke, "Accent", "Color")
 
-        -- ===== AVATAR with ring =====
-        local avatarSize = IS_MOBILE and 42 or 46
-        local pad = 9
+        -- ===== AVATAR =====
+        local avatarSize = IS_MOBILE and 44 or 48
+        local pad = 10
 
-        -- outer accent ring
         local avatarRing = Instance.new("Frame")
         avatarRing.Size = UDim2.fromOffset(avatarSize + 4, avatarSize + 4)
         avatarRing.Position = UDim2.new(0, pad - 2, 0.5, -(avatarSize + 4) / 2)
         avatarRing.BackgroundColor3 = C.Accent
-        avatarRing.BackgroundTransparency = 0.55
+        avatarRing.BackgroundTransparency = 0.5
         avatarRing.BorderSizePixel = 0
         avatarRing.ZIndex = 9
         avatarRing.Parent = row
@@ -7172,7 +7224,7 @@ do
         local textX = pad + avatarSize + 12
 
         local displayName = Instance.new("TextLabel")
-        displayName.Size = UDim2.new(1, -(textX + (IS_MOBILE and 70 or 80)), 0, 20)
+        displayName.Size = UDim2.new(1, -(textX + (IS_MOBILE and 72 or 84)), 0, 22)
         displayName.Position = UDim2.fromOffset(textX, IS_MOBILE and 9 or 12)
         displayName.BackgroundTransparency = 1
         displayName.Text = player.DisplayName
@@ -7187,10 +7239,9 @@ do
         displayName.Parent = row
         registerTheme(displayName, "Text", "TextColor3")
 
-        -- username + status dot row
         local subRow = Instance.new("Frame")
-        subRow.Size = UDim2.new(1, -(textX + (IS_MOBILE and 70 or 80)), 0, 16)
-        subRow.Position = UDim2.fromOffset(textX, IS_MOBILE and 30 or 34)
+        subRow.Size = UDim2.new(1, -(textX + (IS_MOBILE and 72 or 84)), 0, 16)
+        subRow.Position = UDim2.fromOffset(textX, IS_MOBILE and 31 or 36)
         subRow.BackgroundTransparency = 1
         subRow.ZIndex = 10
         subRow.Parent = row
@@ -7225,9 +7276,9 @@ do
         username.Parent = subRow
         registerTheme(username, "Muted", "TextColor3")
 
-        -- ===== BADGE "TP" =====
-        local badgeW = IS_MOBILE and 48 or 56
-        local badgeH = 28
+        -- ===== BADGE =====
+        local badgeW = IS_MOBILE and 50 or 58
+        local badgeH = 30
 
         local badge = Instance.new("Frame")
         badge.Size = UDim2.fromOffset(badgeW, badgeH)
@@ -7256,9 +7307,9 @@ do
         badgeLabel.ZIndex = 11
         badgeLabel.Parent = badge
 
-        -- ===== CLICK = TP =====
+        -- ===== CLICK =====
         row.MouseButton1Click:Connect(function()
-            teleportBehind(player)
+            teleportBehind(player, badge, badgeLabel)
         end)
 
         -- ===== HOVER =====
@@ -7268,8 +7319,6 @@ do
                     {BackgroundTransparency = 0}):Play()
                 TweenService:Create(rowStroke, TweenInfo.new(0.12),
                     {Transparency = 0.4}):Play()
-                TweenService:Create(badge, TweenInfo.new(0.12),
-                    {BackgroundTransparency = -0.1}):Play()
             end
         end)
 
@@ -7278,9 +7327,7 @@ do
                 TweenService:Create(row, TweenInfo.new(0.12),
                     {BackgroundTransparency = 0.05}):Play()
                 TweenService:Create(rowStroke, TweenInfo.new(0.12),
-                    {Transparency = 0.88}):Play()
-                TweenService:Create(badge, TweenInfo.new(0.12),
-                    {BackgroundTransparency = 0.05}):Play()
+                    {Transparency = 0.85}):Play()
             end
         end)
 
