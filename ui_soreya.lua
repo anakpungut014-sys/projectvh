@@ -7155,16 +7155,12 @@ do
 
         local rowHeight = IS_MOBILE and 62 or 68
 
-        local row = Instance.new("TextButton")
+        local row = Instance.new("Frame")
         row.Name = "Player_" .. player.UserId
         row.Size = UDim2.new(1, -4, 0, rowHeight)
         row.BackgroundColor3 = C.Surface2
         row.BackgroundTransparency = 0.05
         row.BorderSizePixel = 0
-        row.Text = ""
-        row.AutoButtonColor = false
-        row.Active = true
-        row.Selectable = true
         row.ClipsDescendants = false
         row.ZIndex = 9
         row.Parent = tpList
@@ -7288,7 +7284,11 @@ do
         local badgeW = IS_MOBILE and 64 or 72
         local badgeH = 30
 
-        local badge = Instance.new("Frame")
+        local badge = Instance.new("TextButton")
+badge.Text = ""
+badge.AutoButtonColor = false
+badge.Active = true
+badge.Selectable = true
         badge.Size = UDim2.fromOffset(badgeW, badgeH)
         badge.Position = UDim2.new(1, -(badgeW + 12), 0.5, -badgeH / 2)
         badge.BackgroundColor3 = C.Accent
@@ -7328,29 +7328,29 @@ do
         badgeLabel.ZIndex = 11
         badgeLabel.Parent = badge
 
-        -- ===== CLICK =====
-        row.MouseButton1Click:Connect(function()
-            teleportBehind(player, badge, badgeLabel)
-        end)
+-- ===== CLICK hanya di badge =====
+badge.MouseButton1Click:Connect(function()
+    teleportBehind(player, badge, badgeLabel)
+end)
 
-        -- ===== HOVER =====
-        row.MouseEnter:Connect(function()
-            if row and row.Parent then
-                TweenService:Create(row, TweenInfo.new(0.12),
-                    {BackgroundTransparency = 0}):Play()
-                TweenService:Create(rowStroke, TweenInfo.new(0.12),
-                    {Transparency = 0.4}):Play()
-            end
-        end)
+-- ===== HOVER hanya di badge =====
+badge.MouseEnter:Connect(function()
+    if badge and badge.Parent then
+        TweenService:Create(badge, TweenInfo.new(0.12),
+            {BackgroundTransparency = -0.1}):Play()
+        TweenService:Create(rowStroke, TweenInfo.new(0.12),
+            {Transparency = 0.4}):Play()
+    end
+end)
 
-        row.MouseLeave:Connect(function()
-            if row and row.Parent then
-                TweenService:Create(row, TweenInfo.new(0.12),
-                    {BackgroundTransparency = 0.05}):Play()
-                TweenService:Create(rowStroke, TweenInfo.new(0.12),
-                    {Transparency = 0.85}):Play()
-            end
-        end)
+badge.MouseLeave:Connect(function()
+    if badge and badge.Parent then
+        TweenService:Create(badge, TweenInfo.new(0.12),
+            {BackgroundTransparency = 0.05}):Play()
+        TweenService:Create(rowStroke, TweenInfo.new(0.12),
+            {Transparency = 0.85}):Play()
+    end
+end)
 
         playerRows[player] = row
     end
