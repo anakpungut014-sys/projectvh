@@ -6957,114 +6957,69 @@ do
 
     local playerRows = {}
 
-    -- ============================================================
-    -- TELEPORT KE BELAKANG PLAYER (auto nunggu respawn, anti spam)
-    -- ============================================================
-    local RunService = game:GetService("RunService")
+-- ============================================================
+-- TELEPORT INSTAN KE BELAKANG PLAYER (3 studs, klik = langsung)
+-- ============================================================
+local RunService = game:GetService("RunService")
 
-    -- DEBOUNCE: biar gak bisa spam klik & numpuk lock posisi
-    local isTeleporting = false
+-- Token buat batalkan lock lama kalau ada TP baru
+local tpToken = 0
 
-    -- TUNGGU CHARACTER HIDUP (max 5 detik)
-    local function waitForChar(player, timeout)
-        timeout = timeout or 5
-        local t = 0
-
-        while t < timeout do
-            -- Player masih ada di server?
-            if not player.Parent then
-                return nil, "keluar"
-            end
-
-            local char = player.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-
-            -- Character ada DAN hidup (bukan mayat)
-            if char and char:FindFirstChild("HumanoidRootPart") and hum and hum.Health > 0 then
-                return char, nil
-            end
-
-            task.wait(0.1)
-            t = t + 0.1
-        end
-
-        return nil, "timeout"
+local function teleportBehind(targetPlayer)
+    if not targetPlayer or targetPlayer == LocalPlayer then
+        return
     end
 
-    local function teleportBehind(targetPlayer)
-        if not targetPlayer or targetPlayer == LocalPlayer then
-            return
-        end
+    -- Cek SEKALI, gak pake loop nunggu
+    local myChar = LocalPlayer.Character
+    local targetChar = targetPlayer.Character
 
-        -- Anti spam klik
-        if isTeleporting then
-            return
-        end
-        isTeleporting = true
-
-        -- TUNGGU character lu sendiri (kalau lagi mati/loading)
-        local myChar = waitForChar(LocalPlayer, 5)
-        if not myChar then
-            notify("❌ Character lu belum spawn, tunggu bentar", "error")
-            isTeleporting = false
-            return
-        end
-
-        -- TUNGGU character target (kalau lagi mati/loading)
-        local targetChar, reason = waitForChar(targetPlayer, 5)
-        if not targetChar then
-            if reason == "keluar" then
-                notify("❌ " .. targetPlayer.DisplayName .. " udah keluar server", "error")
-            else
-                notify("❌ " .. targetPlayer.DisplayName .. " gak respawn dalam 5 detik", "error")
-            end
-            isTeleporting = false
-            return
-        end
-
-        -- Posisi 3 studs di belakang target
-        local behindCF = targetChar:GetPivot() * CFrame.new(0, 0, 3)
-
-        -- Lepas seat biar gak ketarik balik
-        local myHum = myChar:FindFirstChildOfClass("Humanoid")
-        if myHum then
-            myHum.Sit = false
-        end
-
-        local myRoot = myChar:FindFirstChild("HumanoidRootPart") or myChar.PrimaryPart
-
-        -- Nolkan velocity SEBELUM TP
-        if myRoot then
-            myRoot.AssemblyLinearVelocity = Vector3.zero
-            myRoot.AssemblyAngularVelocity = Vector3.zero
-        end
-
-        -- TP SELURUH CHARACTER
-        local ok = pcall(function()
-            myChar:PivotTo(behindCF)
-        end)
-
-        if not ok then
-            notify("❌ Gagal teleport", "error")
-            isTeleporting = false
-            return
-        end
-
-        -- KUNCI posisi 8 frame biar gak di-snap-back
-        task.spawn(function()
-            for _ = 1, 8 do
-                RunService.Heartbeat:Wait()
-                if myRoot and myRoot.Parent then
-                    myRoot.CFrame = behindCF
-                    myRoot.AssemblyLinearVelocity = Vector3.zero
-                    myRoot.AssemblyAngularVelocity = Vector3.zero
-                end
-            end
-            isTeleporting = false
-        end)
-
-        notify("✓ TP ke belakang " .. targetPlayer.DisplayName, "success")
+    if not myChar or not myChar:FindFirstChild("HumanoidRootPart") then
+        notify("❌ Character lu belum ada", "error")
+        return
     end
+
+    if not targetChar or not targetChar:FindFirstChild("HumanoidRootPart") then
+        notify("❌ " .. targetPlayer.DisplayName .. " lagi mati / belum spawn", "error")
+        return
+    end
+
+    -- Posisi 3 studs di belakang target
+    local behindCF = targetChar.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+
+    -- Lepas seat biar gak ketarik balik
+    local myHum = myChar:FindFirstChildOfClass("Humanoid")
+    if myHum then
+        myHum.Sit = false
+    end
+
+    local myRoot = myChar.HumanoidRootPart
+
+    -- Nolkan velocity
+    myRoot.AssemblyLinearVelocity = Vector3.zero
+    myRoot.AssemblyAngularVelocity = Vector3.zero
+
+    -- TP INSTAN, tanpa nunggu apa pun
+    myChar:PivotTo(behindCF)
+
+    -- Lock posisi singkat (jalan di background, GAK blokir klik baru)
+    -- Kalau user TP lagi ke player lain, lock lama otomatis berhenti
+    tpToken += 1
+    local myToken = tpToken
+
+    task.spawn(function()
+        for _ = 1, 5 do
+            RunService.Heartbeat:Wait()
+            if tpToken ~= myToken then return end -- ada TP baru, stop lock lama
+            if myRoot and myRoot.Parent then
+                myRoot.CFrame = behindCF
+                myRoot.AssemblyLinearVelocity = Vector3.zero
+            end
+        end
+    end)
+
+    notify("✓ TP ke belakang " .. targetPlayer.DisplayName, "success")
+end
 
     -- BUAT ROW PLAYER
     local function createPlayerRow(player)
