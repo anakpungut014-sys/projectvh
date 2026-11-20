@@ -115,7 +115,8 @@ end
 end
 
 -- ============================================================
--- 🎣 AUTO FISH v5 — MULTI-TAP PER FRAME
+-- 🎣 AUTO FISH v6 — HIDDEN MINIGAME (VIM ONLY, NO UI)
+-- Mini game TIDAK PERNAH ditampilkan. Tap via VirtualInputManager.
 -- ============================================================
 local RS      = game:GetService("ReplicatedStorage")
 local UIS     = game:GetService("UserInputService")
@@ -126,7 +127,8 @@ local FishSpeed = {
     castCooldown  = 0.15,
     castPowerWait = 0.15,
     loopDelay     = 0.05,
-    tapsPerFrame  = 5,    -- ⚡⚡ 5 tap TIAP FRAME ≈ 300 tap/detik
+    tapsPerFrame  = 5,   -- ⚡ 5 tap per frame
+    reelStartWait = 0.10, -- ⭐ tunggu mini game aktif dulu sebelum tap
 }
 
 local FishState = {
@@ -137,9 +139,11 @@ local FishState = {
     status = "Idle", lastCastTime = 0, lastBiteTime = 0,
 }
 
+-- ⚠️ MiniGame/PowerBar di-require TAPI TIDAK PERNAH di-show
 local FishMiniGame, FishPowerBar
 pcall(function() FishMiniGame  = require(RS.Modules.Fishing.MiniGameHandler)  end)
 pcall(function() FishPowerBar = require(RS.Modules.Fishing.PowerBarHandler) end)
+-- ⛔ JANGAN panggil FishMiniGame.Show / FishPowerBar.Show di mana pun
 
 local function isFishingRod(tool)
     return tool and tool:IsA("Tool") and tool:FindFirstChild("Mechanics") ~= nil
@@ -167,49 +171,15 @@ local function getRodRemotes(rod)
     return mech and mech:FindFirstChild("Remotes")
 end
 
-local function autoEquipRod()
-    if getEquippedRod() then return true end
-    local rod = findRodInBackpack()
-    if not rod then FishState.status = "❌ Rod tidak terdeteksi"; return false end
-    local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    if not hum then return false end
-    FishState.status = "Equipping " .. rod.Name
-    pcall(function() hum:EquipTool(rod) end)
-    task.wait(0.3)
-    return getEquippedRod() ~= nil
-end
-
-local function autoCast()
-    local rod = getEquippedRod()
-    if not rod then return false end
-    if getStatusValue(rod, "FishingActive") then return false end
-    if getStatusValue(rod, "MiniGameActive") then return false end
-    local remotes = getRodRemotes(rod)
-    local castEvent = remotes and remotes:FindFirstChild("CastEvent")
-    if not castEvent then FishState.status = "❌ CastEvent tidak ada"; return false end
-    FishState.status = "Casting..."
-    pcall(function()
-        castEvent:FireServer(true)
-        task.wait(FishSpeed.castPowerWait)
-        castEvent:FireServer(false, 100, Vector3.new(0, 0, -1))
-    end)
-    FishState.stats.cast += 1
-    FishState.lastCastTime = os.clock()
-    return true
-end
-
+-- ═══ TAP MURNI VIM — TIDAK SENTUH MINIGAME MODULE ═══
 local function tapOnce()
-    if FishMiniGame and FishMiniGame.MobileTap then
-        pcall(function() FishMiniGame.MobileTap() end)
-    else
-        pcall(function()
-            VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-            VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-        end)
-    end
+    pcall(function()
+        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
+        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+    end)
 end
 
--- ⚡⚡ REEL — 5 TAP PER FRAME (nembus batas 60 tap/detik)
+-- ═══ REEL — guard MiniGameActive dulu, baru spam ═══
 local function doReelSpam()
     if FishState.reeling then return end
     FishState.reeling = true
@@ -217,40 +187,44 @@ local function doReelSpam()
     local rod = getEquippedRod()
     local start = os.clock()
     local taps = 0
-    FishState.status = "⚡⚡ MULTI-TAP REEL..."
+    FishState.status = "⚡ REEL (hidden)..."
 
-    local miss = 0
-    local minigameSeen = false
+    -- ⭐ Tunggu MiniGameActive muncul (max 2s)
+    local waitStart = os.clock()
+    while FishState.enabled and not FishState.reelAbort
+        and os.clock() - waitStart < 2.0 do
+        if rod and getStatusValue(rod, "MiniGameActive") then break end
+        task.wait(0.05)
+    end
 
+    local miss, minigameSeen = 0, false
     while FishState.enabled
         and not FishState.reelAbort
         and os.clock() - start < FishSpeed.reelMaxTime do
 
         if rod then
             if getStatusValue(rod, "MiniGameActive") then
-                minigameSeen = true
-                miss = 0
+                minigameSeen, miss = true, 0
             elseif minigameSeen then
                 miss += 1
                 if miss >= 2 then break end
             end
         end
 
-        -- ⚡⚡ INTI: beberapa tap dalam 1 frame
         for _ = 1, FishSpeed.tapsPerFrame do
-            tapOnce()
-            taps += 1
+            tapOnce(); taps += 1
         end
-
         RunService.Heartbeat:Wait()
     end
 
     local dur = os.clock() - start
     FishState.reeling = false
-    FishState.status = string.format("✅ Reel %.1fs (%d tap) → cast lagi", dur, taps)
+    FishState.reelAbort = false  -- ⭐ reset biar next reel gak langsung abort
+    FishState.status = string.format("✅ Reel %.1fs (%d tap)", dur, taps)
 end
 
-local fishHookedRods = {}
+-- ═══ HOOK ROD — auto re-hook kalau rod di-equip ulang ═══
+local fishHookedRods = setmetatable({}, { __mode = "k" })  -- ⭐ weak table
 local function hookRod(rod)
     if not rod or fishHookedRods[rod] then return end
     local remotes = getRodRemotes(rod)
@@ -264,12 +238,9 @@ local function hookRod(rod)
         if not FishState.enabled then return end
         if action == "Start" then
             FishState.lastBiteTime = os.clock()
-            if not FishState.reeling then
-                task.spawn(doReelSpam)
-            end
+            if not FishState.reeling then task.spawn(doReelSpam) end
         elseif action == "Stop" then
             FishState.reelAbort = true
-            FishState.status = "Reel done"
         end
     end)
 
@@ -277,7 +248,7 @@ local function hookRod(rod)
         if not FishState.enabled then return end
         if action == "Bite" then
             FishState.lastBiteTime = os.clock()
-            FishState.status = "🐟 Ikan nyangkut! LANGSUNG REEL..."
+            FishState.status = "🐟 Bite! REEL..."
             if FishState.autoReel and not FishState.reeling then
                 task.spawn(doReelSpam)
             end
@@ -297,6 +268,11 @@ local function hookRod(rod)
     end)
 end
 
+-- ═══ ROD cleanup saat unequip ═══
+LocalPlayer.CharacterAdded:Connect(function()
+    fishHookedRods = setmetatable({}, { __mode = "k" })
+end)
+
 local function startFishLoop()
     task.spawn(function()
         while true do
@@ -305,7 +281,11 @@ local function startFishLoop()
             local char = LocalPlayer.Character
             if not char then FishState.status = "No character"; continue end
             if FishState.autoEquip and not getEquippedRod() then
-                autoEquipRod()
+                local rod = findRodInBackpack()
+                if rod then
+                    local hum = char:FindFirstChildOfClass("Humanoid")
+                    if hum then pcall(function() hum:EquipTool(rod) end) end
+                end
                 continue
             end
             local rod = getEquippedRod()
@@ -316,13 +296,23 @@ local function startFishLoop()
                 and not getStatusValue(rod, "MiniGameActive")
                 and not FishState.reeling
                 and os.clock() - FishState.lastCastTime > FishSpeed.castCooldown then
-                autoCast()
+                -- ═══ CAST ═══
+                local remotes = getRodRemotes(rod)
+                local castEvent = remotes and remotes:FindFirstChild("CastEvent")
+                if castEvent then
+                    FishState.status = "Casting..."
+                    pcall(function()
+                        castEvent:FireServer(true)
+                        task.wait(FishSpeed.castPowerWait)
+                        castEvent:FireServer(false, 100, Vector3.new(0, 0, -1))
+                    end)
+                    FishState.stats.cast += 1
+                    FishState.lastCastTime = os.clock()
+                end
             end
             if FishState.autoReel
                 and getStatusValue(rod, "MiniGameActive")
-                and not FishState.reeling
-                and os.clock() - FishState.lastBiteTime > 0 then
-                FishState.lastBiteTime = os.clock()
+                and not FishState.reeling then
                 task.spawn(doReelSpam)
             end
         end
