@@ -115,20 +115,20 @@ end
 end
 
 -- ============================================================
--- 🎣 AUTO FISH v6 — HIDDEN MINIGAME (VIM ONLY, NO UI)
--- Mini game TIDAK PERNAH ditampilkan. Tap via VirtualInputManager.
+-- 🎣 AUTO FISH v7 — HIDDEN MINIGAME (FORCE HIDE UI)
+-- Mini game DIHIDE PAKSA: disable GUI, block VIM, no MobileTap.
 -- ============================================================
 local RS      = game:GetService("ReplicatedStorage")
 local UIS     = game:GetService("UserInputService")
 local VIM     = game:GetService("VirtualInputManager")
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
 local FishSpeed = {
     reelMaxTime   = 8,
     castCooldown  = 0.15,
     castPowerWait = 0.15,
     loopDelay     = 0.05,
-    tapsPerFrame  = 5,   -- ⚡ 5 tap per frame
-    reelStartWait = 0.10, -- ⭐ tunggu mini game aktif dulu sebelum tap
+    tapsPerFrame  = 5,
 }
 
 local FishState = {
@@ -139,11 +139,9 @@ local FishState = {
     status = "Idle", lastCastTime = 0, lastBiteTime = 0,
 }
 
--- ⚠️ MiniGame/PowerBar di-require TAPI TIDAK PERNAH di-show
-local FishMiniGame, FishPowerBar
-pcall(function() FishMiniGame  = require(RS.Modules.Fishing.MiniGameHandler)  end)
-pcall(function() FishPowerBar = require(RS.Modules.Fishing.PowerBarHandler) end)
--- ⛔ JANGAN panggil FishMiniGame.Show / FishPowerBar.Show di mana pun
+-- ⛔ JANGAN require MiniGameHandler / PowerBarHandler sama sekali.
+--    Itu yang bikin UI muncul. Kalau butuh, cuma buat baca state, tapi
+--    di v7 kita baca state dari rod.Status aja (aman, no UI).
 
 local function isFishingRod(tool)
     return tool and tool:IsA("Tool") and tool:FindFirstChild("Mechanics") ~= nil
@@ -171,15 +169,72 @@ local function getRodRemotes(rod)
     return mech and mech:FindFirstChild("Remotes")
 end
 
--- ═══ TAP MURNI VIM — TIDAK SENTUH MINIGAME MODULE ═══
+-- ═══════════════════════════════════════════════════════════
+-- 🔒 LAYER 1: FORCE HIDE MINIGAME UI
+-- Scan PlayerGui tiap 0.2s, matiin GUI yang namanya berbau mini game
+-- ═══════════════════════════════════════════════════════════
+local HIDDEN_GUI_NAMES = {
+    ["minigame"] = true, ["minigameui"] = true, ["minigamegui"] = true,
+    ["powerbar"] = true, ["powerbarui"] = true, ["reelui"] = true,
+    ["reelbar"]  = true, ["fishingui"] = true, ["fishingbar"] = true,
+    ["catchbar"] = true, ["catchui"]   = true, ["fishgame"]   = true,
+}
+
+local hiddenGuiCache = setmetatable({}, { __mode = "k" })
+
+local function forceHideMiniGameUI()
+    local ok = pcall(function()
+        for _, obj in ipairs(PlayerGui:GetDescendants()) do
+            if obj:IsA("ScreenGui") or obj:IsA("BillboardGui")
+                or obj:IsA("SurfaceGui") then
+                local n = obj.Name:lower():gsub("%s+", "")
+                if HIDDEN_GUI_NAMES[n]
+                    or n:find("minigame")
+                    or n:find("powerbar")
+                    or n:find("reelbar")
+                    or n:find("catchbar") then
+                    if not hiddenGuiCache[obj] then
+                        hiddenGuiCache[obj] = true
+                    end
+                    if obj.Enabled ~= false then obj.Enabled = false end
+                    if obj.Visible ~= nil and obj.Visible ~= false then
+                        pcall(function() obj.Visible = false end)
+                    end
+                    -- 1 = hidden (bukan 0, biar gak full invisible ke script)
+                    pcall(function() obj.Enabled = false end)
+                end
+            end
+        end
+    end)
+    return ok
+end
+
+task.spawn(function()
+    while true do
+        task.wait(0.2)
+        if FishState.enabled then
+            pcall(forceHideMiniGameUI)
+        end
+    end
+end)
+
+-- ═══════════════════════════════════════════════════════════
+-- 🔒 LAYER 2: TAP TANPA VIM KE LAYAR
+-- Pakai VirtualUser (bukan VIM) — gak klik koordinat layar,
+-- jadi gak trigger GUI yang listen ke mouse click.
+-- ═══════════════════════════════════════════════════════════
+local VirtualUser = game:GetService("VirtualUser")
+
 local function tapOnce()
+    -- ⭐ VirtualUser gak butuh koordinat → gak nyentuh GUI
     pcall(function()
-        VIM:SendMouseButtonEvent(0, 0, 0, true, game, 0)
-        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+        VirtualUser:CaptureController()
+        VirtualUser:Button1Down(Vector2.new(0, 0))
+        VirtualUser:Button1Up(Vector2.new(0, 0))
     end)
 end
 
--- ═══ REEL — guard MiniGameActive dulu, baru spam ═══
+-- ═══ REEL ═══
 local function doReelSpam()
     if FishState.reeling then return end
     FishState.reeling = true
@@ -189,7 +244,7 @@ local function doReelSpam()
     local taps = 0
     FishState.status = "⚡ REEL (hidden)..."
 
-    -- ⭐ Tunggu MiniGameActive muncul (max 2s)
+    -- tunggu MiniGameActive muncul (max 2s)
     local waitStart = os.clock()
     while FishState.enabled and not FishState.reelAbort
         and os.clock() - waitStart < 2.0 do
@@ -201,6 +256,9 @@ local function doReelSpam()
     while FishState.enabled
         and not FishState.reelAbort
         and os.clock() - start < FishSpeed.reelMaxTime do
+
+        -- ⭐ tiap frame, pastiin UI hidden lagi (server bisa re-show)
+        pcall(forceHideMiniGameUI)
 
         if rod then
             if getStatusValue(rod, "MiniGameActive") then
@@ -219,12 +277,12 @@ local function doReelSpam()
 
     local dur = os.clock() - start
     FishState.reeling = false
-    FishState.reelAbort = false  -- ⭐ reset biar next reel gak langsung abort
+    FishState.reelAbort = false
     FishState.status = string.format("✅ Reel %.1fs (%d tap)", dur, taps)
 end
 
--- ═══ HOOK ROD — auto re-hook kalau rod di-equip ulang ═══
-local fishHookedRods = setmetatable({}, { __mode = "k" })  -- ⭐ weak table
+-- ═══ HOOK ROD ═══
+local fishHookedRods = setmetatable({}, { __mode = "k" })
 local function hookRod(rod)
     if not rod or fishHookedRods[rod] then return end
     local remotes = getRodRemotes(rod)
@@ -236,6 +294,8 @@ local function hookRod(rod)
 
     miniGame.OnClientEvent:Connect(function(action, info)
         if not FishState.enabled then return end
+        -- ⭐ begitu Start, langsung paksa hide UI
+        pcall(forceHideMiniGameUI)
         if action == "Start" then
             FishState.lastBiteTime = os.clock()
             if not FishState.reeling then task.spawn(doReelSpam) end
@@ -268,11 +328,11 @@ local function hookRod(rod)
     end)
 end
 
--- ═══ ROD cleanup saat unequip ═══
 LocalPlayer.CharacterAdded:Connect(function()
     fishHookedRods = setmetatable({}, { __mode = "k" })
 end)
 
+-- ═══ MAIN LOOP ═══
 local function startFishLoop()
     task.spawn(function()
         while true do
@@ -291,12 +351,12 @@ local function startFishLoop()
             local rod = getEquippedRod()
             if not rod then FishState.status = "Waiting for rod..."; continue end
             if not fishHookedRods[rod] then hookRod(rod) end
+
             if FishState.autoCast
                 and not getStatusValue(rod, "FishingActive")
                 and not getStatusValue(rod, "MiniGameActive")
                 and not FishState.reeling
                 and os.clock() - FishState.lastCastTime > FishSpeed.castCooldown then
-                -- ═══ CAST ═══
                 local remotes = getRodRemotes(rod)
                 local castEvent = remotes and remotes:FindFirstChild("CastEvent")
                 if castEvent then
@@ -341,12 +401,17 @@ local function initAutoFish()
                     FishState.autoReel    = true
                     FishState.reelAbort   = false
                     FishState.enabled     = true
-                    -- ⭐ AUTO FISH ON → GHOST IKUT ON
                     Shared.GhostMode_Enabled = true
+                    -- ⭐ langsung paksa hide pas ON
+                    task.spawn(function()
+                        for _ = 1, 20 do
+                            pcall(forceHideMiniGameUI)
+                            task.wait(0.1)
+                        end
+                    end)
                 else
                     FishState.enabled   = false
                     FishState.reelAbort = true
-                    -- ⭐ AUTO FISH OFF → GHOST IKUT OFF (char balik normal)
                     Shared.GhostMode_Enabled = false
                 end
             end
