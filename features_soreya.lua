@@ -115,12 +115,15 @@ end
 end
 
 -- ============================================================
--- 🎣 AUTO FISH v8 — MULTI-TAP + HIDE FISHING MINIGAME ONLY
+-- 🎣 AUTO FISH v8.1 — HIDE FISHING MINIGAME ONLY (CRASH FIX)
 -- ============================================================
--- ✅ Cuma GUI minigame mancing yang dihide (Enabled/Visible=false → HILANG TOTAL)
--- ✅ GUI lain (hub, notif, inventory, dll) TIDAK disentuh
--- ✅ Deteksi: sniff module MiniGameHandler + GUI yang muncul pas MiniGameActive
--- ✅ Minigame selesai → balik otomatis | AutoFish OFF → balik normal
+-- FIX v8.1:
+--  ✅ CRASH FIX: "Visible is not a valid member of ScreenGui"
+--     (ternary trap → sekarang cek tipe + pcall, mustahil error)
+--  ✅ Auto-learn diperketat: cuma GUI yang BARU DIBUAT pas minigame
+--     (Backpack yang cuma di-enable nggak kelearn lagi)
+--  ✅ blacklist += "backpack"
+--  ✅ Cuma GUI minigame mancing yang dihide, GUI lain aman
 -- ============================================================
 
 local RS         = game:GetService("ReplicatedStorage")
@@ -221,13 +224,12 @@ local function tapOnce()
 end
 
 -- ============================================================
--- 🙈 HIDE — FISHING MINIGAME ONLY
+-- 🙈 HIDE — FISHING MINIGAME ONLY (CRASH-PROOF)
 -- ============================================================
 local HideMini = {
     enabled   = true,
-    keywords  = { "minigame", "reel", "fishbar", "catch" }, -- cocokin sebagian nama
-    blacklist = { "vrilz" },  -- ⭐ GUI script sendiri → jangan dihide
-    learned   = {},           -- nama exact hasil auto-learn (biarin kosong)
+    keywords  = { "minigame", "reel", "fishbar", "catch", "fishing" },
+    blacklist = { "vrilz", "backpack" },  -- ⭐ GUI sendiri + backpack → JANGAN dihide
 }
 
 local knownExact = {}   -- [namaLower] = true
@@ -262,20 +264,35 @@ local function learn(name)
     end
 end
 
+-- ⭐ FIX CRASH: cek tipe dulu + pcall → ScreenGui nggak pernah kena "Visible"
 local function hardHide(inst, prop)
     if hiddenNow[inst] then return end
-    hiddenNow[inst] = { prop = prop, val = (prop == "Enabled") and inst.Enabled or inst.Visible }
-    if prop == "Enabled" then inst.Enabled = false else inst.Visible = false end
+    if prop == "Enabled" then
+        if not inst:IsA("ScreenGui") then return end
+        local ok, cur = pcall(function() return inst.Enabled end)
+        if not ok then return end
+        hiddenNow[inst] = { prop = "Enabled", val = cur }
+        inst.Enabled = false
+    else
+        if not inst:IsA("GuiObject") then return end  -- ScreenGui bukan GuiObject → aman
+        local ok, cur = pcall(function() return inst.Visible end)
+        if not ok then return end
+        hiddenNow[inst] = { prop = "Visible", val = cur }
+        inst.Visible = false
+    end
 end
 
 local function hideTargets()
     for _, g in ipairs(PlayerGui:GetChildren()) do
-        if g:IsA("ScreenGui") then
+        if g:IsA("ScreenGui") and not isBlacklisted(g.Name) then
             if isTarget(g.Name) then
                 hardHide(g, "Enabled")
-            else
-                for _, c in ipairs(g:GetChildren()) do
-                    if c:IsA("GuiObject") and isTarget(g.Name .. "/" .. c.Name) then
+            end
+            for _, c in ipairs(g:GetChildren()) do
+                if c:IsA("ScreenGui") then
+                    if isTarget(c.Name) then hardHide(c, "Enabled") end
+                elseif c:IsA("GuiObject") then
+                    if isTarget(g.Name .. "/" .. c.Name) or isTarget(c.Name) then
                         hardHide(c, "Visible")
                     end
                 end
@@ -296,22 +313,16 @@ local function restoreAll()
     table.clear(hiddenNow)
 end
 
--- snapshot kondisi GUI sekarang (buat deteksi yang BARU muncul)
+-- snapshot: gui apa aja yang UDAH ADA (buat deteksi yang baru dibuat)
 local function takeSnap()
     local snap = {}
     for _, g in ipairs(PlayerGui:GetChildren()) do
-        if g:IsA("ScreenGui") then
-            local frames = {}
-            for _, c in ipairs(g:GetChildren()) do
-                if c:IsA("GuiObject") then frames[c] = c.Visible end
-            end
-            snap[g] = { en = g.Enabled, fr = frames }
-        end
+        if g:IsA("ScreenGui") then snap[g] = true end
     end
     return snap
 end
 
--- 👀 WATCHER — deteksi + hide + restore (tiap 0.05s)
+-- 👀 WATCHER (tiap 0.05s)
 task.spawn(function()
     while true do
         task.wait(0.05)
@@ -324,59 +335,55 @@ task.spawn(function()
             prevSnap = takeSnap()
         else
             hiding = true
-            -- 1) yang BARU muncul/nyala pas minigame → catat namanya
-            local cur = takeSnap()
+            -- ⭐ cuma GUI yang BARU DIBUAT pas minigame → learn + hide
+            --    (GUI lama yang cuma di-enable kayak Backpack → DIABAIKAN)
             if prevSnap then
-                for g, st in pairs(cur) do
-                    if not isBlacklisted(g.Name) then
-                        local old = prevSnap[g]
-                        if not old then
-                            if st.en then learn(g.Name) end
-                        elseif st.en and not old.en then
-                            learn(g.Name)
-                        end
-                        for c, vis in pairs(st.fr) do
-                            local oldVis = old and old.fr[c]
-                            if vis and not oldVis then
-                                learn(g.Name .. "/" .. c.Name)
-                            end
-                        end
+                for _, g in ipairs(PlayerGui:GetChildren()) do
+                    if g:IsA("ScreenGui") and not prevSnap[g] and not isBlacklisted(g.Name) then
+                        learn(g.Name)
+                        hardHide(g, "Enabled")
                     end
                 end
             end
-            prevSnap = cur
-            -- 2) hide semua yang cocok (cuma minigame!)
-            hideTargets()
+            prevSnap = takeSnap()
+            hideTargets()  -- hide target: keyword / sniffed / manual
         end
     end
 end)
 
--- 🧠 SNIFF: ambil nama GUI langsung dari MiniGameHandler (paling akurat)
+-- 🧠 SNIFF: ambil nama GUI langsung dari MiniGameHandler (dicek tiap 2s)
 task.spawn(function()
-    if not FishMiniGame then return end
     local function reg(v)
         if typeof(v) == "Instance" then
-            if v:IsA("ScreenGui") then learn(v.Name)
+            if v:IsA("ScreenGui") then
+                if not isBlacklisted(v.Name) then learn(v.Name) end
             elseif v:IsA("GuiObject") then
                 local sg = v:FindFirstAncestorOfClass("ScreenGui")
-                if sg then learn(sg.Name .. "/" .. v.Name) end
+                if sg and not isBlacklisted(sg.Name) then
+                    learn(sg.Name .. "/" .. v.Name)
+                end
             end
         end
     end
-    pcall(function() for _, v in pairs(FishMiniGame) do reg(v) end end)
-    local getuv = getupvalues or getupvals
-    if getuv then
-        pcall(function()
-            for _, f in pairs(FishMiniGame) do
-                if type(f) == "function" then
-                    for _, uv in ipairs(getuv(f)) do reg(uv) end
-                end
+    while true do
+        if FishMiniGame then
+            pcall(function() for _, v in pairs(FishMiniGame) do reg(v) end end)
+            local getuv = getupvalues or getupvals
+            if getuv then
+                pcall(function()
+                    for _, f in pairs(FishMiniGame) do
+                        if type(f) == "function" then
+                            for _, uv in ipairs(getuv(f)) do reg(uv) end
+                        end
+                    end
+                end)
             end
-        end)
+        end
+        task.wait(2)
     end
 end)
 
--- 🔎 DEBUG: jalankan pas minigame muncul → liat semua nama GUI + frame
+-- 🔎 DEBUG: jalankan pas minigame muncul → liat semua nama GUI
 _G.VRILZ_DebugGui = function()
     print("=== PlayerGui ===")
     for _, g in ipairs(PlayerGui:GetChildren()) do
@@ -390,8 +397,13 @@ _G.VRILZ_DebugGui = function()
         end
     end
 end
--- tambah nama manual: _G.VRILZ_HideMiniAdd("NamaGui") atau ("NamaGui/NamaFrame")
+-- manual: _G.VRILZ_HideMiniAdd("NamaGui") / ("NamaGui/NamaFrame")
 _G.VRILZ_HideMiniAdd = function(n) learn(n) end
+-- kalau ada yang kelearn salah: _G.VRILZ_HideMiniRemove("NamaGui")
+_G.VRILZ_HideMiniRemove = function(n)
+    knownExact[n:lower()] = nil
+    print("[HideMini] removed:", n)
+end
 
 -- ============================================================
 -- ⚡ REEL — MULTI-TAP PER FRAME
@@ -449,7 +461,7 @@ local function hookRod(rod)
     fishHookedRods[rod] = true
 
     miniGame.OnClientEvent:Connect(function(action, info)
-        -- ⭐ hide INSTAN pas minigame mulai (0 delay)
+        -- ⭐ hide INSTAN pas minigame mulai
         if action == "Start" and HideMini.enabled then
             hideTargets()
         end
@@ -563,7 +575,7 @@ local function initAutoFish()
                     HideMini.enabled         = true   -- ⭐ Hide ON
                     local rod = getEquippedRod()
                     if rod and getStatusValue(rod, "MiniGameActive") then
-                        hideTargets()                 -- lagi minigame → hide sekarang
+                        hideTargets()
                     end
                 else
                     FishState.enabled   = false
