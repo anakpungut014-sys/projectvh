@@ -115,14 +115,12 @@ end
 end
 
 -- ============================================================
--- 🎣 AUTO FISH v6.1 — MULTI-TAP + HIDE MINIGAME (FINAL)
+-- 🎣 AUTO FISH v8 — MULTI-TAP + HIDE FISHING MINIGAME ONLY
 -- ============================================================
--- FIX:
---  ✅ LocalPlayer & RunService didefinisi
---  ✅ Hide minigame mode "invisible" (UI transparan, tap tetap kena)
---  ✅ Auto-learn nama GUI minigame + guard anti-unhide
---  ✅ Siklus ON→OFF→ON berkali-kali konsisten (re-apply fix)
---  ✅ OFF → minigame balik tampil normal (restoreAll)
+-- ✅ Cuma GUI minigame mancing yang dihide (Enabled/Visible=false → HILANG TOTAL)
+-- ✅ GUI lain (hub, notif, inventory, dll) TIDAK disentuh
+-- ✅ Deteksi: sniff module MiniGameHandler + GUI yang muncul pas MiniGameActive
+-- ✅ Minigame selesai → balik otomatis | AutoFish OFF → balik normal
 -- ============================================================
 
 local RS         = game:GetService("ReplicatedStorage")
@@ -132,21 +130,13 @@ local Players    = game:GetService("Players")
 
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
-
--- Shared global dari loader utama; fallback biar tetap jalan standalone
 Shared = Shared or {}
 
--- ------------------------------------------------------------
 -- ⚙ CONFIG
--- ------------------------------------------------------------
 local FishSpeed = {
-    reelMaxTime   = 8,
-    castCooldown  = 0.15,
-    castPowerWait = 0.15,
-    loopDelay     = 0.05,
-    tapsPerFrame  = 5,    -- ⚡ 5 tap tiap frame ≈ 300 tap/detik
+    reelMaxTime = 8, castCooldown = 0.15, castPowerWait = 0.15,
+    loopDelay = 0.05, tapsPerFrame = 5,
 }
-
 local FishState = {
     enabled = false,
     autoEquip = true, autoCast = true, autoPerfect = true, autoReel = true,
@@ -155,20 +145,15 @@ local FishState = {
     status = "Idle", lastCastTime = 0, lastBiteTime = 0,
 }
 
--- ------------------------------------------------------------
--- 📦 MODULE GAME
--- ------------------------------------------------------------
+-- 📦 MODULE
 local FishMiniGame, FishPowerBar
 pcall(function() FishMiniGame  = require(RS.Modules.Fishing.MiniGameHandler)  end)
 pcall(function() FishPowerBar = require(RS.Modules.Fishing.PowerBarHandler) end)
 
--- ------------------------------------------------------------
--- 🔧 HELPER ROD
--- ------------------------------------------------------------
+-- 🔧 ROD HELPERS
 local function isFishingRod(tool)
     return tool and tool:IsA("Tool") and tool:FindFirstChild("Mechanics") ~= nil
 end
-
 local function getEquippedRod()
     local char = LocalPlayer.Character
     if not char then return nil end
@@ -176,7 +161,6 @@ local function getEquippedRod()
         if isFishingRod(t) then return t end
     end
 end
-
 local function findRodInBackpack()
     local bp = LocalPlayer:FindFirstChild("Backpack")
     if not bp then return nil end
@@ -184,14 +168,12 @@ local function findRodInBackpack()
         if isFishingRod(t) then return t end
     end
 end
-
 local function getStatusValue(rod, name)
     local mech = rod and rod:FindFirstChild("Mechanics")
     local s = mech and mech:FindFirstChild("Status")
     local v = s and s:FindFirstChild(name)
     return (v and v.Value) or false
 end
-
 local function getRodRemotes(rod)
     local mech = rod and rod:FindFirstChild("Mechanics")
     return mech and mech:FindFirstChild("Remotes")
@@ -212,8 +194,7 @@ end
 local function autoCast()
     local rod = getEquippedRod()
     if not rod then return false end
-    if getStatusValue(rod, "FishingActive")  then return false end
-    if getStatusValue(rod, "MiniGameActive") then return false end
+    if getStatusValue(rod, "FishingActive") or getStatusValue(rod, "MiniGameActive") then return false end
     local remotes = getRodRemotes(rod)
     local castEvent = remotes and remotes:FindFirstChild("CastEvent")
     if not castEvent then FishState.status = "❌ CastEvent tidak ada"; return false end
@@ -240,208 +221,177 @@ local function tapOnce()
 end
 
 -- ============================================================
--- 🙈 HIDE MINIGAME — UI transparan tapi tap tetap jalan
+-- 🙈 HIDE — FISHING MINIGAME ONLY
 -- ============================================================
 local HideMini = {
     enabled   = true,
-    mode      = "invisible",  -- "invisible" ✅ recommended | "disabled" ⚠ (tap VIM bisa gagal)
-    keywords  = { "minigame", "reel", "fishbar" }, -- kata kunci nama GUI
-    blacklist = { "vrilz" },  -- GUI milik script sendiri → JANGAN di-hide
-    learned   = {},           -- nama GUI yang auto-ketahuan saat minigame aktif
+    keywords  = { "minigame", "reel", "fishbar", "catch" }, -- cocokin sebagian nama
+    blacklist = { "vrilz" },  -- ⭐ GUI script sendiri → jangan dihide
+    learned   = {},           -- nama exact hasil auto-learn (biarin kosong)
 }
 
-local HideMiniNeedsReapply = false   -- ⭐ PATCH: flag hide-ulang saat ON lagi
+local knownExact = {}   -- [namaLower] = true
+local hiddenNow  = {}   -- [instance] = {prop, val}
+local hiding     = false
+local prevSnap   = nil
 
-local saved, disabledGuis, hookedTrees = {}, {}, {}
-
-local function isTextObj(o)  return o:IsA("TextLabel") or o:IsA("TextButton") or o:IsA("TextBox") end
-local function isImageObj(o) return o:IsA("ImageLabel") or o:IsA("ImageButton") end
-
-local function matchName(name)
-    name = name:lower()
+local function isBlacklisted(n)
+    n = n:lower()
     for _, b in ipairs(HideMini.blacklist) do
-        if name:find(b:lower(), 1, true) then return false end
-    end
-    for _, k in ipairs(HideMini.keywords) do
-        if name:find(k:lower(), 1, true) then return true end
-    end
-    for _, n in ipairs(HideMini.learned) do
-        if name == n:lower() then return true end
+        if n:find(b:lower(), 1, true) then return true end
     end
     return false
 end
 
-local function ghostify(obj)
-    if not obj:IsA("GuiObject") then return end
-    if not saved[obj] then
-        saved[obj] = {
-            bg   = obj.BackgroundTransparency,
-            txt  = isTextObj(obj)  and obj.TextTransparency       or nil,
-            strk = isTextObj(obj)  and obj.TextStrokeTransparency or nil,
-            img  = isImageObj(obj) and obj.ImageTransparency      or nil,
-        }
+local function isTarget(name)
+    if isBlacklisted(name) then return false end
+    local n = name:lower()
+    if knownExact[n] then return true end
+    for _, k in ipairs(HideMini.keywords) do
+        if n:find(k:lower(), 1, true) then return true end
     end
-    obj.BackgroundTransparency = 1
-    if saved[obj].txt then obj.TextTransparency, obj.TextStrokeTransparency = 1, 1 end
-    if saved[obj].img then obj.ImageTransparency = 1 end
+    return false
 end
 
-local function hideTree(root)
-    if not root or not root.Parent then return end
-
-    if HideMini.mode == "disabled" and root:IsA("ScreenGui") then
-        root.Enabled = false
-        disabledGuis[root] = true
-        if not hookedTrees[root] then
-            hookedTrees[root] = true
-            root:GetPropertyChangedSignal("Enabled"):Connect(function()
-                if HideMini.enabled and HideMini.mode == "disabled" and root.Parent then
-                    root.Enabled = false
-                end
-            end)
-        end
-        return
+local function learn(name)
+    if isBlacklisted(name) then return end
+    local n = name:lower()
+    if not knownExact[n] then
+        knownExact[n] = true
+        print("[HideMini] 🧠 Learned:", name)
     end
+end
 
-    -- mode "invisible": transparankan semua, UI tetap ada & bisa diklik
-    ghostify(root)
-    for _, d in ipairs(root:GetDescendants()) do ghostify(d) end
-    if not hookedTrees[root] then
-        hookedTrees[root] = true
-        root.DescendantAdded:Connect(function(d)
-            if HideMini.enabled then task.defer(ghostify, d) end
-        end)
+local function hardHide(inst, prop)
+    if hiddenNow[inst] then return end
+    hiddenNow[inst] = { prop = prop, val = (prop == "Enabled") and inst.Enabled or inst.Visible }
+    if prop == "Enabled" then inst.Enabled = false else inst.Visible = false end
+end
+
+local function hideTargets()
+    for _, g in ipairs(PlayerGui:GetChildren()) do
+        if g:IsA("ScreenGui") then
+            if isTarget(g.Name) then
+                hardHide(g, "Enabled")
+            else
+                for _, c in ipairs(g:GetChildren()) do
+                    if c:IsA("GuiObject") and isTarget(g.Name .. "/" .. c.Name) then
+                        hardHide(c, "Visible")
+                    end
+                end
+            end
+        end
     end
 end
 
 local function restoreAll()
-    for obj, p in pairs(saved) do
+    for inst, st in pairs(hiddenNow) do
         pcall(function()
-            if obj.Parent then
-                obj.BackgroundTransparency = p.bg
-                if p.txt then obj.TextTransparency, obj.TextStrokeTransparency = p.txt, p.strk end
-                if p.img then obj.ImageTransparency = p.img end
+            if inst and inst.Parent then
+                if st.prop == "Enabled" then inst.Enabled = st.val
+                else inst.Visible = st.val end
             end
         end)
     end
-    table.clear(saved)
-    for g in pairs(disabledGuis) do
-        pcall(function() if g.Parent then g.Enabled = true end end)
-    end
-    table.clear(disabledGuis)
+    table.clear(hiddenNow)
 end
 
--- 1️⃣ Scan GUI yang udah ada + yang baru muncul
-local function watchPlayerGui()
-    local function scan(inst)
-        if inst:IsA("ScreenGui") and matchName(inst.Name) then
-            hideTree(inst)
+-- snapshot kondisi GUI sekarang (buat deteksi yang BARU muncul)
+local function takeSnap()
+    local snap = {}
+    for _, g in ipairs(PlayerGui:GetChildren()) do
+        if g:IsA("ScreenGui") then
+            local frames = {}
+            for _, c in ipairs(g:GetChildren()) do
+                if c:IsA("GuiObject") then frames[c] = c.Visible end
+            end
+            snap[g] = { en = g.Enabled, fr = frames }
         end
     end
-    for _, d in ipairs(PlayerGui:GetDescendants()) do scan(d) end
-    PlayerGui.DescendantAdded:Connect(function(d)
-        task.defer(function()
-            if HideMini.enabled and d:IsA("ScreenGui") and matchName(d.Name) then
-                hideTree(d)
-            end
-        end)
-    end)
+    return snap
 end
 
--- 2️⃣ Intip referensi GUI di dalam MiniGameHandler
-local function hideFromModule()
+-- 👀 WATCHER — deteksi + hide + restore (tiap 0.05s)
+task.spawn(function()
+    while true do
+        task.wait(0.05)
+        local rod = getEquippedRod()
+        local active = HideMini.enabled
+            and ((rod and getStatusValue(rod, "MiniGameActive")) or false)
+
+        if not active then
+            if hiding then hiding = false; restoreAll() end  -- ⭐ minigame selesai → balik
+            prevSnap = takeSnap()
+        else
+            hiding = true
+            -- 1) yang BARU muncul/nyala pas minigame → catat namanya
+            local cur = takeSnap()
+            if prevSnap then
+                for g, st in pairs(cur) do
+                    if not isBlacklisted(g.Name) then
+                        local old = prevSnap[g]
+                        if not old then
+                            if st.en then learn(g.Name) end
+                        elseif st.en and not old.en then
+                            learn(g.Name)
+                        end
+                        for c, vis in pairs(st.fr) do
+                            local oldVis = old and old.fr[c]
+                            if vis and not oldVis then
+                                learn(g.Name .. "/" .. c.Name)
+                            end
+                        end
+                    end
+                end
+            end
+            prevSnap = cur
+            -- 2) hide semua yang cocok (cuma minigame!)
+            hideTargets()
+        end
+    end
+end)
+
+-- 🧠 SNIFF: ambil nama GUI langsung dari MiniGameHandler (paling akurat)
+task.spawn(function()
     if not FishMiniGame then return end
-    local function checkVal(v)
-        if typeof(v) == "Instance" and (v:IsA("ScreenGui") or v:IsA("GuiObject")) then
-            hideTree(v)
+    local function reg(v)
+        if typeof(v) == "Instance" then
+            if v:IsA("ScreenGui") then learn(v.Name)
+            elseif v:IsA("GuiObject") then
+                local sg = v:FindFirstAncestorOfClass("ScreenGui")
+                if sg then learn(sg.Name .. "/" .. v.Name) end
+            end
         end
     end
-    pcall(function()
-        for _, v in pairs(FishMiniGame) do checkVal(v) end
-    end)
+    pcall(function() for _, v in pairs(FishMiniGame) do reg(v) end end)
     local getuv = getupvalues or getupvals
     if getuv then
         pcall(function()
             for _, f in pairs(FishMiniGame) do
                 if type(f) == "function" then
-                    for _, uv in ipairs(getuv(f)) do checkVal(uv) end
+                    for _, uv in ipairs(getuv(f)) do reg(uv) end
                 end
             end
         end)
     end
-end
+end)
 
--- 3️⃣ AUTO-LEARN + RE-APPLY: GUI yang muncul pas MiniGameActive → dicatat & di-hide
-local function startAutoLearn()
-    task.spawn(function()
-        local seenEnabled = setmetatable({}, { __mode = "k" }) -- weak: gui destroyed → auto bersih
-        local startTime   = os.clock()
-        while true do
-            task.wait(0.15)
-            if not HideMini.enabled then continue end
-
-            -- ⭐ PATCH: hide ulang GUI yang udah dikenal pas Auto Fish baru ON lagi
-            if HideMiniNeedsReapply then
-                HideMiniNeedsReapply = false
-                for _, g in ipairs(PlayerGui:GetChildren()) do
-                    if g:IsA("ScreenGui") and matchName(g.Name) then
-                        hideTree(g)
-                    end
-                end
-            end
-
-            local rod = getEquippedRod()
-            local active = (rod and getStatusValue(rod, "MiniGameActive")) or false
-            for _, g in ipairs(PlayerGui:GetChildren()) do
-                if g:IsA("ScreenGui") and g.Enabled and not seenEnabled[g] then
-                    seenEnabled[g] = true
-                    -- grace period 2 detik: gui yang udah ada dari awal jangan dicatat
-                    if active and os.clock() - startTime > 2 then
-                        if not table.find(HideMini.learned, g.Name) then
-                            table.insert(HideMini.learned, g.Name)
-                            print("[HideMini] 🧠 Learned GUI minigame:", g.Name)
-                        end
-                        hideTree(g)
-                    end
-                end
-            end
-        end
-    end)
-end
-
--- 4️⃣ GUARD: kalau game balikin transparency-nya, sembunyikan lagi
-local function startGuardLoop()
-    task.spawn(function()
-        while true do
-            task.wait(0.25)
-            if HideMini.enabled and HideMini.mode == "invisible" then
-                for obj, p in pairs(saved) do
-                    if not obj.Parent then
-                        saved[obj] = nil
-                    else
-                        pcall(function()
-                            if obj.BackgroundTransparency < 1 then obj.BackgroundTransparency = 1 end
-                            if p.txt and obj.TextTransparency < 1 then
-                                obj.TextTransparency, obj.TextStrokeTransparency = 1, 1
-                            end
-                            if p.img and obj.ImageTransparency < 1 then obj.ImageTransparency = 1 end
-                        end)
-                    end
-                end
-            end
-        end
-    end)
-end
-
--- 🔎 DEBUG: jalankan _G.VRILZ_DebugGui() pas minigame muncul → print semua nama GUI
+-- 🔎 DEBUG: jalankan pas minigame muncul → liat semua nama GUI + frame
 _G.VRILZ_DebugGui = function()
-    print("=== PlayerGui Scan ===")
+    print("=== PlayerGui ===")
     for _, g in ipairs(PlayerGui:GetChildren()) do
         if g:IsA("ScreenGui") then
-            print(("%-30s Enabled=%s"):format(g.Name, tostring(g.Enabled)))
+            print(("%-32s Enabled=%s"):format(g.Name, tostring(g.Enabled)))
+            for _, c in ipairs(g:GetChildren()) do
+                if c:IsA("GuiObject") then
+                    print(("   └ %-30s Visible=%s"):format(c.Name, tostring(c.Visible)))
+                end
+            end
         end
     end
 end
+-- tambah nama manual: _G.VRILZ_HideMiniAdd("NamaGui") atau ("NamaGui/NamaFrame")
+_G.VRILZ_HideMiniAdd = function(n) learn(n) end
 
 -- ============================================================
 -- ⚡ REEL — MULTI-TAP PER FRAME
@@ -472,7 +422,6 @@ local function doReelSpam()
             end
         end
 
-        -- ⚡ INTI: beberapa tap dalam 1 frame
         for _ = 1, FishSpeed.tapsPerFrame do
             tapOnce()
             taps += 1
@@ -500,6 +449,10 @@ local function hookRod(rod)
     fishHookedRods[rod] = true
 
     miniGame.OnClientEvent:Connect(function(action, info)
+        -- ⭐ hide INSTAN pas minigame mulai (0 delay)
+        if action == "Start" and HideMini.enabled then
+            hideTargets()
+        end
         if not FishState.enabled then return end
         if action == "Start" then
             FishState.lastBiteTime = os.clock()
@@ -574,12 +527,13 @@ end
 -- 🌐 EXPORT API
 -- ============================================================
 _G.VRILZ_FishState = FishState
+_G.VRILZ_HideMini  = HideMini
 _G.VRILZ_FishUI = {
     setStatus  = function(s) FishState.status = s end,
     setEnabled = function(v) FishState.enabled = v and true or false end,
     toggle     = function() FishState.enabled = not FishState.enabled end,
     isEnabled  = function() return FishState.enabled end,
-    setHideMinigame = function(v)                 -- ⭐ toggle hide terpisah
+    setHideMinigame = function(v)
         HideMini.enabled = v and true or false
         if not HideMini.enabled then restoreAll() end
     end,
@@ -590,13 +544,6 @@ _G.VRILZ_FishUI = {
 -- 🚀 INIT
 -- ============================================================
 local function initAutoFish()
-    -- 🙈 sistem hide minigame
-    watchPlayerGui()
-    hideFromModule()
-    startAutoLearn()
-    startGuardLoop()
-
-    -- 🎣 loop utama
     startFishLoop()
 
     -- 🔄 sinkron toggle AutoFish → Ghost & HideMinigame ikut
@@ -613,14 +560,17 @@ local function initAutoFish()
                     FishState.reelAbort   = false
                     FishState.enabled     = true
                     Shared.GhostMode_Enabled = true   -- ⭐ Ghost ON
-                    HideMini.enabled         = true   -- ⭐ Hide minigame ON
-                    HideMiniNeedsReapply     = true   -- ⭐ PATCH: hide ulang GUI yang dikenal
+                    HideMini.enabled         = true   -- ⭐ Hide ON
+                    local rod = getEquippedRod()
+                    if rod and getStatusValue(rod, "MiniGameActive") then
+                        hideTargets()                 -- lagi minigame → hide sekarang
+                    end
                 else
                     FishState.enabled   = false
                     FishState.reelAbort = true
                     Shared.GhostMode_Enabled = false  -- ⭐ Ghost OFF
                     HideMini.enabled         = false  -- ⭐ Hide OFF
-                    restoreAll()                      -- ⭐ UI minigame balik normal
+                    restoreAll()                      -- ⭐ GUI minigame balik normal
                 end
             end
         end
@@ -628,6 +578,7 @@ local function initAutoFish()
 end
 
 initAutoFish()
+
 -- ============================================================
 -- 🏔 AUTO SUMMIT v2 — STANDALONE (Baca AutoSummit_StartCP dari UI)
 -- ✅ Gak perlu soreyacp.txt
