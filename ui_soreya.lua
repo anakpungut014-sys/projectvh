@@ -7403,10 +7403,227 @@ end)
     refreshPlayers()
 end
 
+-- ============================================================
+-- 🌐 AUTO JOIN TAB — DI BAWAH SHOP
+-- ============================================================
+do
+    local joinPage = Instance.new("Frame")
+    joinPage.Name = "AutoJoin"
+    joinPage.Size = UDim2.fromScale(1, 1)
+    joinPage.BackgroundTransparency = 1
+    joinPage.BorderSizePixel = 0
+    joinPage.Visible = false
+    joinPage.ZIndex = 7
+    joinPage.Parent = pageHolder
+    pages.AutoJoin = joinPage
+
+    -- HEADER
+    local headerWrap = Instance.new("Frame")
+    headerWrap.Size = UDim2.new(1, -20, 0, 48)
+    headerWrap.Position = UDim2.fromOffset(10, 6)
+    headerWrap.BackgroundTransparency = 1
+    headerWrap.ZIndex = 8
+    headerWrap.Parent = joinPage
+
+    local joinHeader = Instance.new("TextLabel")
+    joinHeader.Size = UDim2.new(1, 0, 0, 24)
+    joinHeader.BackgroundTransparency = 1
+    joinHeader.Text = "🌐  AUTO JOIN SERVER"
+    joinHeader.TextColor3 = C.Text
+    joinHeader.Font = Enum.Font.GothamBold
+    joinHeader.TextSize = IS_MOBILE and 13 or 15
+    joinHeader.TextXAlignment = Enum.TextXAlignment.Left
+    joinHeader.ZIndex = 8
+    joinHeader.Parent = headerWrap
+    registerTheme(joinHeader, "Text", "TextColor3")
+
+    local joinInfo = Instance.new("TextLabel")
+    joinInfo.Size = UDim2.new(1, 0, 0, 18)
+    joinInfo.Position = UDim2.fromOffset(0, 24)
+    joinInfo.BackgroundTransparency = 1
+    joinInfo.Text = "Hope server sepi / Rejoin / Job ID"
+    joinInfo.TextColor3 = C.Muted
+    joinInfo.Font = Enum.Font.GothamSemibold
+    joinInfo.TextSize = CFG.FONT_MUTED
+    joinInfo.TextXAlignment = Enum.TextXAlignment.Left
+    joinInfo.ZIndex = 8
+    joinInfo.Parent = headerWrap
+    registerTheme(joinInfo, "Muted", "TextColor3")
+
+    -- SCROLL
+    local joinScroll = Instance.new("ScrollingFrame")
+    joinScroll.Size = UDim2.new(1, -20, 1, -70)
+    joinScroll.Position = UDim2.fromOffset(10, 60)
+    joinScroll.BackgroundTransparency = 1
+    joinScroll.BorderSizePixel = 0
+    joinScroll.ScrollBarThickness = 4
+    joinScroll.ScrollBarImageColor3 = C.Accent
+    joinScroll.CanvasSize = UDim2.new(0, 0, 0, 0)
+    joinScroll.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    joinScroll.ZIndex = 8
+    joinScroll.Parent = joinPage
+    registerTheme(joinScroll, "Accent", "ScrollBarImageColor3")
+
+    local joinLayout = Instance.new("UIListLayout")
+    joinLayout.Padding = UDim.new(0, 9)
+    joinLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    joinLayout.Parent = joinScroll
+
+    local joinPad = Instance.new("UIPadding")
+    joinPad.PaddingBottom = UDim.new(0, 10)
+    joinPad.PaddingTop = UDim.new(0, 4)
+    joinPad.Parent = joinScroll
+
+    -- CARD
+    local joinCard, joinContent = makeCard(joinScroll, "Join Config", 1)
+
+    -- Toggle
+    makeToggle(joinContent, "Enable Auto Join", false, nil, "AutoJoin_Enabled")
+
+    -- Mode dropdown
+    Shared.AutoJoin_Mode = Shared.AutoJoin_Mode or "server"
+    local modeDrop = makeDropdownGlobal(joinContent, { "server", "player", "jobid" },
+        Shared.AutoJoin_Mode, function(v)
+            Shared.AutoJoin_Mode = v
+            if _G.VRILZ_AutoJoin then _G.VRILZ_AutoJoin.SetMode(v) end
+        end)
+    modeDrop.LayoutOrder = 10
+
+    -- Input keyword
+    local function makeJoinInput(placeholder, sharedKey, layoutOrder)
+        local frame = Instance.new("Frame")
+        frame.Size = UDim2.new(1, 0, 0, CFG.ACTION_H)
+        frame.BackgroundColor3 = C.Surface3
+        frame.BorderSizePixel = 0
+        frame.ZIndex = 3
+        frame.LayoutOrder = layoutOrder or 1
+        frame.Parent = joinContent
+        registerTheme(frame, "Surface3", "BackgroundColor3")
+
+        local fc = Instance.new("UICorner")
+        fc.CornerRadius = UDim.new(0, 8)
+        fc.Parent = frame
+
+        local box = Instance.new("TextBox")
+        box.Size = UDim2.new(1, -20, 1, 0)
+        box.Position = UDim2.fromOffset(10, 0)
+        box.BackgroundTransparency = 1
+        box.PlaceholderText = placeholder
+        box.Text = Shared[sharedKey] or ""
+        box.TextColor3 = C.Text
+        box.PlaceholderColor3 = C.Muted
+        box.Font = Enum.Font.Gotham
+        box.TextSize = CFG.FONT_LABEL
+        box.TextXAlignment = Enum.TextXAlignment.Left
+        box.ClearTextOnFocus = false
+        box.ZIndex = 4
+        box.Parent = frame
+        registerTheme(box, "Text", "TextColor3")
+
+        box:GetPropertyChangedSignal("Text"):Connect(function()
+            Shared[sharedKey] = box.Text
+        end)
+        return box
+    end
+
+    local kwBox = makeJoinInput("Username / Job ID / (kosong = sepi)", "AutoJoin_Keyword", 11)
+    local pidBox = makeJoinInput("Place ID (opsional)", "AutoJoin_PlaceId", 12)
+
+    pidBox:GetPropertyChangedSignal("Text"):Connect(function()
+        local n = tonumber(pidBox.Text)
+        Shared.AutoJoin_PlaceId = n
+    end)
+
+    -- Tombol Join Now
+    local joinBtn = Instance.new("TextButton")
+    joinBtn.Size = UDim2.new(1, 0, 0, CFG.ACTION_H)
+    joinBtn.BackgroundColor3 = C.Accent
+    joinBtn.Text = "🚀 Join Now"
+    joinBtn.TextColor3 = Color3.new(1, 1, 1)
+    joinBtn.Font = Enum.Font.GothamBold
+    joinBtn.TextSize = CFG.FONT_LABEL
+    joinBtn.BorderSizePixel = 0
+    joinBtn.ZIndex = 3
+    joinBtn.LayoutOrder = 13
+    joinBtn.Parent = joinContent
+    registerTheme(joinBtn, "Accent", "BackgroundColor3")
+
+    local jc = Instance.new("UICorner")
+    jc.CornerRadius = UDim.new(0, 8)
+    jc.Parent = joinBtn
+
+    joinBtn.MouseButton1Click:Connect(function()
+        if _G.VRILZ_AutoJoin then
+            local ok, err = _G.VRILZ_AutoJoin.JoinNow(
+                Shared.AutoJoin_Mode, Shared.AutoJoin_Keyword, Shared.AutoJoin_PlaceId
+            )
+            if not ok then
+                _G.VRILZ_Notify("❌ " .. tostring(err), "error")
+            end
+        else
+            _G.VRILZ_Notify("❌ AutoJoin belum siap", "error")
+        end
+    end)
+
+    -- Tombol Rejoin
+    local rejoinBtn = Instance.new("TextButton")
+    rejoinBtn.Size = UDim2.new(1, 0, 0, CFG.ACTION_H)
+    rejoinBtn.BackgroundColor3 = C.Surface2
+    rejoinBtn.Text = "🔄 Rejoin Server Terakhir"
+    rejoinBtn.TextColor3 = C.Text
+    rejoinBtn.Font = Enum.Font.GothamSemibold
+    rejoinBtn.TextSize = CFG.FONT_LABEL
+    rejoinBtn.BorderSizePixel = 0
+    rejoinBtn.ZIndex = 3
+    rejoinBtn.LayoutOrder = 14
+    rejoinBtn.Parent = joinContent
+    registerTheme(rejoinBtn, "Surface2", "BackgroundColor3")
+
+    local rjc = Instance.new("UICorner")
+    rjc.CornerRadius = UDim.new(0, 8)
+    rjc.Parent = rejoinBtn
+
+    rejoinBtn.MouseButton1Click:Connect(function()
+        if _G.VRILZ_AutoJoin then
+            local ok, err = _G.VRILZ_AutoJoin.RejoinNow()
+            if ok then
+                _G.VRILZ_Notify("🔄 Rejoin...", "info")
+            else
+                _G.VRILZ_Notify("❌ " .. tostring(err), "error")
+            end
+        end
+    end)
+
+    -- Status
+    local statusLbl = Instance.new("TextLabel")
+    statusLbl.Size = UDim2.new(1, 0, 0, 34)
+    statusLbl.BackgroundTransparency = 1
+    statusLbl.Text = "Status: Idle"
+    statusLbl.TextColor3 = C.Muted
+    statusLbl.Font = Enum.Font.Gotham
+    statusLbl.TextSize = CFG.FONT_MUTED
+    statusLbl.TextWrapped = true
+    statusLbl.TextXAlignment = Enum.TextXAlignment.Left
+    statusLbl.TextYAlignment = Enum.TextYAlignment.Top
+    statusLbl.ZIndex = 3
+    statusLbl.LayoutOrder = 15
+    statusLbl.Parent = joinContent
+    registerTheme(statusLbl, "Muted", "TextColor3")
+
+    task.spawn(function()
+        while statusLbl.Parent do
+            task.wait(1)
+            local st = _G.VRILZ_AutoJoin and _G.VRILZ_AutoJoin.GetState()
+            statusLbl.Text = "Status: " .. (st and st.status or "N/A")
+        end
+    end)
+end
+
 registerTab("Info", "129516985087314", "Info", true)
 registerTab("AutoSummit", "127064137622496", "Auto Summit", true)
 registerTab("AutoFish", "118895892824960", "Auto Fish", true)
 registerTab("Shop", "101498199599518", "Shop", true)
+registerTab("AutoJoin", "129516985087314", "Auto Join", true)
 registerTab("TpPlayer", "85209430814229", "Tp Player", true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Webhook", "78129393420657", "Webhook", true)
