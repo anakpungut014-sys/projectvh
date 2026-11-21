@@ -7404,7 +7404,7 @@ end)
 end
 
 -- ============================================================
--- 🌐 AUTO JOIN TAB v2 — PREMIUM UI
+-- 🌐 AUTO JOIN TAB — CLEAN UI (Rejoin / Hope / Join by ID)
 -- ============================================================
 do
     local joinPage = Instance.new("Frame")
@@ -7417,18 +7417,16 @@ do
     joinPage.Parent = pageHolder
     pages.AutoJoin = joinPage
 
-    -- ═══════════════════════════════════════════════════════
     -- HEADER
-    -- ═══════════════════════════════════════════════════════
     local headerWrap = Instance.new("Frame")
-    headerWrap.Size = UDim2.new(1, -20, 0, 52)
+    headerWrap.Size = UDim2.new(1, -20, 0, 48)
     headerWrap.Position = UDim2.fromOffset(10, 6)
     headerWrap.BackgroundTransparency = 1
     headerWrap.ZIndex = 8
     headerWrap.Parent = joinPage
 
     local joinHeader = Instance.new("TextLabel")
-    joinHeader.Size = UDim2.new(1, 0, 0, 26)
+    joinHeader.Size = UDim2.new(1, 0, 0, 24)
     joinHeader.BackgroundTransparency = 1
     joinHeader.Text = "🌐  AUTO JOIN SERVER"
     joinHeader.TextColor3 = C.Text
@@ -7441,9 +7439,9 @@ do
 
     local joinInfo = Instance.new("TextLabel")
     joinInfo.Size = UDim2.new(1, 0, 0, 18)
-    joinInfo.Position = UDim2.fromOffset(0, 26)
+    joinInfo.Position = UDim2.fromOffset(0, 24)
     joinInfo.BackgroundTransparency = 1
-    joinInfo.Text = "Hope server sepi / Rejoin / Job ID"
+    joinInfo.Text = "Rejoin · Hope Server · Join by Server ID"
     joinInfo.TextColor3 = C.Muted
     joinInfo.Font = Enum.Font.GothamSemibold
     joinInfo.TextSize = CFG.FONT_MUTED
@@ -7452,12 +7450,10 @@ do
     joinInfo.Parent = headerWrap
     registerTheme(joinInfo, "Muted", "TextColor3")
 
-    -- ═══════════════════════════════════════════════════════
     -- SCROLL
-    -- ═══════════════════════════════════════════════════════
     local joinScroll = Instance.new("ScrollingFrame")
-    joinScroll.Size = UDim2.new(1, -20, 1, -74)
-    joinScroll.Position = UDim2.fromOffset(10, 64)
+    joinScroll.Size = UDim2.new(1, -20, 1, -70)
+    joinScroll.Position = UDim2.fromOffset(10, 60)
     joinScroll.BackgroundTransparency = 1
     joinScroll.BorderSizePixel = 0
     joinScroll.ScrollBarThickness = 4
@@ -7478,104 +7474,12 @@ do
     joinPad.PaddingTop = UDim.new(0, 4)
     joinPad.Parent = joinScroll
 
-    -- ═══════════════════════════════════════════════════════
     -- CARD
-    -- ═══════════════════════════════════════════════════════
-    local joinCard, joinContent = makeCard(joinScroll, "Join Config", 1)
+    local joinCard, joinContent = makeCard(joinScroll, "Join Actions", 1)
 
-    -- ═══════════════════════════════════════════════════════
-    -- TOGGLE
-    -- ═══════════════════════════════════════════════════════
-    makeToggle(joinContent, "Enable Auto Join", false, nil, "AutoJoin_Enabled")
-
-    -- ═══════════════════════════════════════════════════════
-    -- MODE DROPDOWN
-    -- ═══════════════════════════════════════════════════════
-    Shared.AutoJoin_Mode = Shared.AutoJoin_Mode or "server"
-    local modeDrop = makeDropdownGlobal(joinContent, { "server", "player", "jobid" },
-        Shared.AutoJoin_Mode, function(v)
-            Shared.AutoJoin_Mode = v
-            if _G.VRILZ_AutoJoin then _G.VRILZ_AutoJoin.SetMode(v) end
-        end)
-    modeDrop.LayoutOrder = 10
-
-    -- ═══════════════════════════════════════════════════════
-    -- INPUT HELPER (dengan icon + focus ring)
-    -- ═══════════════════════════════════════════════════════
-    local function makeJoinInput(icon, placeholder, sharedKey, layoutOrder)
-        local frame = Instance.new("Frame")
-        frame.Size = UDim2.new(1, 0, 0, CFG.ACTION_H + 4)
-        frame.BackgroundColor3 = C.Surface3
-        frame.BorderSizePixel = 0
-        frame.ZIndex = 3
-        frame.LayoutOrder = layoutOrder or 1
-        frame.Parent = joinContent
-        registerTheme(frame, "Surface3", "BackgroundColor3")
-
-        local fc = Instance.new("UICorner")
-        fc.CornerRadius = UDim.new(0, 8)
-        fc.Parent = frame
-
-        local stroke = Instance.new("UIStroke")
-        stroke.Color = C.Accent
-        stroke.Thickness = 1
-        stroke.Transparency = 0.7
-        stroke.Parent = frame
-        registerTheme(stroke, "Accent", "Color")
-
-        -- icon
-        local iconLbl = Instance.new("TextLabel")
-        iconLbl.Size = UDim2.fromOffset(28, 28)
-        iconLbl.Position = UDim2.new(0, 8, 0.5, -14)
-        iconLbl.BackgroundTransparency = 1
-        iconLbl.Text = icon
-        iconLbl.TextColor3 = C.Accent
-        iconLbl.Font = Enum.Font.GothamBold
-        iconLbl.TextSize = 14
-        iconLbl.ZIndex = 4
-        iconLbl.Parent = frame
-        registerTheme(iconLbl, "Accent", "TextColor3")
-
-        local box = Instance.new("TextBox")
-        box.Size = UDim2.new(1, -46, 1, 0)
-        box.Position = UDim2.fromOffset(38, 0)
-        box.BackgroundTransparency = 1
-        box.PlaceholderText = placeholder
-        box.Text = Shared[sharedKey] or ""
-        box.TextColor3 = C.Text
-        box.PlaceholderColor3 = C.Muted
-        box.Font = Enum.Font.Gotham
-        box.TextSize = CFG.FONT_LABEL
-        box.TextXAlignment = Enum.TextXAlignment.Left
-        box.ClearTextOnFocus = false
-        box.ZIndex = 4
-        box.Parent = frame
-        registerTheme(box, "Text", "TextColor3")
-
-        box.Focused:Connect(function()
-            TweenService:Create(stroke, TweenInfo.new(0.15), {Transparency = 0.2}):Play()
-        end)
-        box.FocusLost:Connect(function()
-            TweenService:Create(stroke, TweenInfo.new(0.15), {Transparency = 0.7}):Play()
-        end)
-
-        box:GetPropertyChangedSignal("Text"):Connect(function()
-            Shared[sharedKey] = box.Text
-        end)
-        return box
-    end
-
-    local kwBox = makeJoinInput("👤", "Username / Job ID / (kosong = sepi)", "AutoJoin_Keyword", 11)
-    local pidBox = makeJoinInput("🆔", "Place ID (opsional)", "AutoJoin_PlaceId", 12)
-
-    pidBox:GetPropertyChangedSignal("Text"):Connect(function()
-        local n = tonumber(pidBox.Text)
-        Shared.AutoJoin_PlaceId = n
-    end)
-
-    -- ═══════════════════════════════════════════════════════
+    -- ========================================================
     -- SPINNER HELPER
-    -- ═══════════════════════════════════════════════════════
+    -- ========================================================
     local function makeSpinner(parent, size)
         local spinner = Instance.new("Frame")
         spinner.Name = "Spinner"
@@ -7640,9 +7544,9 @@ do
         return spinner, stopSpin, startSpin
     end
 
-    -- ═══════════════════════════════════════════════════════
+    -- ========================================================
     -- TOMBOL HELPER
-    -- ═══════════════════════════════════════════════════════
+    -- ========================================================
     local function makeActionButton(parent, icon, text, color, isAccent, layoutOrder)
         local btn = Instance.new("TextButton")
         btn.Size = UDim2.new(1, 0, 0, CFG.ACTION_H + 6)
@@ -7661,7 +7565,6 @@ do
         corner.CornerRadius = UDim.new(0, 9)
         corner.Parent = btn
 
-        -- gradient
         local grad = Instance.new("UIGradient")
         grad.Rotation = 45
         if isAccent then
@@ -7677,14 +7580,12 @@ do
         end
         grad.Parent = btn
 
-        -- stroke
         local stroke = Instance.new("UIStroke")
         stroke.Color = isAccent and C.Accent2 or C.Accent
         stroke.Thickness = 1
         stroke.Transparency = isAccent and 0.3 or 0.6
         stroke.Parent = btn
 
-        -- top gloss
         local gloss = Instance.new("Frame")
         gloss.Size = UDim2.new(1, -12, 0, 1)
         gloss.Position = UDim2.fromOffset(6, 1)
@@ -7706,7 +7607,7 @@ do
         label.TextSize = CFG.FONT_LABEL
         label.ZIndex = 5
         label.Parent = btn
-        registerTheme(label, isAccent and "Text" or "Text", "TextColor3")
+        registerTheme(label, "Text", "TextColor3")
 
         local spinner, stopSpin, startSpin = makeSpinner(btn, 20)
 
@@ -7739,74 +7640,68 @@ do
         btn.MouseEnter:Connect(function()
             if loading then return end
             TweenService:Create(stroke, TweenInfo.new(0.15), {Transparency = 0.1}):Play()
-            TweenService:Create(btn, TweenInfo.new(0.15),
-                {Size = UDim2.new(1, 2, 0, CFG.ACTION_H + 6)}):Play()
         end)
         btn.MouseLeave:Connect(function()
             if loading then return end
             TweenService:Create(stroke, TweenInfo.new(0.15),
                 {Transparency = isAccent and 0.3 or 0.6}):Play()
-            TweenService:Create(btn, TweenInfo.new(0.15),
-                {Size = UDim2.new(1, 0, 0, CFG.ACTION_H + 6)}):Play()
         end)
 
         return btn, label, setLoading
     end
 
-    -- ═══════════════════════════════════════════════════════
-    -- TOMBOL JOIN NOW (HOPE) — 5 DETIK LOADING
-    -- ═══════════════════════════════════════════════════════
-    local joinBtn, joinLabel, setJoinLoading = makeActionButton(
-        joinContent, "🚀", "Join Now", C.Accent, true, 13
+    -- ========================================================
+    -- 1. HOPE SERVER (5 detik loading)
+    -- ========================================================
+    local hopeBtn, hopeLabel, setHopeLoading = makeActionButton(
+        joinContent, "🔍", "Hope Server", C.Accent, true, 1
     )
 
-    joinBtn.MouseButton1Click:Connect(function()
+    hopeBtn.MouseButton1Click:Connect(function()
         if not _G.VRILZ_AutoJoin then
-            _G.VRILZ_Notify("❌ AutoJoin belum siap", "error")
+            _G.VRILZ_Notify("❌ AutoJoin not ready", "error")
             return
         end
-        if joinBtn.Active == false then return end
+        if hopeBtn.Active == false then return end
 
-        setJoinLoading(true, "Mencari server...")
-        _G.VRILZ_Notify("🔍 Mencari server terbaik...", "info")
+        setHopeLoading(true, "Finding server...")
+        _G.VRILZ_Notify("🔍 Searching for low-player server...", "info")
 
         task.spawn(function()
-            task.wait(5)  -- ⭐ loading 5 detik
+            task.wait(5)  -- ⭐ 5 detik loading
 
-            local ok, err = _G.VRILZ_AutoJoin.JoinNow(
-                Shared.AutoJoin_Mode, Shared.AutoJoin_Keyword, Shared.AutoJoin_PlaceId
-            )
+            local ok, err = _G.VRILZ_AutoJoin.JoinNow("server", "", Shared.AutoJoin_PlaceId)
 
             task.wait(0.4)
-            setJoinLoading(false)
+            setHopeLoading(false)
 
             if ok then
-                _G.VRILZ_Notify("✅ Server ketemu! Join...", "success")
+                _G.VRILZ_Notify("✅ Server found! Joining...", "success")
             else
                 _G.VRILZ_Notify("❌ " .. tostring(err), "error")
             end
         end)
     end)
 
-    -- ═══════════════════════════════════════════════════════
-    -- TOMBOL REJOIN — 3 DETIK LOADING
-    -- ═══════════════════════════════════════════════════════
+    -- ========================================================
+    -- 2. REJOIN (3 detik loading)
+    -- ========================================================
     local rejoinBtn, rejoinLabel, setRejoinLoading = makeActionButton(
-        joinContent, "🔄", "Rejoin Server Terakhir", C.Surface2, false, 14
+        joinContent, "🔄", "Rejoin Server", C.Surface2, false, 2
     )
 
     rejoinBtn.MouseButton1Click:Connect(function()
         if not _G.VRILZ_AutoJoin then
-            _G.VRILZ_Notify("❌ AutoJoin belum siap", "error")
+            _G.VRILZ_Notify("❌ AutoJoin not ready", "error")
             return
         end
         if rejoinBtn.Active == false then return end
 
         setRejoinLoading(true, "Rejoining...")
-        _G.VRILZ_Notify("🔄 Rejoin ke server terakhir...", "info")
+        _G.VRILZ_Notify("🔄 Rejoining last server...", "info")
 
         task.spawn(function()
-            task.wait(3)  -- ⭐ loading 3 detik
+            task.wait(3)  -- ⭐ 3 detik loading
 
             local ok, err = _G.VRILZ_AutoJoin.RejoinNow()
 
@@ -7814,23 +7709,126 @@ do
             setRejoinLoading(false)
 
             if ok then
-                _G.VRILZ_Notify("✅ Rejoin berhasil!", "success")
+                _G.VRILZ_Notify("✅ Rejoin successful!", "success")
             else
                 _G.VRILZ_Notify("❌ " .. tostring(err), "error")
             end
         end)
     end)
 
-    -- ═══════════════════════════════════════════════════════
-    -- STATUS CARD (dot indicator + text)
-    -- ═══════════════════════════════════════════════════════
+    -- ========================================================
+    -- 3. JOIN BY SERVER ID (opsional, auto-join kalau valid)
+    -- ========================================================
+    local idFrame = Instance.new("Frame")
+    idFrame.Size = UDim2.new(1, 0, 0, CFG.ACTION_H + 4)
+    idFrame.BackgroundColor3 = C.Surface3
+    idFrame.BorderSizePixel = 0
+    idFrame.ZIndex = 3
+    idFrame.LayoutOrder = 3
+    idFrame.Parent = joinContent
+    registerTheme(idFrame, "Surface3", "BackgroundColor3")
+
+    local idCorner = Instance.new("UICorner")
+    idCorner.CornerRadius = UDim.new(0, 9)
+    idCorner.Parent = idFrame
+
+    local idStroke = Instance.new("UIStroke")
+    idStroke.Color = C.Accent
+    idStroke.Thickness = 1
+    idStroke.Transparency = 0.6
+    idStroke.Parent = idFrame
+    registerTheme(idStroke, "Accent", "Color")
+
+    local idIcon = Instance.new("TextLabel")
+    idIcon.Size = UDim2.fromOffset(28, 28)
+    idIcon.Position = UDim2.new(0, 10, 0.5, -14)
+    idIcon.BackgroundTransparency = 1
+    idIcon.Text = "🆔"
+    idIcon.TextColor3 = C.Accent
+    idIcon.Font = Enum.Font.GothamBold
+    idIcon.TextSize = 14
+    idIcon.ZIndex = 4
+    idIcon.Parent = idFrame
+    registerTheme(idIcon, "Accent", "TextColor3")
+
+    local idBox = Instance.new("TextBox")
+    idBox.Size = UDim2.new(1, -50, 1, 0)
+    idBox.Position = UDim2.fromOffset(40, 0)
+    idBox.BackgroundTransparency = 1
+    idBox.PlaceholderText = "Paste Server ID (optional)"
+    idBox.Text = ""
+    idBox.TextColor3 = C.Text
+    idBox.PlaceholderColor3 = C.Muted
+    idBox.Font = Enum.Font.Gotham
+    idBox.TextSize = CFG.FONT_LABEL
+    idBox.TextXAlignment = Enum.TextXAlignment.Left
+    idBox.ClearTextOnFocus = false
+    idBox.ZIndex = 4
+    idBox.Parent = idFrame
+    registerTheme(idBox, "Text", "TextColor3")
+
+    idBox.Focused:Connect(function()
+        TweenService:Create(idStroke, TweenInfo.new(0.15), {Transparency = 0.2}):Play()
+    end)
+    idBox.FocusLost:Connect(function()
+        TweenService:Create(idStroke, TweenInfo.new(0.15), {Transparency = 0.6}):Play()
+    end)
+
+    -- ⭐ AUTO-JOIN: paste ID valid → langsung join tanpa klik
+    local lastAutoJoinId = nil
+    local autoJoinCooldown = false
+
+    idBox:GetPropertyChangedSignal("Text"):Connect(function()
+        local raw = idBox.Text:gsub("%s+", "")
+        if raw == "" then
+            lastAutoJoinId = nil
+            return
+        end
+
+        -- validasi: UUID 36 char dengan strip
+        local isValid = raw:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$") ~= nil
+
+        if isValid and raw ~= lastAutoJoinId and not autoJoinCooldown then
+            lastAutoJoinId = raw
+            autoJoinCooldown = true
+
+            _G.VRILZ_Notify("✅ Valid Server ID detected! Joining...", "success")
+
+            task.spawn(function()
+                task.wait(1)  -- kasih waktu 1 detik biar user liat notif
+                if _G.VRILZ_AutoJoin then
+                    local ok, err = _G.VRILZ_AutoJoin.JoinNow("jobid", raw, Shared.AutoJoin_PlaceId)
+                    if not ok then
+                        _G.VRILZ_Notify("❌ " .. tostring(err), "error")
+                    end
+                end
+                task.wait(3)
+                autoJoinCooldown = false
+            end)
+        elseif not isValid and #raw > 0 and #raw >= 30 then
+            -- ID kelihatan panjang tapi invalid
+            if idStroke then
+                idStroke.Color = Color3.fromRGB(255, 80, 90)
+                task.delay(1.5, function()
+                    if idStroke then
+                        TweenService:Create(idStroke, TweenInfo.new(0.3),
+                            {Color = C.Accent}):Play()
+                    end
+                end)
+            end
+        end
+    end)
+
+    -- ========================================================
+    -- STATUS CARD (tanpa "Idle")
+    -- ========================================================
     local statusCard = Instance.new("Frame")
-    statusCard.Size = UDim2.new(1, 0, 0, 38)
+    statusCard.Size = UDim2.new(1, 0, 0, 36)
     statusCard.BackgroundColor3 = C.Surface3
     statusCard.BackgroundTransparency = 0.4
     statusCard.BorderSizePixel = 0
     statusCard.ZIndex = 3
-    statusCard.LayoutOrder = 15
+    statusCard.LayoutOrder = 4
     statusCard.Parent = joinContent
     registerTheme(statusCard, "Surface3", "BackgroundColor3")
 
@@ -7857,7 +7855,6 @@ do
     sdCorner.CornerRadius = UDim.new(1, 0)
     sdCorner.Parent = statusDot
 
-    -- pulse animasi dot
     task.spawn(function()
         while statusDot.Parent do
             TweenService:Create(statusDot, TweenInfo.new(0.6), {
@@ -7880,7 +7877,7 @@ do
     statusLbl.Size = UDim2.new(1, -34, 1, 0)
     statusLbl.Position = UDim2.fromOffset(28, 0)
     statusLbl.BackgroundTransparency = 1
-    statusLbl.Text = "Idle"
+    statusLbl.Text = ""
     statusLbl.TextColor3 = C.Text
     statusLbl.Font = Enum.Font.GothamSemibold
     statusLbl.TextSize = CFG.FONT_MUTED
@@ -7890,12 +7887,18 @@ do
     statusLbl.Parent = statusCard
     registerTheme(statusLbl, "Text", "TextColor3")
 
+    -- ⭐ Status update — skip "Idle" / "Stopped"
     task.spawn(function()
         while statusLbl.Parent do
-            task.wait(1)
+            task.wait(0.5)
             local st = _G.VRILZ_AutoJoin and _G.VRILZ_AutoJoin.GetState()
-            local txt = st and st.status or "N/A"
-            statusLbl.Text = txt
+            if st then
+                local txt = st.status or ""
+                if txt == "Idle" or txt == "⏹ Stopped" or txt == "⏹ Stopped" then
+                    txt = ""
+                end
+                statusLbl.Text = txt
+            end
         end
     end)
 end
