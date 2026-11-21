@@ -7404,7 +7404,7 @@ end)
 end
 
 -- ============================================================
--- 🌐 AUTO JOIN TAB — CLEAN UI (Rejoin / Hope / Join by ID)
+-- 🌐 AUTO JOIN TAB — PREMIUM UI
 -- ============================================================
 do
     local joinPage = Instance.new("Frame")
@@ -7417,43 +7417,10 @@ do
     joinPage.Parent = pageHolder
     pages.AutoJoin = joinPage
 
-    -- HEADER
-    local headerWrap = Instance.new("Frame")
-    headerWrap.Size = UDim2.new(1, -20, 0, 48)
-    headerWrap.Position = UDim2.fromOffset(10, 6)
-    headerWrap.BackgroundTransparency = 1
-    headerWrap.ZIndex = 8
-    headerWrap.Parent = joinPage
-
-    local joinHeader = Instance.new("TextLabel")
-    joinHeader.Size = UDim2.new(1, 0, 0, 24)
-    joinHeader.BackgroundTransparency = 1
-    joinHeader.Text = "🌐  AUTO JOIN SERVER"
-    joinHeader.TextColor3 = C.Text
-    joinHeader.Font = Enum.Font.GothamBold
-    joinHeader.TextSize = IS_MOBILE and 14 or 16
-    joinHeader.TextXAlignment = Enum.TextXAlignment.Left
-    joinHeader.ZIndex = 8
-    joinHeader.Parent = headerWrap
-    registerTheme(joinHeader, "Text", "TextColor3")
-
-    local joinInfo = Instance.new("TextLabel")
-    joinInfo.Size = UDim2.new(1, 0, 0, 18)
-    joinInfo.Position = UDim2.fromOffset(0, 24)
-    joinInfo.BackgroundTransparency = 1
-    joinInfo.Text = "Rejoin · Hope Server · Join by Server ID"
-    joinInfo.TextColor3 = C.Muted
-    joinInfo.Font = Enum.Font.GothamSemibold
-    joinInfo.TextSize = CFG.FONT_MUTED
-    joinInfo.TextXAlignment = Enum.TextXAlignment.Left
-    joinInfo.ZIndex = 8
-    joinInfo.Parent = headerWrap
-    registerTheme(joinInfo, "Muted", "TextColor3")
-
     -- SCROLL
     local joinScroll = Instance.new("ScrollingFrame")
-    joinScroll.Size = UDim2.new(1, -20, 1, -70)
-    joinScroll.Position = UDim2.fromOffset(10, 60)
+    joinScroll.Size = UDim2.new(1, -20, 1, -20)
+    joinScroll.Position = UDim2.fromOffset(10, 10)
     joinScroll.BackgroundTransparency = 1
     joinScroll.BorderSizePixel = 0
     joinScroll.ScrollBarThickness = 4
@@ -7465,17 +7432,14 @@ do
     registerTheme(joinScroll, "Accent", "ScrollBarImageColor3")
 
     local joinLayout = Instance.new("UIListLayout")
-    joinLayout.Padding = UDim.new(0, 10)
+    joinLayout.Padding = UDim.new(0, 14)
     joinLayout.SortOrder = Enum.SortOrder.LayoutOrder
     joinLayout.Parent = joinScroll
 
     local joinPad = Instance.new("UIPadding")
-    joinPad.PaddingBottom = UDim.new(0, 12)
-    joinPad.PaddingTop = UDim.new(0, 4)
+    joinPad.PaddingBottom = UDim.new(0, 16)
+    joinPad.PaddingTop = UDim.new(0, 8)
     joinPad.Parent = joinScroll
-
-    -- CARD
-    local joinCard, joinContent = makeCard(joinScroll, "Join Actions", 1)
 
     -- ========================================================
     -- SPINNER HELPER
@@ -7484,7 +7448,7 @@ do
         local spinner = Instance.new("Frame")
         spinner.Name = "Spinner"
         spinner.Size = UDim2.fromOffset(size, size)
-        spinner.Position = UDim2.new(0, 14, 0.5, -size/2)
+        spinner.Position = UDim2.new(0.5, -size/2, 0.5, -size/2)
         spinner.BackgroundTransparency = 1
         spinner.Visible = false
         spinner.ZIndex = 10
@@ -7545,16 +7509,14 @@ do
     end
 
     -- ========================================================
-    -- TOMBOL HELPER
+    -- HERO BUTTON HELPER (tombol besar premium)
     -- ========================================================
-    local function makeActionButton(parent, icon, text, color, isAccent, layoutOrder)
+    local function makeHeroButton(parent, icon, title, subtitle, c1, c2, layoutOrder)
+        -- container utama
         local btn = Instance.new("TextButton")
-        btn.Size = UDim2.new(1, 0, 0, CFG.ACTION_H + 6)
-        btn.BackgroundColor3 = color
+        btn.Size = UDim2.new(1, 0, 0, IS_MOBILE and 64 or 72)
+        btn.BackgroundColor3 = c1
         btn.Text = ""
-        btn.TextColor3 = Color3.new(1, 1, 1)
-        btn.Font = Enum.Font.GothamBold
-        btn.TextSize = CFG.FONT_LABEL
         btn.BorderSizePixel = 0
         btn.AutoButtonColor = false
         btn.ZIndex = 3
@@ -7562,35 +7524,31 @@ do
         btn.Parent = parent
 
         local corner = Instance.new("UICorner")
-        corner.CornerRadius = UDim.new(0, 9)
+        corner.CornerRadius = UDim.new(0, 14)
         corner.Parent = btn
 
+        -- gradient background
         local grad = Instance.new("UIGradient")
-        grad.Rotation = 45
-        if isAccent then
-            grad.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, C.Accent),
-                ColorSequenceKeypoint.new(1, C.Accent2),
-            })
-        else
-            grad.Color = ColorSequence.new({
-                ColorSequenceKeypoint.new(0, C.Surface2),
-                ColorSequenceKeypoint.new(1, C.Surface3),
-            })
-        end
+        grad.Rotation = 135
+        grad.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, c1),
+            ColorSequenceKeypoint.new(1, c2),
+        })
         grad.Parent = btn
 
+        -- stroke glow
         local stroke = Instance.new("UIStroke")
-        stroke.Color = isAccent and C.Accent2 or C.Accent
-        stroke.Thickness = 1
-        stroke.Transparency = isAccent and 0.3 or 0.6
+        stroke.Color = c2
+        stroke.Thickness = 1.5
+        stroke.Transparency = 0.2
         stroke.Parent = btn
 
+        -- top gloss line
         local gloss = Instance.new("Frame")
-        gloss.Size = UDim2.new(1, -12, 0, 1)
-        gloss.Position = UDim2.fromOffset(6, 1)
+        gloss.Size = UDim2.new(1, -24, 0, 1)
+        gloss.Position = UDim2.fromOffset(12, 1)
         gloss.BackgroundColor3 = Color3.new(1, 1, 1)
-        gloss.BackgroundTransparency = 0.8
+        gloss.BackgroundTransparency = 0.7
         gloss.BorderSizePixel = 0
         gloss.ZIndex = 4
         gloss.Parent = btn
@@ -7598,18 +7556,59 @@ do
         glc.CornerRadius = UDim.new(1, 0)
         glc.Parent = gloss
 
-        local label = Instance.new("TextLabel")
-        label.Size = UDim2.fromScale(1, 1)
-        label.BackgroundTransparency = 1
-        label.Text = icon .. "  " .. text
-        label.TextColor3 = isAccent and Color3.new(1, 1, 1) or C.Text
-        label.Font = Enum.Font.GothamBold
-        label.TextSize = CFG.FONT_LABEL
-        label.ZIndex = 5
-        label.Parent = btn
-        registerTheme(label, "Text", "TextColor3")
+        -- ICON BOX (kiri)
+        local iconSize = IS_MOBILE and 34 or 38
+        local iconBox = Instance.new("Frame")
+        iconBox.Size = UDim2.fromOffset(iconSize, iconSize)
+        iconBox.Position = UDim2.new(0, 12, 0.5, -iconSize/2)
+        iconBox.BackgroundColor3 = Color3.new(1, 1, 1)
+        iconBox.BackgroundTransparency = 0.85
+        iconBox.BorderSizePixel = 0
+        iconBox.ZIndex = 5
+        iconBox.Parent = btn
+        local ibc = Instance.new("UICorner")
+        ibc.CornerRadius = UDim.new(0, 9)
+        ibc.Parent = iconBox
 
-        local spinner, stopSpin, startSpin = makeSpinner(btn, 20)
+        local iconLbl = Instance.new("TextLabel")
+        iconLbl.Size = UDim2.fromScale(1, 1)
+        iconLbl.BackgroundTransparency = 1
+        iconLbl.Text = icon
+        iconLbl.TextColor3 = Color3.new(1, 1, 1)
+        iconLbl.Font = Enum.Font.GothamBold
+        iconLbl.TextSize = IS_MOBILE and 16 or 18
+        iconLbl.ZIndex = 6
+        iconLbl.Parent = iconBox
+
+        -- TITLE (tengah)
+        local titleLbl = Instance.new("TextLabel")
+        titleLbl.Size = UDim2.new(1, -(iconSize + 40), 0, 20)
+        titleLbl.Position = UDim2.fromOffset(iconSize + 24, IS_MOBILE and 12 or 14)
+        titleLbl.BackgroundTransparency = 1
+        titleLbl.Text = title
+        titleLbl.TextColor3 = Color3.new(1, 1, 1)
+        titleLbl.Font = Enum.Font.GothamBold
+        titleLbl.TextSize = IS_MOBILE and 13 or 14
+        titleLbl.TextXAlignment = Enum.TextXAlignment.Left
+        titleLbl.ZIndex = 5
+        titleLbl.Parent = btn
+
+        -- SUBTITLE (bawah title)
+        local subLbl = Instance.new("TextLabel")
+        subLbl.Size = UDim2.new(1, -(iconSize + 40), 0, 16)
+        subLbl.Position = UDim2.fromOffset(iconSize + 24, IS_MOBILE and 32 or 36)
+        subLbl.BackgroundTransparency = 1
+        subLbl.Text = subtitle
+        subLbl.TextColor3 = Color3.new(1, 1, 1)
+        subLbl.TextTransparency = 0.25
+        subLbl.Font = Enum.Font.GothamSemibold
+        subLbl.TextSize = IS_MOBILE and 10 or 11
+        subLbl.TextXAlignment = Enum.TextXAlignment.Left
+        subLbl.ZIndex = 5
+        subLbl.Parent = btn
+
+        -- spinner
+        local spinner, stopSpin, startSpin = makeSpinner(btn, 22)
 
         local loading = false
         local function setLoading(v, loadingText)
@@ -7617,44 +7616,59 @@ do
             if v then
                 btn.Active = false
                 btn.Selectable = false
-                label.Text = "      " .. (loadingText or "Loading...")
-                label.TextColor3 = Color3.new(1, 1, 1)
+                titleLbl.Text = loadingText or "Loading..."
+                subLbl.Text = "Please wait..."
                 spinner.Visible = true
                 startSpin()
-                TweenService:Create(btn, TweenInfo.new(0.15),
-                    {BackgroundColor3 = Color3.fromRGB(60, 60, 70)}):Play()
+                iconLbl.Text = ""
+                TweenService:Create(btn, TweenInfo.new(0.2),
+                    {BackgroundColor3 = Color3.fromRGB(50, 50, 60)}):Play()
+                TweenService:Create(stroke, TweenInfo.new(0.2),
+                    {Transparency = 0.5}):Play()
                 grad.Enabled = false
             else
                 btn.Active = true
                 btn.Selectable = true
-                label.Text = icon .. "  " .. text
-                label.TextColor3 = isAccent and Color3.new(1, 1, 1) or C.Text
+                titleLbl.Text = title
+                subLbl.Text = subtitle
                 spinner.Visible = false
                 stopSpin()
-                TweenService:Create(btn, TweenInfo.new(0.15),
-                    {BackgroundColor3 = color}):Play()
+                iconLbl.Text = icon
+                TweenService:Create(btn, TweenInfo.new(0.2),
+                    {BackgroundColor3 = c1}):Play()
+                TweenService:Create(stroke, TweenInfo.new(0.2),
+                    {Transparency = 0.2}):Play()
                 grad.Enabled = true
             end
         end
 
         btn.MouseEnter:Connect(function()
             if loading then return end
-            TweenService:Create(stroke, TweenInfo.new(0.15), {Transparency = 0.1}):Play()
+            TweenService:Create(stroke, TweenInfo.new(0.15), {Transparency = 0.05}):Play()
+            TweenService:Create(btn, TweenInfo.new(0.15),
+                {Size = UDim2.new(1, 2, 0, IS_MOBILE and 64 or 72)}):Play()
         end)
         btn.MouseLeave:Connect(function()
             if loading then return end
-            TweenService:Create(stroke, TweenInfo.new(0.15),
-                {Transparency = isAccent and 0.3 or 0.6}):Play()
+            TweenService:Create(stroke, TweenInfo.new(0.15), {Transparency = 0.2}):Play()
+            TweenService:Create(btn, TweenInfo.new(0.15),
+                {Size = UDim2.new(1, 0, 0, IS_MOBILE and 64 or 72)}):Play()
         end)
 
-        return btn, label, setLoading
+        return btn, titleLbl, subLbl, setLoading
     end
 
     -- ========================================================
-    -- 1. HOPE SERVER (5 detik loading)
+    -- 1. HOPE SERVER (gradient orange premium)
     -- ========================================================
-    local hopeBtn, hopeLabel, setHopeLoading = makeActionButton(
-        joinContent, "🔍", "Hope Server", C.Accent, true, 1
+    local hopeBtn, hopeTitle, hopeSub, setHopeLoading = makeHeroButton(
+        joinScroll,
+        "🔍",
+        "Hope Server",
+        "Find low-player server",
+        Color3.fromRGB(255, 140, 40),
+        Color3.fromRGB(255, 80, 120),
+        1
     )
 
     hopeBtn.MouseButton1Click:Connect(function()
@@ -7668,13 +7682,10 @@ do
         _G.VRILZ_Notify("🔍 Searching for low-player server...", "info")
 
         task.spawn(function()
-            task.wait(5)  -- ⭐ 5 detik loading
-
+            task.wait(5)
             local ok, err = _G.VRILZ_AutoJoin.JoinNow("server", "", Shared.AutoJoin_PlaceId)
-
             task.wait(0.4)
             setHopeLoading(false)
-
             if ok then
                 _G.VRILZ_Notify("✅ Server found! Joining...", "success")
             else
@@ -7684,10 +7695,16 @@ do
     end)
 
     -- ========================================================
-    -- 2. REJOIN (3 detik loading)
+    -- 2. REJOIN (gradient biru premium)
     -- ========================================================
-    local rejoinBtn, rejoinLabel, setRejoinLoading = makeActionButton(
-        joinContent, "🔄", "Rejoin Server", C.Surface2, false, 2
+    local rejoinBtn, rejoinTitle, rejoinSub, setRejoinLoading = makeHeroButton(
+        joinScroll,
+        "🔄",
+        "Rejoin Server",
+        "Return to last server",
+        Color3.fromRGB(50, 130, 255),
+        Color3.fromRGB(120, 80, 255),
+        2
     )
 
     rejoinBtn.MouseButton1Click:Connect(function()
@@ -7701,13 +7718,10 @@ do
         _G.VRILZ_Notify("🔄 Rejoining last server...", "info")
 
         task.spawn(function()
-            task.wait(3)  -- ⭐ 3 detik loading
-
+            task.wait(3)
             local ok, err = _G.VRILZ_AutoJoin.RejoinNow()
-
             task.wait(0.4)
             setRejoinLoading(false)
-
             if ok then
                 _G.VRILZ_Notify("✅ Rejoin successful!", "success")
             else
@@ -7717,61 +7731,105 @@ do
     end)
 
     -- ========================================================
-    -- 3. JOIN BY SERVER ID (opsional, auto-join kalau valid)
+    -- 3. JOIN BY SERVER ID (card premium)
     -- ========================================================
-    local idFrame = Instance.new("Frame")
-    idFrame.Size = UDim2.new(1, 0, 0, CFG.ACTION_H + 4)
-    idFrame.BackgroundColor3 = C.Surface3
-    idFrame.BorderSizePixel = 0
-    idFrame.ZIndex = 3
-    idFrame.LayoutOrder = 3
-    idFrame.Parent = joinContent
-    registerTheme(idFrame, "Surface3", "BackgroundColor3")
+    local idCard = Instance.new("Frame")
+    idCard.Size = UDim2.new(1, 0, 0, IS_MOBILE and 64 or 72)
+    idCard.BackgroundColor3 = Color3.fromRGB(25, 25, 32)
+    idCard.BorderSizePixel = 0
+    idCard.ZIndex = 3
+    idCard.LayoutOrder = 3
+    idCard.Parent = joinScroll
+    registerTheme(idCard, "Surface2", "BackgroundColor3")
 
     local idCorner = Instance.new("UICorner")
-    idCorner.CornerRadius = UDim.new(0, 9)
-    idCorner.Parent = idFrame
+    idCorner.CornerRadius = UDim.new(0, 14)
+    idCorner.Parent = idCard
+
+    local idGrad = Instance.new("UIGradient")
+    idGrad.Rotation = 135
+    idGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(30, 30, 40)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(20, 20, 28)),
+    })
+    idGrad.Parent = idCard
 
     local idStroke = Instance.new("UIStroke")
-    idStroke.Color = C.Accent
-    idStroke.Thickness = 1
-    idStroke.Transparency = 0.6
-    idStroke.Parent = idFrame
-    registerTheme(idStroke, "Accent", "Color")
+    idStroke.Color = Color3.fromRGB(80, 220, 140)
+    idStroke.Thickness = 1.5
+    idStroke.Transparency = 0.35
+    idStroke.Parent = idCard
 
-    local idIcon = Instance.new("TextLabel")
-    idIcon.Size = UDim2.fromOffset(28, 28)
-    idIcon.Position = UDim2.new(0, 10, 0.5, -14)
-    idIcon.BackgroundTransparency = 1
-    idIcon.Text = "🆔"
-    idIcon.TextColor3 = C.Accent
-    idIcon.Font = Enum.Font.GothamBold
-    idIcon.TextSize = 14
-    idIcon.ZIndex = 4
-    idIcon.Parent = idFrame
-    registerTheme(idIcon, "Accent", "TextColor3")
+    local idGloss = Instance.new("Frame")
+    idGloss.Size = UDim2.new(1, -24, 0, 1)
+    idGloss.Position = UDim2.fromOffset(12, 1)
+    idGloss.BackgroundColor3 = Color3.new(1, 1, 1)
+    idGloss.BackgroundTransparency = 0.8
+    idGloss.BorderSizePixel = 0
+    idGloss.ZIndex = 4
+    idGloss.Parent = idCard
+    local idGlc = Instance.new("UICorner")
+    idGlc.CornerRadius = UDim.new(1, 0)
+    idGlc.Parent = idGloss
 
+    -- icon box
+    local idIconSize = IS_MOBILE and 34 or 38
+    local idIconBox = Instance.new("Frame")
+    idIconBox.Size = UDim2.fromOffset(idIconSize, idIconSize)
+    idIconBox.Position = UDim2.new(0, 12, 0.5, -idIconSize/2)
+    idIconBox.BackgroundColor3 = Color3.fromRGB(80, 220, 140)
+    idIconBox.BackgroundTransparency = 0.85
+    idIconBox.BorderSizePixel = 0
+    idIconBox.ZIndex = 5
+    idIconBox.Parent = idCard
+    local idIbc = Instance.new("UICorner")
+    idIbc.CornerRadius = UDim.new(0, 9)
+    idIbc.Parent = idIconBox
+
+    local idIconLbl = Instance.new("TextLabel")
+    idIconLbl.Size = UDim2.fromScale(1, 1)
+    idIconLbl.BackgroundTransparency = 1
+    idIconLbl.Text = "🆔"
+    idIconLbl.TextColor3 = Color3.new(1, 1, 1)
+    idIconLbl.Font = Enum.Font.GothamBold
+    idIconLbl.TextSize = IS_MOBILE and 16 or 18
+    idIconLbl.ZIndex = 6
+    idIconLbl.Parent = idIconBox
+
+    -- input
     local idBox = Instance.new("TextBox")
-    idBox.Size = UDim2.new(1, -50, 1, 0)
-    idBox.Position = UDim2.fromOffset(40, 0)
+    idBox.Size = UDim2.new(1, -(idIconSize + 40), 0, 20)
+    idBox.Position = UDim2.fromOffset(idIconSize + 24, IS_MOBILE and 12 or 14)
     idBox.BackgroundTransparency = 1
-    idBox.PlaceholderText = "Paste Server ID (optional)"
+    idBox.PlaceholderText = "Paste Server ID"
     idBox.Text = ""
-    idBox.TextColor3 = C.Text
-    idBox.PlaceholderColor3 = C.Muted
-    idBox.Font = Enum.Font.Gotham
-    idBox.TextSize = CFG.FONT_LABEL
+    idBox.TextColor3 = Color3.new(1, 1, 1)
+    idBox.PlaceholderColor3 = Color3.fromRGB(130, 130, 140)
+    idBox.Font = Enum.Font.GothamBold
+    idBox.TextSize = IS_MOBILE and 12 or 13
     idBox.TextXAlignment = Enum.TextXAlignment.Left
     idBox.ClearTextOnFocus = false
-    idBox.ZIndex = 4
-    idBox.Parent = idFrame
-    registerTheme(idBox, "Text", "TextColor3")
+    idBox.ZIndex = 5
+    idBox.Parent = idCard
+
+    local idHint = Instance.new("TextLabel")
+    idHint.Size = UDim2.new(1, -(idIconSize + 40), 0, 16)
+    idHint.Position = UDim2.fromOffset(idIconSize + 24, IS_MOBILE and 32 or 36)
+    idHint.BackgroundTransparency = 1
+    idHint.Text = "Valid UUID = auto join"
+    idHint.TextColor3 = Color3.fromRGB(80, 220, 140)
+    idHint.TextTransparency = 0.3
+    idHint.Font = Enum.Font.GothamSemibold
+    idHint.TextSize = IS_MOBILE and 10 or 11
+    idHint.TextXAlignment = Enum.TextXAlignment.Left
+    idHint.ZIndex = 5
+    idHint.Parent = idCard
 
     idBox.Focused:Connect(function()
-        TweenService:Create(idStroke, TweenInfo.new(0.15), {Transparency = 0.2}):Play()
+        TweenService:Create(idStroke, TweenInfo.new(0.15), {Transparency = 0.05}):Play()
     end)
     idBox.FocusLost:Connect(function()
-        TweenService:Create(idStroke, TweenInfo.new(0.15), {Transparency = 0.6}):Play()
+        TweenService:Create(idStroke, TweenInfo.new(0.15), {Transparency = 0.35}):Play()
     end)
 
     -- ⭐ AUTO-JOIN: paste ID valid → langsung join tanpa klik
@@ -7785,17 +7843,19 @@ do
             return
         end
 
-        -- validasi: UUID 36 char dengan strip
         local isValid = raw:match("^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$") ~= nil
 
         if isValid and raw ~= lastAutoJoinId and not autoJoinCooldown then
             lastAutoJoinId = raw
             autoJoinCooldown = true
 
+            TweenService:Create(idStroke, TweenInfo.new(0.2),
+                {Color = Color3.fromRGB(80, 220, 140), Transparency = 0.05}):Play()
+
             _G.VRILZ_Notify("✅ Valid Server ID detected! Joining...", "success")
 
             task.spawn(function()
-                task.wait(1)  -- kasih waktu 1 detik biar user liat notif
+                task.wait(1)
                 if _G.VRILZ_AutoJoin then
                     local ok, err = _G.VRILZ_AutoJoin.JoinNow("jobid", raw, Shared.AutoJoin_PlaceId)
                     if not ok then
@@ -7806,16 +7866,14 @@ do
                 autoJoinCooldown = false
             end)
         elseif not isValid and #raw > 0 and #raw >= 30 then
-            -- ID kelihatan panjang tapi invalid
-            if idStroke then
-                idStroke.Color = Color3.fromRGB(255, 80, 90)
-                task.delay(1.5, function()
-                    if idStroke then
-                        TweenService:Create(idStroke, TweenInfo.new(0.3),
-                            {Color = C.Accent}):Play()
-                    end
-                end)
-            end
+            TweenService:Create(idStroke, TweenInfo.new(0.2),
+                {Color = Color3.fromRGB(255, 80, 90), Transparency = 0.05}):Play()
+            task.delay(1.5, function()
+                if idStroke then
+                    TweenService:Create(idStroke, TweenInfo.new(0.3),
+                        {Color = Color3.fromRGB(80, 220, 140), Transparency = 0.35}):Play()
+                end
+            end)
         end
     end)
 end
