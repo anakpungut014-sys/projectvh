@@ -1658,12 +1658,18 @@ end
 local function joinFindServer(placeId, mode, keyword, maxScan)
     maxScan = maxScan or 150
 
-    if mode == "jobid" then
-        if not keyword or keyword == "" then return nil, "Job ID kosong" end
-        if keyword:len() < 30 then return nil, "Job ID invalid (UUID 36 char)" end
-        return { id = keyword, name = "Manual JobId", playing = 0, maxPlayers = 0 }, nil, 1
+        if mode == "jobid" then
+        if not keyword or keyword == "" then return nil, "Server ID empty" end
+        local raw = keyword:gsub("%s+", "")
+        local isValid = raw:match(
+            "^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$"
+        )
+        if not isValid then
+            return nil, "Invalid Server ID format (must be UUID)"
+        end
+        return { id = raw, name = "Manual Server ID", playing = 0, maxPlayers = 0 }, nil, 1
     end
-
+    
     if mode == "server" then
         local scanned, cursor, candidates = 0, nil, {}
         while scanned < maxScan do
@@ -1842,9 +1848,20 @@ local function joinNow(mode, keyword, placeId)
             return false, "username not found"
         end
     end
-    if JoinState.mode == "jobid" and JoinState.keyword == "" then
-        JoinState.status = "⚠ Job ID kosong"
-        return false, "empty"
+    if JoinState.mode == "jobid" then
+        if JoinState.keyword == "" then
+            JoinState.status = "⚠ Server ID empty"
+            return false, "empty"
+        end
+        local raw = JoinState.keyword:gsub("%s+", "")
+        local isValid = raw:match(
+            "^%x%x%x%x%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%-%x%x%x%x%x%x%x%x%x%x%x%x$"
+        )
+        if not isValid then
+            JoinState.status = "❌ Invalid Server ID (UUID required)"
+            return false, "invalid uuid"
+        end
+        JoinState.keyword = raw
     end
     JoinState.status = "🔍 Manual scan (" .. JoinState.mode .. ")..."
     local server, err = joinFindServer(JoinState.placeId or game.PlaceId, JoinState.mode, JoinState.keyword, JoinState.maxServers)
