@@ -1565,6 +1565,338 @@ local function initGhostMode()
 end
 
 -- ============================================================
+-- 🌐 AUTO JOIN SERVER — SEPI + REJOIN + JOB ID
+-- ============================================================
+local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
+
+local JoinState = {
+    enabled     = false,
+    mode        = "server",
+    keyword     = "",
+    placeId     = nil,
+    maxServers  = 150,
+    retryDelay  = 5,
+    retryCount  = 0,
+    maxRetry    = 60,
+    status      = "Idle",
+    joining     = false,
+    userIdCache = {},
+}
+
+local REJOIN_FILE = "vrilz_last_jobid.txt"
+
+local function joinHttpGet(url)
+    local req = (syn and syn.request) or (http and http.request) or http_request or request
+    if req then
+        local ok, res = pcall(function() return req({ Url = url, Method = "GET" }) end)
+        if ok and res and res.Body then return res.Body end
+    end
+    local ok, body = pcall(function() return game:HttpGet(url) end)
+    if ok then return body end
+    return nil
+end
+
+local function joinHttpPost(url, bodyTable)
+    local req = (syn and syn.request) or (http and http.request) or http_request or request
+    if not req then return nil end
+    local ok, res = pcall(function()
+        return req({
+            Url = url, Method = "POST",
+            Headers = { ["Content-Type"] = "application/json" },
+            Body = HttpService:JSONEncode(bodyTable),
+        })
+    end)
+    if ok and res and res.Body then return res.Body end
+    return nil
+end
+
+local function joinResolveUserId(username)
+    if not username or username == "" then return nil end
+    local key = username:lower()
+    if JoinState.userIdCache[key] then return JoinState.userIdCache[key] end
+    local body = joinHttpPost("https://users.roblox.com/v1/usernames/users", {
+        usernames = { username }, excludeBannedUsers = false,
+    })
+    if not body then return nil end
+    local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+    if not ok or not data or not data.data or #data.data == 0 then return nil end
+    local uid = tonumber(data.data[1].id)
+    if uid then JoinState.userIdCache[key] = uid end
+    return uid
+end
+
+local function joinScanServers(placeId, cursor)
+    local url = string.format(
+        "https://games.roblox.com/v1/games/%d/servers/Public?limit=100&sortOrder=Desc%s",
+        placeId, cursor and ("&cursor=" .. cursor) or ""
+    )
+    local body = joinHttpGet(url)
+    if not body then return nil, "HTTP failed" end
+    local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+    if not ok or not data or not data.data then return nil, "decode failed" end
+    return data.data, nil, data.nextPageCursor
+end
+
+local function joinCheckPlayerInServer(placeId, jobId, targetUsername)
+    local url = string.format(
+        "https://games.roblox.com/v1/games/%d/servers/%s/players",
+        placeId, jobId
+    )
+    local body = joinHttpGet(url)
+    if not body then return false end
+    local ok, data = pcall(function() return HttpService:JSONDecode(body) end)
+    if not ok or not data or not data.data then return false end
+    local kw = targetUsername:lower()
+    for _, p in ipairs(data.data) do
+        if tostring(p.name or ""):lower() == kw then return true, p end
+        if tostring(p.displayName or ""):lower() == kw then return true, p end
+    end
+    return false
+end
+
+local function joinFindServer(placeId, mode, keyword, maxScan)
+    maxScan = maxScan or 150
+
+    if mode == "jobid" then
+        if not keyword or keyword == "" then return nil, "Job ID kosong" end
+        if keyword:len() < 30 then return nil, "Job ID invalid (UUID 36 char)" end
+        return { id = keyword, name = "Manual JobId", playing = 0, maxPlayers = 0 }, nil, 1
+    end
+
+    if mode == "server" then
+        local scanned, cursor, candidates = 0, nil, {}
+        while scanned < maxScan do
+            local servers, err, nextCursor = joinScanServers(placeId, cursor)
+            if not servers then return nil, err end
+            if #servers == 0 then break end
+            for _, srv in ipairs(servers) do
+                scanned = scanned + 1
+                local playing = tonumber(srv.playing) or 0
+                local maxP = tonumber(srv.maxPlayers) or 0
+                if playing >= 1 and playing < maxP then
+                    table.insert(candidates, srv)
+                end
+                if scanned >= maxScan then break end
+            end
+            if not nextCursor or nextCursor == "" then break end
+            cursor = nextCursor
+            task.wait(0.25)
+        end
+        if #candidates == 0 then
+            return nil, string.format("Tidak ada server sepi (scan %d)", scanned)
+        end
+        table.sort(candidates, function(a, b)
+            local pa = tonumber(a.playing) or 0
+            local pb = tonumber(b.playing) or 0
+            if pa ~= pb then return pa < pb end
+            return (tonumber(a.maxPlayers) or 0) > (tonumber(b.maxPlayers) or 0)
+        end)
+        return candidates[1], nil, #candidates
+    end
+
+    if mode == "player" then
+        local scanned, cursor = 0, nil
+        while scanned < maxScan do
+            local servers, err, nextCursor = joinScanServers(placeId, cursor)
+            if not servers then return nil, err end
+            if #servers == 0 then break end
+            for _, srv in ipairs(servers) do
+                scanned = scanned + 1
+                if (tonumber(srv.playing) or 0) > 0 and srv.id then
+                    local found = joinCheckPlayerInServer(placeId, srv.id, keyword)
+                    if found then
+                        JoinState.status = "🎯 Ketemu '" .. keyword .. "' di " .. tostring(srv.id):sub(1, 8)
+                        return srv, nil, 1
+                    end
+                end
+                if scanned >= maxScan then break end
+                task.wait(0.15)
+            end
+            if not nextCursor or nextCursor == "" then break end
+            cursor = nextCursor
+            task.wait(0.3)
+        end
+        return nil, string.format("Player '%s' tidak ketemu (scan %d)", keyword, scanned)
+    end
+
+    return nil, "Mode invalid"
+end
+
+local function saveLastJobId(jobId, placeId)
+    if not jobId then return end
+    _G.VRILZ_LastJobId = { jobId = jobId, placeId = placeId or game.PlaceId }
+    if writefile then
+        pcall(writefile, REJOIN_FILE, jobId .. "|" .. tostring(placeId or game.PlaceId))
+    end
+end
+
+local function loadLastJobId()
+    if _G.VRILZ_LastJobId then return _G.VRILZ_LastJobId end
+    if readfile and isfile then
+        local ok, exists = pcall(isfile, REJOIN_FILE)
+        if ok and exists then
+            local okR, content = pcall(readfile, REJOIN_FILE)
+            if okR and content then
+                local jid, pid = content:match("^([^|]+)|(%d+)$")
+                if jid then
+                    _G.VRILZ_LastJobId = { jobId = jid, placeId = tonumber(pid) }
+                    return _G.VRILZ_LastJobId
+                end
+            end
+        end
+    end
+    return nil
+end
+
+local function joinDoJoin(server)
+    if not server or not server.id then
+        JoinState.status = "❌ Server invalid"
+        return false
+    end
+    if JoinState.joining then return false end
+    JoinState.joining = true
+    JoinState.status = string.format("🚀 Join '%s' (%d/%d)...",
+        tostring(server.name or "?"), tonumber(server.playing) or 0, tonumber(server.maxPlayers) or 0)
+    local placeId = JoinState.placeId or game.PlaceId
+    saveLastJobId(server.id, placeId)
+    task.spawn(function()
+        local ok, err = pcall(function()
+            TeleportService:TeleportToPlaceInstance(placeId, server.id, LocalPlayer)
+        end)
+        if not ok then
+            JoinState.status = "❌ Teleport gagal: " .. tostring(err)
+            JoinState.joining = false
+        end
+    end)
+    return true
+end
+
+local function joinRejoinNow()
+    local last = loadLastJobId()
+    if not last then
+        JoinState.status = "❌ Belum ada JobId tersimpan"
+        return false, "no saved jobid"
+    end
+    JoinState.status = "🔄 Rejoin ke server terakhir..."
+    local ok, err = pcall(function()
+        TeleportService:TeleportToPlaceInstance(last.placeId, last.jobId, LocalPlayer)
+    end)
+    if not ok then
+        JoinState.status = "❌ Rejoin gagal: " .. tostring(err)
+        return false, tostring(err)
+    end
+    return true
+end
+
+local function joinStartLoop()
+    task.spawn(function()
+        while true do
+            task.wait(1)
+            if not JoinState.enabled then JoinState.retryCount = 0; continue end
+            if JoinState.joining then continue end
+            if JoinState.mode == "player" and JoinState.keyword == "" then
+                JoinState.status = "⚠ Username kosong"
+                continue
+            end
+            if JoinState.mode == "jobid" and JoinState.keyword == "" then
+                JoinState.status = "⚠ Job ID kosong"
+                continue
+            end
+            if JoinState.retryCount >= JoinState.maxRetry then
+                JoinState.status = "❌ Gagal setelah " .. JoinState.maxRetry .. "x"
+                JoinState.enabled = false
+                if Shared then Shared.AutoJoin_Enabled = false end
+                continue
+            end
+            JoinState.retryCount = JoinState.retryCount + 1
+            JoinState.status = string.format("🔍 Scan #%d (%s)...", JoinState.retryCount, JoinState.mode)
+            local placeId = JoinState.placeId or game.PlaceId
+            local server, err = joinFindServer(placeId, JoinState.mode, JoinState.keyword, JoinState.maxServers)
+            if server then
+                JoinState.status = "✅ Ketemu! Join..."
+                joinDoJoin(server)
+                return
+            else
+                JoinState.status = string.format("⏳ %s — retry %ds", err or "not found", JoinState.retryDelay)
+                task.wait(JoinState.retryDelay)
+            end
+        end
+    end)
+end
+
+local function joinNow(mode, keyword, placeId)
+    JoinState.mode = mode or JoinState.mode
+    JoinState.keyword = keyword or JoinState.keyword or ""
+    JoinState.placeId = placeId or JoinState.placeId
+    JoinState.retryCount = 0
+    JoinState.joining = false
+    if JoinState.mode == "player" then
+        if JoinState.keyword == "" then
+            JoinState.status = "⚠ Username kosong"
+            return false, "empty"
+        end
+        local uid = joinResolveUserId(JoinState.keyword)
+        if not uid then
+            JoinState.status = "❌ Username tidak ditemukan"
+            return false, "username not found"
+        end
+    end
+    if JoinState.mode == "jobid" and JoinState.keyword == "" then
+        JoinState.status = "⚠ Job ID kosong"
+        return false, "empty"
+    end
+    JoinState.status = "🔍 Manual scan (" .. JoinState.mode .. ")..."
+    local server, err = joinFindServer(JoinState.placeId or game.PlaceId, JoinState.mode, JoinState.keyword, JoinState.maxServers)
+    if server then
+        joinDoJoin(server)
+        return true
+    else
+        JoinState.status = "❌ " .. (err or "not found")
+        return false, err
+    end
+end
+
+local function initAutoJoin()
+    loadLastJobId()
+    task.spawn(function()
+        while true do
+            task.wait(0.5)
+            if not Shared then continue end
+            local wantOn = Shared.AutoJoin_Enabled == true
+            if wantOn ~= JoinState.enabled then
+                if wantOn then
+                    JoinState.mode = Shared.AutoJoin_Mode or "server"
+                    JoinState.keyword = Shared.AutoJoin_Keyword or ""
+                    JoinState.placeId = Shared.AutoJoin_PlaceId
+                    JoinState.maxServers = tonumber(Shared.AutoJoin_MaxScan) or 150
+                    JoinState.retryDelay = tonumber(Shared.AutoJoin_RetryDelay) or 5
+                    JoinState.maxRetry = tonumber(Shared.AutoJoin_MaxRetry) or 60
+                    JoinState.retryCount = 0
+                    JoinState.joining = false
+                    JoinState.enabled = true
+                    joinStartLoop()
+                else
+                    JoinState.enabled = false
+                    JoinState.status = "⏹ Stopped"
+                end
+            end
+        end
+    end)
+
+    _G.VRILZ_AutoJoin = {
+        JoinNow = joinNow,
+        RejoinNow = joinRejoinNow,
+        GetState = function() return JoinState end,
+        SetMode = function(m) JoinState.mode = m end,
+        SetKeyword = function(k) JoinState.keyword = k end,
+        SetPlaceId = function(p) JoinState.placeId = tonumber(p) end,
+        ResolveUser = joinResolveUserId,
+        GetLastJobId = loadLastJobId,
+    }
+end
+
+-- ============================================================
 -- FEATURES.INIT
 -- ============================================================
 function Features.Init(sharedState)
@@ -1599,6 +1931,11 @@ function Features.Init(sharedState)
     if not Features._ghostStarted then
         Features._ghostStarted = true
         pcall(initGhostMode)
+    end
+        -- ⭐ AUTO JOIN
+    if not Features._autoJoinStarted then
+        Features._autoJoinStarted = true
+        pcall(initAutoJoin)
     end
 end
 
