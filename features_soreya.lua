@@ -1600,11 +1600,6 @@ function Features.Init(sharedState)
         Features._ghostStarted = true
         pcall(initGhostMode)
     end
-        -- ⭐ AUTO JOIN
-    if not Features._autoJoinStarted then
-        Features._autoJoinStarted = true
-        pcall(initAutoJoin)
-    end
 end
 
     _G.VRILZ_Features = Features
