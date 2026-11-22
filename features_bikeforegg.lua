@@ -115,8 +115,8 @@ end
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 AUTO THROW SYSTEM — CAMERA LOCK DI CLONE + BLOCK ANIMASI
--- Auto Throw ON = camera lock total di clone, animasi di-block
+-- 🎯 AUTO THROW SYSTEM — CAMERA LOCK DI CLONE, TANPA BLOCK ANIMASI
+-- Auto Throw ON = camera lock di clone, animasi gak nampil (char invisible)
 -- Auto Throw OFF = normal
 -- ═══════════════════════════════════════════════════════════
 local function initAutoThrow()
@@ -325,10 +325,10 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ LOOP AUTO THROW ═══
+    -- ═══ LOOP AUTO THROW — CEPET ═══
     task.spawn(function()
         while true do
-            task.wait(0.5)
+            task.wait(0.3)   -- ⭐ 0.3s, lebih cepet dari 0.5s
             if not ThrowState.autoThrow then continue end
             if not ThrowController or not ThrowController.Start then
                 Shared.Notify("Auto Throw", "ThrowController tidak ditemukan.", "error")
@@ -352,7 +352,7 @@ local function initAutoThrow()
             end
             if ClientState and ClientState.Busy then continue end
             pcall(ThrowController.Start)
-            task.wait(3)
+            task.wait(1.5)   -- ⭐ 1.5s antar throw, lebih cepet dari 3s
         end
     end)
 
@@ -368,7 +368,7 @@ local function initAutoThrow()
     end)
 
     -- ═══════════════════════════════════════════════════════════
-    -- 🎥 CAMERA LOCK + BLOCK ANIMASI
+    -- 🎥 CAMERA LOCK — TANPA BLOCK ANIMASI
     -- ═══════════════════════════════════════════════════════════
     local camera = Workspace.CurrentCamera
     local camAnchor = nil
@@ -475,25 +475,8 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ BLOCK ANIMASI THROW DI CHAR ASLI ═══
-    pcall(function()
-        local mt = getrawmetatable(game)
-        local oldNamecall = mt.__namecall
-        setreadonly(mt, false)
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            if method == "LoadAnimation" and self:IsA("Animator") then
-                local char = self.Parent
-                if char and char == LocalPlayer.Character then
-                    if Shared and Shared.AutoThrow_Enabled then
-                        return nil
-                    end
-                end
-            end
-            return oldNamecall(self, ...)
-        end)
-        setreadonly(mt, true)
-    end)
+    -- ⭐ ANIMASI TIDAK DI-BLOCK — game butuh buat hitbox/reward
+    -- Char asli udah invisible (ghostHide), visual gak keliatan
 
     if Shared then
         Shared.ThrowController_Ref = ThrowController
