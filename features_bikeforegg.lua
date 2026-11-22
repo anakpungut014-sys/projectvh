@@ -483,26 +483,54 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ HOOK ANIMASI ═══
-    pcall(function()
-        local mt = getrawmetatable(game)
-        local oldNamecall = mt.__namecall
-        setreadonly(mt, false)
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            if method == "LoadAnimation" and self:IsA("Animator") then
-                local char = self.Parent
-                if char and char == LocalPlayer.Character then
-                    if Shared and Shared.AutoThrow_Enabled then
-                        return nil
-                    end
+        -- ═══ HOOK ANIMASI — BISA DILEPAS ═══
+    local hookInstalled = false
+    local mt = getrawmetatable(game)
+    local oldNamecall = mt.__namecall
+
+    local function hookLoadAnimation(self, ...)
+        local method = getnamecallmethod()
+        if method == "LoadAnimation" and self:IsA("Animator") then
+            local char = self.Parent
+            if char and char == LocalPlayer.Character then
+                if Shared and Shared.AutoThrow_Enabled then
+                    return nil   -- blok animasi cuma pas ON
                 end
             end
-            return oldNamecall(self, ...)
-        end)
-        setreadonly(mt, true)
-    end)
+        end
+        return oldNamecall(self, ...)
+    end
 
+    local function installHook()
+        if hookInstalled then return end
+        hookInstalled = true
+        setreadonly(mt, false)
+        mt.__namecall = newcclosure(hookLoadAnimation)
+        setreadonly(mt, true)
+    end
+
+    local function uninstallHook()
+        if not hookInstalled then return end
+        hookInstalled = false
+        setreadonly(mt, false)
+        mt.__namecall = oldNamecall   -- ⭐ balikin ke asli
+        setreadonly(mt, true)
+    end
+
+    -- ⭐ Sync: pasang hook cuma saat Auto Throw ON
+    task.spawn(function()
+        local wasOn = false
+        while true do
+            task.wait(0.2)
+            local on = Shared and Shared.AutoThrow_Enabled == true
+            if on and not wasOn then
+                installHook()
+            elseif not on and wasOn then
+                uninstallHook()
+            end
+            wasOn = on
+        end
+    end)
     if Shared then
         Shared.ThrowController_Ref = ThrowController
         Shared.ClientState_Ref = ClientState
