@@ -115,15 +115,14 @@ end
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 AUTO THROW SYSTEM — CAMERA LOCK KE CLONE (FINAL)
--- Auto Throw ON = camera WAJIB lock di clone, lawan semua cinematic
--- Auto Throw OFF = normal (camera ikut char)
+-- 🎯 AUTO THROW SYSTEM — CAMERA LOCK DI CLONE + BLOCK ANIMASI
+-- Auto Throw ON = camera lock total di clone, animasi di-block
+-- Auto Throw OFF = normal
 -- ═══════════════════════════════════════════════════════════
 local function initAutoThrow()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local VirtualInputManager = game:GetService("VirtualInputManager")
 
-    -- ═══ STATE ═══
     local ThrowState = {
         autoThrow = false,
         autoBest = false,
@@ -135,7 +134,6 @@ local function initAutoThrow()
         revealCache = setmetatable({}, { __mode = "k" }),
     }
 
-    -- ═══ HELPER: require ═══
     local function requirePlayerScript(...)
         local ps = LocalPlayer:WaitForChild("PlayerScripts", 5)
         if not ps then return nil end
@@ -150,7 +148,6 @@ local function initAutoThrow()
     local ThrowController = requirePlayerScript("Client", "Controllers", "ThrowController")
     local ClientState = requirePlayerScript("Client", "Controllers", "ClientState")
 
-    -- ═══ HELPER: ambil animal tool ═══
     local function getEquippedAnimal()
         local char = LocalPlayer.Character
         if not char then return nil end
@@ -161,7 +158,6 @@ local function initAutoThrow()
         return nil
     end
 
-    -- ═══ HELPER: unequip ═══
     local function unequipTools()
         local char = LocalPlayer.Character
         if not char then return nil end
@@ -172,7 +168,6 @@ local function initAutoThrow()
         return true
     end
 
-    -- ═══ HELPER: StarterArea ═══
     local function getStarterArea()
         local sa = Workspace:FindFirstChild("StarterArea")
         if not sa then return nil, nil end
@@ -212,7 +207,6 @@ local function initAutoThrow()
         return true
     end
 
-    -- ═══ HELPER: meter marker ═══
     local function findMeterMarker()
         local pg = LocalPlayer:FindFirstChild("PlayerGui")
         if not pg then return nil end
@@ -226,7 +220,6 @@ local function initAutoThrow()
         return nil
     end
 
-    -- ═══ HELPER: reveal text ═══
     local function isRevealText(txt)
         if type(txt) ~= "string" or txt == "" then return false end
         local lower = txt:lower()
@@ -260,7 +253,6 @@ local function initAutoThrow()
         end
     end
 
-    -- ═══ LOOP: marker & reveal ═══
     task.spawn(function()
         while true do
             task.wait(0.15)
@@ -278,7 +270,6 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ REVEAL WATCHER ═══
     task.spawn(function()
         local pg = LocalPlayer:WaitForChild("PlayerGui")
         pg.DescendantAdded:Connect(function(d)
@@ -319,7 +310,6 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ AUTO BEST THROW ═══
     RunService.RenderStepped:Connect(function()
         if not ThrowState.autoBest then return end
         local m = ThrowState.marker
@@ -335,7 +325,7 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ LOOP: AUTO THROW ═══
+    -- ═══ LOOP AUTO THROW ═══
     task.spawn(function()
         while true do
             task.wait(0.5)
@@ -366,7 +356,6 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ SYNC STATE ═══
     task.spawn(function()
         while true do
             task.wait(0.3)
@@ -379,7 +368,7 @@ local function initAutoThrow()
     end)
 
     -- ═══════════════════════════════════════════════════════════
-    -- 🎥 CAMERA LOCK — WAJIB LOCK SAAT AUTO THROW ON
+    -- 🎥 CAMERA LOCK + BLOCK ANIMASI
     -- ═══════════════════════════════════════════════════════════
     local camera = Workspace.CurrentCamera
     local camAnchor = nil
@@ -484,6 +473,26 @@ local function initAutoThrow()
             end
             startCamPin()
         end
+    end)
+
+    -- ═══ BLOCK ANIMASI THROW DI CHAR ASLI ═══
+    pcall(function()
+        local mt = getrawmetatable(game)
+        local oldNamecall = mt.__namecall
+        setreadonly(mt, false)
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            if method == "LoadAnimation" and self:IsA("Animator") then
+                local char = self.Parent
+                if char and char == LocalPlayer.Character then
+                    if Shared and Shared.AutoThrow_Enabled then
+                        return nil
+                    end
+                end
+            end
+            return oldNamecall(self, ...)
+        end)
+        setreadonly(mt, true)
     end)
 
     if Shared then
