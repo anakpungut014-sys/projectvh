@@ -433,14 +433,17 @@ local function initAutoThrow()
         camAnchor = createCamAnchor()
         savedSubject    = camera.CameraSubject
         savedCameraType = camera.CameraType
+        pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
         RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 10, hardStep)
     end
 
-    local function stopCamPin()
-        if not camAnchor then return end
+        local function stopCamPin()
+        if not camAnchor then
+            pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
+            return
+        end
         pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
         local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        -- ⭐ SELALU balikin normal — gak peduli ghostOn
         camera.CameraType = savedCameraType or Enum.CameraType.Custom
         camera.CameraSubject = savedSubject or hum
         savedSubject, savedCameraType = nil, nil
@@ -834,9 +837,7 @@ local function ghostCreateClone(char)
         hum.PlatformStand      = true
         pcall(function() hum.EvaluateStateMachine = false end)
 
-        -- ⭐ FIX: cabut Animator — game gak bisa muter animasi lempar di clone
-        local anim = hum:FindFirstChildOfClass("Animator")
-        if anim then anim:Destroy() end
+        -- ⛔ JANGAN destroy Animator — biarin clone punya Animator
     end
 
     for _, cls in ipairs({"Shirt", "Pants", "ShirtGraphic"}) do
@@ -909,13 +910,12 @@ local function ghostDisable()
         GhostState.clone:Destroy()
         GhostState.clone = nil
     end
-    if not throwCamActive() then
-        local cam = Workspace.CurrentCamera
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if cam and hum then
-            cam.CameraSubject = hum
-            cam.CameraType = Enum.CameraType.Custom   -- ⭐ tambah ini
-        end
+    -- ⭐ SELALU reset camera ke normal — gak peduli throwCamActive
+    local cam = Workspace.CurrentCamera
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    if cam and hum then
+        cam.CameraSubject = hum
+        cam.CameraType = Enum.CameraType.Custom
     end
     GhostState.enabled = false
 end
@@ -932,9 +932,7 @@ local function initGhostMode()
         end
     end)
 
-    -- ⬇️⬇️ TAMBAH BLOK INI ⬇️⬇️
-    -- Bind di priority Last+2 → jalan SETELAH hardStep (Last+1) di initAutoThrow,
-    -- jadi menimpa Scriptable/CFrame fixed → camera ikut clone
+    -- ═══ GHOST CAM OVERRIDE — priority Last+5 ═══
     RunService:BindToRenderStep("VRILZ_GhostCamOverride",
         Enum.RenderPriority.Last.Value + 5, function()
             if not GhostState.enabled then return end
@@ -943,78 +941,73 @@ local function initGhostMode()
             if not (SharedNow.GhostMode_Enabled or SharedNow.AutoThrow_Enabled) then return end
             ghostCamToClone()
         end)
-    -- ⭐ pengawal Animator: cabut SETIAP kali AutoThrow/Ghost ON,
---    TANPA peduli GhostState.enabled — biar animasi gak main di char asli
-task.spawn(function()
-    while true do
-        task.wait(0.05)
-        -- ⭐ cek AutoThrow/Ghost, bukan GhostState.enabled
-        if not (Shared and (Shared.AutoThrow_Enabled or Shared.GhostMode_Enabled)) then
-            continue
-        end
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            local anim = hum:FindFirstChildOfClass("Animator")
-            if anim then
-                pcall(function()
-                    for _, t in ipairs(anim:GetPlayingAnimationTracks()) do
-                        t:Stop(0)
-                    end
-                end)
-                if GhostState.savedAnimator == nil then
-                    GhostState.savedAnimator = { anim = anim, parent = anim.Parent }
-                end
-            end
-        end
-    end
-end)
-    
+
+    -- ═══ PENGAWAL ANIMATOR — cuma Stop, JANGAN cabut ═══
     task.spawn(function()
-    while true do
-        task.wait(0.1)   -- ⭐ 0.1s, bukan 0.5s
-        local wantOn = Shared and (Shared.GhostMode_Enabled == true
-            or Shared.AutoThrow_Enabled == true)
-
-        if wantOn and not GhostState.enabled then
-            -- ⭐ langsung panggil (bukan pcall) biar error keliatan di console
-            ghostEnable()
-        elseif not wantOn and GhostState.enabled then
-            pcall(ghostDisable)
-        end
-
-        if GhostState.enabled then
+        while true do
+            task.wait(0.05)
+            if not (Shared and (Shared.AutoThrow_Enabled or Shared.GhostMode_Enabled)) then
+                continue
+            end
             local char = LocalPlayer.Character
-            local hrp = char and char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                if GhostState.clone and not GhostState.clone.Parent then
-                    pcall(ghostCreateClone, char)
-                end
-                if GhostState.clone and GhostState.clone.Parent
-                    and hrp.Transparency < 1 then
-                    pcall(ghostHide, char)
-                end
-                local humNow = char:FindFirstChildOfClass("Humanoid")
-                if humNow then
-                    local anNow = humNow:FindFirstChildOfClass("Animator")
-                    if anNow then
-                        pcall(function()
-                            for _, t in ipairs(anNow:GetPlayingAnimationTracks()) do
-                                t:Stop(0)
-                            end
-                        end)
-                        if GhostState.savedAnimator == nil then
-                            GhostState.savedAnimator = { anim = anNow, parent = anNow.Parent }
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                local anim = hum:FindFirstChildOfClass("Animator")
+                if anim then
+                    pcall(function()
+                        for _, t in ipairs(anim:GetPlayingAnimationTracks()) do
+                            t:Stop(0)
                         end
-                        anNow.Parent = nil
-                    end
+                    end)
+                    -- ⛔ JANGAN cabut Animator
                 end
             end
-            ghostHideGuis()
-            ghostCamToClone()
         end
-    end
-end)
+    end)
+
+    -- ═══ LOOP GHOST ON/OFF ═══
+    task.spawn(function()
+        while true do
+            task.wait(0.1)
+            local wantOn = Shared and (Shared.GhostMode_Enabled == true
+                or Shared.AutoThrow_Enabled == true)
+
+            if wantOn and not GhostState.enabled then
+                pcall(ghostEnable)
+            elseif not wantOn and GhostState.enabled then
+                pcall(ghostDisable)
+            end
+
+            if GhostState.enabled then
+                local char = LocalPlayer.Character
+                local hrp = char and char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    if GhostState.clone and not GhostState.clone.Parent then
+                        pcall(ghostCreateClone, char)
+                    end
+                    if GhostState.clone and GhostState.clone.Parent
+                        and hrp.Transparency < 1 then
+                        pcall(ghostHide, char)
+                    end
+                    -- ⭐ cuma Stop animasi, JANGAN cabut Animator
+                    local humNow = char:FindFirstChildOfClass("Humanoid")
+                    if humNow then
+                        local anNow = humNow:FindFirstChildOfClass("Animator")
+                        if anNow then
+                            pcall(function()
+                                for _, t in ipairs(anNow:GetPlayingAnimationTracks()) do
+                                    t:Stop(0)
+                                end
+                            end)
+                            -- ⛔ JANGAN cabut Animator
+                        end
+                    end
+                end
+                ghostHideGuis()
+                ghostCamToClone()
+            end
+        end
+    end)
 end
 
 -- ============================================================
