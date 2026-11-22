@@ -387,11 +387,9 @@ local function initAutoThrow()
     local savedCameraType = nil
 
     local BIND_HARD = "VRILZ_CamPin_Hard"
-
     local BASE_POS   = Vector3.new(2.23, 6.01, 20.29)
     local CAM_OFFSET = Vector3.new(0, 6, 14)
 
-    -- ⭐ Posisi lock: prioritas CLONE HRP → fallback BASE_POS
     local function getLockTarget()
         local ghost = Workspace:FindFirstChild(LocalPlayer.Name .. "_Ghost")
         if ghost then
@@ -413,13 +411,15 @@ local function initAutoThrow()
         a.CanQuery = false
         a.CanTouch = false
         a.Massless = true
-        a.CFrame = CFrame.new(getLockTarget())
+        local target = getLockTarget()
+        if not target or typeof(target) ~= "Vector3" then
+            target = BASE_POS
+        end
+        a.CFrame = CFrame.new(target)
         a.Parent = Workspace
         return a
     end
 
-    -- ⭐ HARD STEP — lock CFrame + CameraType tiap frame
-    -- Subject di-handle ghostCamToClone (Last+5)
     local function hardStep()
         local cam = Workspace.CurrentCamera
         if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then
@@ -431,7 +431,6 @@ local function initAutoThrow()
         local target = getLockTarget()
         local camPos = target + CAM_OFFSET
         cam.CFrame = CFrame.lookAt(camPos, target)
-        -- ⭐ paksa subject ke anchor biar game gak pindah ke ThrowTarget
         if camAnchor and camAnchor.Parent then
             if cam.CameraSubject ~= camAnchor then
                 cam.CameraSubject = camAnchor
@@ -445,10 +444,9 @@ local function initAutoThrow()
         camAnchor = createCamAnchor()
         savedSubject    = camera.CameraSubject
         savedCameraType = camera.CameraType
-        RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 1, hardStep)
+        RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 10, hardStep)
     end
 
-    -- ⭐ stopCamPin — jangan balikin Custom kalau ghost masih ON
     local function stopCamPin()
         if not camAnchor then return end
         pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
@@ -465,10 +463,9 @@ local function initAutoThrow()
         camAnchor = nil
     end
 
-    -- ⭐ LOOP CAM
     task.spawn(function()
         while true do
-            task.wait(0.1)
+            task.wait(0.05)
             if ThrowState.autoThrow then
                 if not camAnchor or not camAnchor.Parent then
                     startCamPin()
@@ -479,7 +476,6 @@ local function initAutoThrow()
         end
     end)
 
-    -- ⭐ CharacterAdded: INSTANT re-lock, no delay
     LocalPlayer.CharacterAdded:Connect(function()
         if ThrowState.autoThrow then
             if camAnchor then
@@ -490,7 +486,6 @@ local function initAutoThrow()
         end
     end)
 
-    -- ⭐ expose ke ghost module
     if Shared then
         Shared.ThrowController_Ref = ThrowController
         Shared.ClientState_Ref = ClientState
@@ -943,76 +938,79 @@ local function initGhostMode()
             if not (SharedNow.GhostMode_Enabled or SharedNow.AutoThrow_Enabled) then return end
             ghostCamToClone()
         end)
-    -- pengawal Animator: jalan tiap 0.05s, tidak peduli transparency
+    -- ⭐ pengawal Animator: cabut SETIAP kali AutoThrow/Ghost ON,
+--    TANPA peduli GhostState.enabled — biar animasi gak main di char asli
+task.spawn(function()
+    while true do
+        task.wait(0.05)
+        -- ⭐ cek AutoThrow/Ghost, bukan GhostState.enabled
+        if not (Shared and (Shared.AutoThrow_Enabled or Shared.GhostMode_Enabled)) then
+            continue
+        end
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if hum then
+            local anim = hum:FindFirstChildOfClass("Animator")
+            if anim then
+                pcall(function()
+                    for _, t in ipairs(anim:GetPlayingAnimationTracks()) do
+                        t:Stop(0)
+                    end
+                end)
+                if GhostState.savedAnimator == nil then
+                    GhostState.savedAnimator = { anim = anim, parent = anim.Parent }
+                end
+                anim.Parent = nil
+            end
+        end
+    end
+end)
+    
     task.spawn(function()
-        while true do
-            task.wait(0.05)
-            if not GhostState.enabled then continue end
+    while true do
+        task.wait(0.1)   -- ⭐ 0.1s, bukan 0.5s
+        local wantOn = Shared and (Shared.GhostMode_Enabled == true
+            or Shared.AutoThrow_Enabled == true)
+
+        if wantOn and not GhostState.enabled then
+            -- ⭐ langsung panggil (bukan pcall) biar error keliatan di console
+            ghostEnable()
+        elseif not wantOn and GhostState.enabled then
+            pcall(ghostDisable)
+        end
+
+        if GhostState.enabled then
             local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                local anim = hum:FindFirstChildOfClass("Animator")
-                if anim then
-                    pcall(function()
-                        for _, t in ipairs(anim:GetPlayingAnimationTracks()) do
-                            t:Stop(0)
-                        end
-                    end)
-                    if GhostState.savedAnimator == nil then
-                        GhostState.savedAnimator = { anim = anim, parent = anim.Parent }
-                    end
-                    anim.Parent = nil
+            local hrp = char and char:FindFirstChild("HumanoidRootPart")
+            if hrp then
+                if GhostState.clone and not GhostState.clone.Parent then
+                    pcall(ghostCreateClone, char)
                 end
-            end
-        end
-    end)
-
-    task.spawn(function()
-        while true do
-            task.wait(0.5)
-            -- ⭐ ghost ON kalau: toggle manual ATAU Auto Throw nyala
-            local wantOn = Shared and (Shared.GhostMode_Enabled == true
-                or Shared.AutoThrow_Enabled == true)
-
-            if wantOn and not GhostState.enabled then
-                pcall(ghostEnable)
-            elseif not wantOn and GhostState.enabled then
-                pcall(ghostDisable)
-            end
-
-            if GhostState.enabled then
-                local char = LocalPlayer.Character
-                local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                                if hrp then
-                    if GhostState.clone and not GhostState.clone.Parent then
-                        pcall(ghostCreateClone, char)
-                    end
-                    if GhostState.clone and GhostState.clone.Parent
-                        and hrp.Transparency < 1 then
-                        pcall(ghostHide, char)
-                    end
-                                        -- cabut Animator SETIAP kali ada (jangan cek savedAnimator == nil)
-                    local humNow = char:FindFirstChildOfClass("Humanoid")
-                    if humNow then
-                        local anNow = humNow:FindFirstChildOfClass("Animator")
-                        if anNow then
-                            pcall(function()
-                                for _, t in ipairs(anNow:GetPlayingAnimationTracks()) do
-                                    t:Stop(0)
-                                end
-                            end)
-                            if GhostState.savedAnimator == nil then
-                                GhostState.savedAnimator = { anim = anNow, parent = anNow.Parent }
+                if GhostState.clone and GhostState.clone.Parent
+                    and hrp.Transparency < 1 then
+                    pcall(ghostHide, char)
+                end
+                local humNow = char:FindFirstChildOfClass("Humanoid")
+                if humNow then
+                    local anNow = humNow:FindFirstChildOfClass("Animator")
+                    if anNow then
+                        pcall(function()
+                            for _, t in ipairs(anNow:GetPlayingAnimationTracks()) do
+                                t:Stop(0)
                             end
-                            anNow.Parent = nil
+                        end)
+                        if GhostState.savedAnimator == nil then
+                            GhostState.savedAnimator = { anim = anNow, parent = anNow.Parent }
                         end
+                        anNow.Parent = nil
                     end
                 end
-                ghostHideGuis()
-                ghostCamToClone()
             end
+            ghostHideGuis()
+            ghostCamToClone()
         end
-    end)
+    end
+end)
 end
 
 -- ============================================================
