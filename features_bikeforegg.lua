@@ -115,7 +115,7 @@ end
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 AUTO THROW SYSTEM — CAMERA LOCK KE CLONE
+-- 🎯 AUTO THROW SYSTEM — CAMERA LOCK KE CLONE (FINAL)
 -- Auto Throw ON = camera WAJIB lock di clone, lawan semua cinematic
 -- Auto Throw OFF = normal (camera ikut char)
 -- ═══════════════════════════════════════════════════════════
@@ -380,7 +380,6 @@ local function initAutoThrow()
 
     -- ═══════════════════════════════════════════════════════════
     -- 🎥 CAMERA LOCK — WAJIB LOCK SAAT AUTO THROW ON
-    -- Lock di CLONE (bukan base). Lawan semua cinematic game.
     -- ═══════════════════════════════════════════════════════════
     local camera = Workspace.CurrentCamera
     local camAnchor = nil
@@ -389,13 +388,11 @@ local function initAutoThrow()
 
     local BIND_HARD = "VRILZ_CamPin_Hard"
 
-    -- ⭐ Posisi lock: di CLONE HRP (dinamis, ikut clone)
-    -- Fallback: BASE_POS kalau clone belum ada
-    local BASE_POS = Vector3.new(2.23, 6.01, 20.29)
-    local CAM_OFFSET = Vector3.new(0, 6, 14) -- offset kamera dari target
+    local BASE_POS   = Vector3.new(2.23, 6.01, 20.29)
+    local CAM_OFFSET = Vector3.new(0, 6, 14)
 
+    -- ⭐ Posisi lock: prioritas CLONE HRP → fallback BASE_POS
     local function getLockTarget()
-        -- prioritas 1: clone HRP
         local ghost = Workspace:FindFirstChild(LocalPlayer.Name .. "_Ghost")
         if ghost then
             local ghostHRP = ghost:FindFirstChild("HumanoidRootPart")
@@ -403,13 +400,6 @@ local function initAutoThrow()
                 return ghostHRP.Position
             end
         end
-        -- fallback: clone State (dari ghost module)
-        local gs = _G.VRILZ_GhostState
-        if gs and gs.clone then
-            local hrp = gs.clone:FindFirstChild("HumanoidRootPart")
-            if hrp then return hrp.Position end
-        end
-        -- fallback terakhir: base pos
         return BASE_POS
     end
 
@@ -428,8 +418,8 @@ local function initAutoThrow()
         return a
     end
 
-    -- ⭐ HARD STEP: override camera SETIAP frame
-    -- Prioritas Last+1 = jalan paling akhir, lawan semua yang lain
+    -- ⭐ HARD STEP — lock CFrame + CameraType tiap frame
+    -- Subject di-handle ghostCamToClone (Last+5)
     local function hardStep()
         local cam = Workspace.CurrentCamera
         if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then
@@ -438,13 +428,10 @@ local function initAutoThrow()
         if cam.CameraType ~= Enum.CameraType.Scriptable then
             cam.CameraType = Enum.CameraType.Scriptable
         end
-
-        -- ⭐ target dinamis: ikut clone kalau ada, fallback base
         local target = getLockTarget()
         local camPos = target + CAM_OFFSET
         cam.CFrame = CFrame.lookAt(camPos, target)
-
-        -- ⭐ paksa subject ke anchor (biar game gak pindah ke ThrowTarget)
+        -- ⭐ paksa subject ke anchor biar game gak pindah ke ThrowTarget
         if camAnchor and camAnchor.Parent then
             if cam.CameraSubject ~= camAnchor then
                 cam.CameraSubject = camAnchor
@@ -461,19 +448,24 @@ local function initAutoThrow()
         RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 1, hardStep)
     end
 
+    -- ⭐ stopCamPin — jangan balikin Custom kalau ghost masih ON
     local function stopCamPin()
         if not camAnchor then return end
         pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
         local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        -- ⭐ AUTO THROW OFF → balikin normal
-        camera.CameraType = savedCameraType or Enum.CameraType.Custom
-        camera.CameraSubject = savedSubject or hum
+        local ghostOn = Shared and (Shared.GhostMode_Enabled or Shared.AutoThrow_Enabled)
+        if ghostOn then
+            camera.CameraType = Enum.CameraType.Scriptable
+        else
+            camera.CameraType = savedCameraType or Enum.CameraType.Custom
+            camera.CameraSubject = savedSubject or hum
+        end
         savedSubject, savedCameraType = nil, nil
         camAnchor:Destroy()
         camAnchor = nil
     end
 
-    -- ⭐ LOOP CAM: cuma lock kalau AutoThrow ON
+    -- ⭐ LOOP CAM
     task.spawn(function()
         while true do
             task.wait(0.1)
@@ -490,7 +482,6 @@ local function initAutoThrow()
     -- ⭐ CharacterAdded: INSTANT re-lock, no delay
     LocalPlayer.CharacterAdded:Connect(function()
         if ThrowState.autoThrow then
-            -- destroy anchor lama biar ke-recreate dengan posisi baru
             if camAnchor then
                 pcall(function() camAnchor:Destroy() end)
                 camAnchor = nil
@@ -499,7 +490,7 @@ local function initAutoThrow()
         end
     end)
 
-    -- ⭐ expose ke ghost module biar bisa lock di clone
+    -- ⭐ expose ke ghost module
     if Shared then
         Shared.ThrowController_Ref = ThrowController
         Shared.ClientState_Ref = ClientState
@@ -890,11 +881,16 @@ local function ghostCamToClone()
     if cam.CameraType ~= Enum.CameraType.Scriptable then
         cam.CameraType = Enum.CameraType.Scriptable
     end
+
+    -- ⭐ WAJIB: paksa subject ke clone HRP — biar game gak pindah ke ThrowTarget
+    if cam.CameraSubject ~= cloneHRP then
+        cam.CameraSubject = cloneHRP
+    end
+
     local target = cloneHRP.Position
     local camPos = target + Vector3.new(0, 6, 14)
     cam.CFrame = CFrame.lookAt(camPos, target)
 end
-
 local function ghostEnable()
     local char = LocalPlayer.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
