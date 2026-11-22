@@ -115,7 +115,7 @@ end
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 AUTO THROW SYSTEM — FIXED
+-- 🎯 AUTO THROW SYSTEM — FIXED v2 (OFF = balik semula)
 -- ═══════════════════════════════════════════════════════════
 local function initAutoThrow()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -130,7 +130,6 @@ local function initAutoThrow()
         marker = nil,
         lastTap = 0,
         revealCache = setmetatable({}, { __mode = "k" }),
-        -- ⭐ flag transisi camera biar gak flip-flop
         camPinned = false,
     }
 
@@ -156,6 +155,30 @@ local function initAutoThrow()
             return tool
         end
         return nil
+    end
+
+    -- ⭐ FIX #1: helper cek throw masih jalan di game (dipakai drain)
+    local function isThrowBusy()
+        local busy = false
+        pcall(function() busy = (ClientState and ClientState.Busy) or false end)
+        local active = false
+        pcall(function()
+            active = (ThrowController and ThrowController.IsActive
+                and ThrowController.IsActive()) or false
+        end)
+        return busy or active or getEquippedAnimal() ~= nil
+    end
+
+    -- ⭐ FIX #1: helper tap Space (dipakai reveal handler + drain)
+    local function tapSpace()
+        pcall(function()
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+        end)
+        task.delay(0.03, function()
+            pcall(function()
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+            end)
+        end)
     end
 
     local function unequipTools()
@@ -253,6 +276,24 @@ local function initAutoThrow()
         end
     end
 
+    -- ⭐ FIX #2: DRAIN — selesaikan throw yang nyangkut saat OFF
+    -- Tanpa ini, game stuck di cinematic → kamera gak pernah balik normal
+    local function drainActiveThrow()
+        local deadline = os.clock() + 12
+        while os.clock() < deadline do
+            if not isThrowBusy() then break end
+            -- dismiss reveal screen yang nyangkut biar flow game selesai
+            for k in pairs(ThrowState.revealCache) do
+                if k.Parent and k.TextTransparency < 0.9 then
+                    ThrowState.revealCache[k] = nil
+                    tapSpace()
+                    task.wait(0.4)
+                end
+            end
+            task.wait(0.1)
+        end
+    end
+
     -- ═══ Marker tracker ═══
     task.spawn(function()
         while true do
@@ -300,10 +341,7 @@ local function initAutoThrow()
                             lastResultTime = os.clock()
                             Shared.Notify("Throw Result", result, "info")
                         end
-                        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-                        task.delay(0.03, function()
-                            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-                        end)
+                        tapSpace()
                     end
                 else
                     ThrowState.revealCache[k] = nil
@@ -321,10 +359,7 @@ local function initAutoThrow()
         local norm = 1 - m.Position.Y.Scale
         if norm >= ThrowState.tapPoint then
             ThrowState.lastTap = os.clock()
-            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-            task.delay(0.03, function()
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-            end)
+            tapSpace()
         end
     end)
 
@@ -354,6 +389,9 @@ local function initAutoThrow()
                 task.wait(Shared.TpDelay_Seconds or ThrowState.tpDelay)
             end
             if ClientState and ClientState.Busy then continue end
+            -- ⭐ FIX #3: re-check flag SEBELUM Start — tutup race window
+            -- biar gak start throw baru pas user baru aja OFF
+            if not ThrowState.autoThrow then continue end
             pcall(ThrowController.Start)
             task.wait(3)
         end
@@ -372,12 +410,10 @@ local function initAutoThrow()
     end)
 
     -- ═══════════════════════════════════════════════════════════
-    -- 🎥 CAMERA LOCK — FIXED
+    -- 🎥 CAMERA LOCK — FIXED v2
     -- ═══════════════════════════════════════════════════════════
     local camera = Workspace.CurrentCamera
     local camAnchor = nil
-    local savedSubject = nil
-    local savedCameraType = nil
 
     local BIND_HARD = "VRILZ_CamPin_Hard"
     local BASE_POS   = Vector3.new(2.23, 6.01, 20.29)
@@ -436,8 +472,8 @@ local function initAutoThrow()
         ThrowState.camPinned = true
         if camAnchor then pcall(function() camAnchor:Destroy() end) end
         camAnchor = createCamAnchor()
-        savedSubject    = camera.CameraSubject
-        savedCameraType = camera.CameraType
+        -- ⭐ FIX #4: HAPUS savedSubject/savedCameraType — state bisa tercemar
+        -- ghost/cinematic sebelum pin jalan → restore jadi ngawur
         pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
         RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 10, hardStep)
     end
@@ -446,17 +482,21 @@ local function initAutoThrow()
         if not ThrowState.camPinned then return end
         ThrowState.camPinned = false
         pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
-        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        camera.CameraType = savedCameraType or Enum.CameraType.Custom
-        camera.CameraSubject = savedSubject or hum
-        savedSubject, savedCameraType = nil, nil
+        local cam = Workspace.CurrentCamera
+        local char = LocalPlayer.Character
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        -- ⭐ FIX #4: restore ke SAFE DEFAULT, bukan saved state
+        cam.CameraType = Enum.CameraType.Custom
+        if hum then
+            cam.CameraSubject = hum
+        end
         if camAnchor then
             pcall(function() camAnchor:Destroy() end)
             camAnchor = nil
         end
     end
 
-    -- ⭐ FIX #6: transisi camera cuma sekali, bukan tiap 0.05s
+    -- ⭐ FIX #5: transisi OFF = drain dulu, baru restore kamera
     task.spawn(function()
         local wasOn = false
         while true do
@@ -465,14 +505,20 @@ local function initAutoThrow()
             if on and not wasOn then
                 startCamPin()
             elseif not on and wasOn then
-                stopCamPin()
+                task.spawn(function()
+                    -- tunggu throw yang jalan selesai (max 12s)
+                    drainActiveThrow()
+                    -- masih OFF? baru restore. Kalau user ON lagi, skip.
+                    if not ThrowState.autoThrow then
+                        stopCamPin()
+                    end
+                end)
             end
             wasOn = on
         end
     end)
 
     LocalPlayer.CharacterAdded:Connect(function()
-        -- ⭐ FIX: reset camPinned biar startCamPin jalan lagi kalo perlu
         if ThrowState.autoThrow then
             ThrowState.camPinned = false
             if camAnchor then
@@ -483,54 +529,17 @@ local function initAutoThrow()
         end
     end)
 
-        -- ═══ HOOK ANIMASI — BISA DILEPAS ═══
-    local hookInstalled = false
-    local mt = getrawmetatable(game)
-    local oldNamecall = mt.__namecall
-
-    local function hookLoadAnimation(self, ...)
-        local method = getnamecallmethod()
-        if method == "LoadAnimation" and self:IsA("Animator") then
-            local char = self.Parent
-            if char and char == LocalPlayer.Character then
-                if Shared and Shared.AutoThrow_Enabled then
-                    return nil   -- blok animasi cuma pas ON
-                end
-            end
-        end
-        return oldNamecall(self, ...)
+    -- ⭐ FIX #6: sync instan dari UI (tutup gap 0.3s sync loop)
+    Features.ForceSyncThrow = function()
+        ThrowState.autoThrow = Shared.AutoThrow_Enabled == true
+        ThrowState.autoBest = Shared.AutoBestThrow_Enabled == true
     end
 
-    local function installHook()
-        if hookInstalled then return end
-        hookInstalled = true
-        setreadonly(mt, false)
-        mt.__namecall = newcclosure(hookLoadAnimation)
-        setreadonly(mt, true)
-    end
+    -- ⭐ FIX #7: HOOK LoadAnimation DIHAPUS TOTAL.
+    -- return nil bikin script game error permanen (track:Play() di nil)
+    -- → char beku / animasi hilang walau udah OFF.
+    -- Ghost mode udah hide char, hook ini gak guna + merusak.
 
-    local function uninstallHook()
-        if not hookInstalled then return end
-        hookInstalled = false
-        setreadonly(mt, false)
-        mt.__namecall = oldNamecall   -- ⭐ balikin ke asli
-        setreadonly(mt, true)
-    end
-
-    -- ⭐ Sync: pasang hook cuma saat Auto Throw ON
-    task.spawn(function()
-        local wasOn = false
-        while true do
-            task.wait(0.2)
-            local on = Shared and Shared.AutoThrow_Enabled == true
-            if on and not wasOn then
-                installHook()
-            elseif not on and wasOn then
-                uninstallHook()
-            end
-            wasOn = on
-        end
-    end)
     if Shared then
         Shared.ThrowController_Ref = ThrowController
         Shared.ClientState_Ref = ClientState
