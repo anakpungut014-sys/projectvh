@@ -115,7 +115,7 @@ end
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 AUTO THROW SYSTEM — FIXED v2 (OFF = balik semula)
+-- 🎯 AUTO THROW SYSTEM — FIXED v3 (animasi hidden + OFF balik semula)
 -- ═══════════════════════════════════════════════════════════
 local function initAutoThrow()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -157,7 +157,7 @@ local function initAutoThrow()
         return nil
     end
 
-    -- ⭐ FIX #1: helper cek throw masih jalan di game (dipakai drain)
+    -- ⭐ helper: cek throw masih jalan di game (dipakai drain)
     local function isThrowBusy()
         local busy = false
         pcall(function() busy = (ClientState and ClientState.Busy) or false end)
@@ -169,7 +169,7 @@ local function initAutoThrow()
         return busy or active or getEquippedAnimal() ~= nil
     end
 
-    -- ⭐ FIX #1: helper tap Space (dipakai reveal handler + drain)
+    -- ⭐ helper: tap Space (dipakai reveal handler + drain)
     local function tapSpace()
         pcall(function()
             VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
@@ -276,13 +276,12 @@ local function initAutoThrow()
         end
     end
 
-    -- ⭐ FIX #2: DRAIN — selesaikan throw yang nyangkut saat OFF
-    -- Tanpa ini, game stuck di cinematic → kamera gak pernah balik normal
+    -- ⭐ DRAIN: selesaikan throw yang nyangkut saat OFF
+    -- Tanpa ini game stuck di cinematic → kamera gak pernah balik normal
     local function drainActiveThrow()
         local deadline = os.clock() + 12
         while os.clock() < deadline do
             if not isThrowBusy() then break end
-            -- dismiss reveal screen yang nyangkut biar flow game selesai
             for k in pairs(ThrowState.revealCache) do
                 if k.Parent and k.TextTransparency < 0.9 then
                     ThrowState.revealCache[k] = nil
@@ -389,7 +388,7 @@ local function initAutoThrow()
                 task.wait(Shared.TpDelay_Seconds or ThrowState.tpDelay)
             end
             if ClientState and ClientState.Busy then continue end
-            -- ⭐ FIX #3: re-check flag SEBELUM Start — tutup race window
+            -- ⭐ re-check flag SEBELUM Start — tutup race window
             -- biar gak start throw baru pas user baru aja OFF
             if not ThrowState.autoThrow then continue end
             pcall(ThrowController.Start)
@@ -410,7 +409,7 @@ local function initAutoThrow()
     end)
 
     -- ═══════════════════════════════════════════════════════════
-    -- 🎥 CAMERA LOCK — FIXED v2
+    -- 🎥 CAMERA LOCK — FIXED v3
     -- ═══════════════════════════════════════════════════════════
     local camera = Workspace.CurrentCamera
     local camAnchor = nil
@@ -472,7 +471,7 @@ local function initAutoThrow()
         ThrowState.camPinned = true
         if camAnchor then pcall(function() camAnchor:Destroy() end) end
         camAnchor = createCamAnchor()
-        -- ⭐ FIX #4: HAPUS savedSubject/savedCameraType — state bisa tercemar
+        -- ⭐ TANPA savedSubject/savedCameraType — state bisa tercemar
         -- ghost/cinematic sebelum pin jalan → restore jadi ngawur
         pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
         RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 10, hardStep)
@@ -485,7 +484,7 @@ local function initAutoThrow()
         local cam = Workspace.CurrentCamera
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
-        -- ⭐ FIX #4: restore ke SAFE DEFAULT, bukan saved state
+        -- ⭐ restore ke SAFE DEFAULT, bukan saved state
         cam.CameraType = Enum.CameraType.Custom
         if hum then
             cam.CameraSubject = hum
@@ -496,7 +495,7 @@ local function initAutoThrow()
         end
     end
 
-    -- ⭐ FIX #5: transisi OFF = drain dulu, baru restore kamera
+    -- ⭐ transisi OFF = drain dulu, baru restore kamera
     task.spawn(function()
         local wasOn = false
         while true do
@@ -529,16 +528,67 @@ local function initAutoThrow()
         end
     end)
 
-    -- ⭐ FIX #6: sync instan dari UI (tutup gap 0.3s sync loop)
+    -- ═══════════════════════════════════════════════════════════
+    -- 🎭 HOOK ANIMASI v3 — AMAN (weight 0, BUKAN return nil)
+    -- Animasi tetap "jalan" (event Stopped fire, timing game utuh)
+    -- tapi zero efek visual → char keliatan diem di pose idle.
+    -- Script game GAK rusak → OFF = animasi otomatis balik normal.
+    -- ═══════════════════════════════════════════════════════════
+    pcall(function()
+        -- catat SEMUA track dari char kita (jangan gate di sini,
+        -- game sering preload animasi SEBELUM auto throw dinyalain)
+        local localTracks = setmetatable({}, { __mode = "k" })
+
+        local function isLocalAnimator(animator)
+            if not animator then return false end
+            local ok, model = pcall(function()
+                return animator:FindFirstAncestorOfClass("Model")
+            end)
+            return ok and model == LocalPlayer.Character
+        end
+
+        local mt = getrawmetatable(game)
+        local oldNamecall = mt.__namecall
+        setreadonly(mt, false)
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+
+            -- 1) LoadAnimation: JANGAN PERNAH return nil — return track asli
+            if method == "LoadAnimation" and self:IsA("Animator") then
+                local result = oldNamecall(self, ...)
+                if typeof(result) == "Instance"
+                    and result:IsA("AnimationTrack")
+                    and isLocalAnimator(self) then
+                    localTracks[result] = true -- catat dulu, gate-nya di Play
+                end
+                return result
+            end
+
+            -- 2) Play: paksa weight 0 → animasi jalan tapi GAK KELIATAN
+            if method == "Play" and localTracks[self]
+                and Shared and Shared.AutoThrow_Enabled then
+                local args = { ... }
+                -- Play(fadeTime, weight, speed) → weight dipaksa 0
+                return oldNamecall(self, args[1] or 0.1, 0, args[3] or 1)
+            end
+
+            -- 3) AdjustWeight: cegah game naikin weight balik jadi keliatan
+            if method == "AdjustWeight" and localTracks[self]
+                and Shared and Shared.AutoThrow_Enabled then
+                local args = { ... }
+                return oldNamecall(self, 0, args[2])
+            end
+
+            return oldNamecall(self, ...)
+        end)
+        setreadonly(mt, true)
+    end)
+
+    -- ═══ Sync instan dari UI ═══
     Features.ForceSyncThrow = function()
         ThrowState.autoThrow = Shared.AutoThrow_Enabled == true
         ThrowState.autoBest = Shared.AutoBestThrow_Enabled == true
     end
-
-    -- ⭐ FIX #7: HOOK LoadAnimation DIHAPUS TOTAL.
-    -- return nil bikin script game error permanen (track:Play() di nil)
-    -- → char beku / animasi hilang walau udah OFF.
-    -- Ghost mode udah hide char, hook ini gak guna + merusak.
 
     if Shared then
         Shared.ThrowController_Ref = ThrowController
