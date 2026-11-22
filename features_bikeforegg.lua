@@ -474,26 +474,56 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ BLOCK ANIMASI THROW DI CHAR ASLI ═══
-    pcall(function()
-        local mt = getrawmetatable(game)
-        local oldNamecall = mt.__namecall
-        setreadonly(mt, false)
-        mt.__namecall = newcclosure(function(self, ...)
-            local method = getnamecallmethod()
-            if method == "LoadAnimation" and self:IsA("Animator") then
-                local char = self.Parent
-                if char and char == LocalPlayer.Character then
-                    if Shared and Shared.AutoThrow_Enabled then
-                        return nil
+    -- ═══ HOOK ANIMASI — BISA ON/OFF ═══
+    local _oldNamecall = nil
+    local _hookInstalled = false
+
+    local function installAnimHook()
+        if _hookInstalled then return end
+        pcall(function()
+            local mt = getrawmetatable(game)
+            _oldNamecall = mt.__namecall
+            setreadonly(mt, false)
+            mt.__namecall = newcclosure(function(self, ...)
+                local method = getnamecallmethod()
+                if method == "LoadAnimation" and self:IsA("Animator") then
+                    local char = self.Parent
+                    if char and char == LocalPlayer.Character then
+                        if Shared and Shared.AutoThrow_Enabled then
+                            return nil
+                        end
                     end
                 end
-            end
-            return oldNamecall(self, ...)
+                return _oldNamecall(self, ...)
+            end)
+            setreadonly(mt, true)
+            _hookInstalled = true
         end)
-        setreadonly(mt, true)
-    end)
+    end
 
+    local function uninstallAnimHook()
+        if not _hookInstalled or not _oldNamecall then return end
+        pcall(function()
+            local mt = getrawmetatable(game)
+            setreadonly(mt, false)
+            mt.__namecall = _oldNamecall
+            setreadonly(mt, true)
+            _hookInstalled = false
+            _oldNamecall = nil
+        end)
+    end
+
+    -- ⭐ pasang/lepas hook berdasarkan AutoThrow_Enabled
+    task.spawn(function()
+        while true do
+            task.wait(0.1)
+            if Shared and Shared.AutoThrow_Enabled then
+                installAnimHook()
+            else
+                uninstallAnimHook()
+            end
+        end
+    end)
     if Shared then
         Shared.ThrowController_Ref = ThrowController
         Shared.ClientState_Ref = ClientState
