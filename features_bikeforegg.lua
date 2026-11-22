@@ -107,7 +107,7 @@ function Features.startAntiAFK()
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 AUTO THROW SYSTEM — v6
+-- 🎯 AUTO THROW SYSTEM — v7 (hook aman + post-off suppressor)
 -- ═══════════════════════════════════════════════════════════
 local function initAutoThrow()
     local VirtualInputManager = game:GetService("VirtualInputManager")
@@ -360,7 +360,6 @@ local function initAutoThrow()
                 task.wait(Shared.TpDelay_Seconds or ThrowState.tpDelay)
             end
             if ClientState and ClientState.Busy then continue end
-            -- re-check flag sebelum Start (tutup race window pas baru OFF)
             if not ThrowState.autoThrow then continue end
             pcall(ThrowController.Start)
             task.wait(3)
@@ -386,6 +385,7 @@ local function initAutoThrow()
 
     local BIND_HARD = "VRILZ_CamPin_Hard"
     local BIND_OFF  = "VRILZ_OffEnforce"
+    local BIND_SUP  = "VRILZ_PostOffSuppress"
     local BASE_POS   = Vector3.new(2.23, 6.01, 20.29)
     local CAM_OFFSET = Vector3.new(0, 6, 14)
 
@@ -446,17 +446,13 @@ local function initAutoThrow()
         RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 10, hardStep)
     end
 
-    -- ═══════════════════════════════════════════════════════════
-    -- ⭐ v6: INSTANT RESTORE — OFF = langsung normal, NO WAIT
-    -- ═══════════════════════════════════════════════════════════
+    -- ═══ INSTANT RESTORE — OFF = langsung normal ═══
     local function instantRestoreNormal()
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
 
-        -- 1) Lepas pin kamera
         pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
 
-        -- 2) Kamera → LANGSUNG ke karakter
         local cam = Workspace.CurrentCamera
         if cam then
             if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then
@@ -468,7 +464,6 @@ local function initAutoThrow()
             end
         end
 
-        -- 3) Stop semua track (bersihin weight-0 bekas ON → gak beku)
         local animator = hum and hum:FindFirstChildOfClass("Animator")
         if animator then
             local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
@@ -479,7 +474,6 @@ local function initAutoThrow()
             end
         end
 
-        -- 4) Char visible lagi
         if char then
             for _, d in ipairs(char:GetDescendants()) do
                 if d:IsA("BasePart") then
@@ -488,31 +482,23 @@ local function initAutoThrow()
             end
         end
 
-        -- 5) Anchor bersihin
         if camAnchor then
             pcall(function() camAnchor:Destroy() end)
             camAnchor = nil
         end
         ThrowState.camPinned = false
 
-        -- 6) Nudge → idle main lagi
         if hum and hum.Health > 0 then
             pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end)
         end
     end
 
-    -- ═══════════════════════════════════════════════════════════
-    -- ⭐ v6: OFF ENFORCER — inti "langsung normal"
-    -- Setelah OFF, game yang lagi cinematic bakal berontak
-    -- (maksa Scriptable, pindah subject). Enforcer NIMPA tiap
-    -- frame selama 10s: kamera DIPAKSA ngikutin karakter lu.
-    -- Bind Last+11 > cam pin (Last+10) → enforcer SELALU menang.
-    -- ═══════════════════════════════════════════════════════════
+    -- ═══ OFF ENFORCER — kamera dipaksa ngikutin char (10s) ═══
     local function startOffEnforcer()
         pcall(function() RunService:UnbindFromRenderStep(BIND_OFF) end)
         RunService:BindToRenderStep(BIND_OFF,
             Enum.RenderPriority.Last.Value + 11, function()
-                if ThrowState.autoThrow then return end -- ON lagi? mundur
+                if ThrowState.autoThrow then return end
                 local char = LocalPlayer.Character
                 local hum = char and char:FindFirstChildOfClass("Humanoid")
                 local cam = Workspace.CurrentCamera
@@ -533,38 +519,164 @@ local function initAutoThrow()
             while os.clock() < deadline do
                 task.wait(0.25)
                 if ThrowState.autoThrow then break end
-                -- bantu cinematic bekas selesai cepet (biar game berhenti berontak)
-                if isThrowBusy() then
-                    for k in pairs(ThrowState.revealCache) do
-                        if k.Parent and k.TextTransparency < 0.9 then
-                            ThrowState.revealCache[k] = nil
-                            tapSpace()
-                        end
-                    end
-                else
-                    break -- game udah idle → enforcer lepas
-                end
+                if not isThrowBusy() then break end
             end
             pcall(function() RunService:UnbindFromRenderStep(BIND_OFF) end)
         end)
     end
 
-    -- ═══ Transisi ON/OFF — v6: INSTAN ═══
+    -- ═══════════════════════════════════════════════════════════
+    -- ⭐⭐⭐ v7: BAR KILLER — bunuh bar hitam cinematic
+    -- Deteksi: Frame/ImageLabel FULL-WIDTH, tipis, nempel atas/bawah
+    -- layar, warna gelap → itu letterbox → Visible = false
+    -- ═══════════════════════════════════════════════════════════
+    local function killLetterboxBars()
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        local cam = Workspace.CurrentCamera
+        if not pg or not cam then return end
+        local vp = cam.ViewportSize
+        for _, gui in ipairs(pg:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
+                for _, d in ipairs(gui:GetDescendants()) do
+                    if (d:IsA("Frame") or d:IsA("ImageLabel")) and d.Visible then
+                        local okPos, pos = pcall(function() return d.AbsolutePosition end)
+                        local okSize, size = pcall(function() return d.AbsoluteSize end)
+                        if okPos and okSize and size.Y > 0 then
+                            local fullW   = size.X >= vp.X * 0.9
+                            local thinH   = size.Y <= vp.Y * 0.25 and size.Y >= vp.Y * 0.02
+                            local atTop   = pos.Y <= 4
+                            local atBot   = (pos.Y + size.Y) >= vp.Y - 4
+                            local dark    = true
+                            if d:IsA("Frame") then
+                                local c = d.BackgroundColor3
+                                dark = (c.R + c.G + c.B) < 0.35
+                                    and d.BackgroundTransparency < 0.5
+                            end
+                            if fullW and thinH and (atTop or atBot) and dark then
+                                d.Visible = false
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- ═══════════════════════════════════════════════════════════
+    -- ⭐⭐⭐ v7: POST-OFF SUPPRESSOR — inti fix screenshot lu
+    -- Setelah OFF, game masih cinematic → replay animasi (char rebah)
+    -- + bar hitam nempel. Suppressor jalan max 8s setelah OFF:
+    --   1. Animasi ditahan weight 0 SELAMA game masih busy
+    --      → char gak rebah, keliatan berdiri normal
+    --   2. Tap Space → cinematic di-skip cepet
+    --   3. Bar hitam dibunuh tiap 0.15s
+    --   4. Game idle → bersihin semua bekas → lepas → NORMAL TOTAL
+    -- ═══════════════════════════════════════════════════════════
+    local function startPostOffSuppressor()
+        pcall(function() RunService:UnbindFromRenderStep(BIND_SUP) end)
+
+        -- per-frame: tahan animasi selama game masih busy
+        RunService:BindToRenderStep(BIND_SUP,
+            Enum.RenderPriority.Last.Value + 12, function()
+                if ThrowState.autoThrow then return end
+                if not isThrowBusy() then return end
+                local char = LocalPlayer.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                local animator = hum and hum:FindFirstChildOfClass("Animator")
+                if animator then
+                    local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
+                    if ok and tracks then
+                        for _, t in ipairs(tracks) do
+                            pcall(function() t:AdjustWeight(0) end)
+                        end
+                    end
+                end
+            end)
+
+        task.spawn(function()
+            local deadline = os.clock() + 8
+            local lastTap, lastNudge = 0, 0
+            while os.clock() < deadline do
+                task.wait(0.15)
+                if ThrowState.autoThrow then break end
+
+                -- 3) bar hitam dibunuh terus selama suppressor hidup
+                pcall(killLetterboxBars)
+
+                if isThrowBusy() then
+                    -- 2a) tap reveal yang kecache
+                    local tapped = false
+                    for k in pairs(ThrowState.revealCache) do
+                        if k.Parent and k.TextTransparency < 0.9 then
+                            ThrowState.revealCache[k] = nil
+                            tapSpace()
+                            tapped = true
+                        end
+                    end
+                    -- 2b) blind tap tiap 1.2s → cinematic dipaksa lanjut
+                    if not tapped and os.clock() - lastTap > 1.2 then
+                        lastTap = os.clock()
+                        tapSpace()
+                    end
+                    -- bangunin char biar gak rebah (state GettingUp)
+                    if os.clock() - lastNudge > 0.5 then
+                        lastNudge = os.clock()
+                        local char = LocalPlayer.Character
+                        local hum = char and char:FindFirstChildOfClass("Humanoid")
+                        if hum and hum.Health > 0 then
+                            pcall(function()
+                                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                            end)
+                        end
+                    end
+                else
+                    -- ✅ game idle → bersihin SEMUA bekas → selesai
+                    local char = LocalPlayer.Character
+                    local hum = char and char:FindFirstChildOfClass("Humanoid")
+                    local animator = hum and hum:FindFirstChildOfClass("Animator")
+                    if animator then
+                        local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
+                        if ok and tracks then
+                            for _, t in ipairs(tracks) do
+                                pcall(function() t:Stop(0) end)
+                            end
+                        end
+                    end
+                    if char then
+                        for _, d in ipairs(char:GetDescendants()) do
+                            if d:IsA("BasePart") then
+                                d.LocalTransparencyModifier = 0
+                            end
+                        end
+                    end
+                    pcall(killLetterboxBars)
+                    if hum and hum.Health > 0 then
+                        pcall(function()
+                            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                        end)
+                    end
+                    break
+                end
+            end
+            pcall(function() RunService:UnbindFromRenderStep(BIND_SUP) end)
+        end)
+    end
+
+    -- ═══ Transisi ON/OFF — v7 ═══
     task.spawn(function()
         local wasOn = false
         while true do
             task.wait(0.1)
             local on = ThrowState.autoThrow
             if on and not wasOn then
-                -- ON: matiin enforcer dulu (biar gak perang sama pin)
                 pcall(function() RunService:UnbindFromRenderStep(BIND_OFF) end)
+                pcall(function() RunService:UnbindFromRenderStep(BIND_SUP) end)
                 startCamPin()
             elseif not on and wasOn then
-                -- ⭐ OFF = SEMUA wajib normal → ghost juga dipaksa mati
-                -- (kalau UI lupa set GhostMode_Enabled=false, di sini dipaksa)
                 if Shared then Shared.GhostMode_Enabled = false end
                 instantRestoreNormal()
                 startOffEnforcer()
+                startPostOffSuppressor()  -- ⭐ NEW v7
             end
             wasOn = on
         end
@@ -581,11 +693,7 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══════════════════════════════════════════════════════════
-    -- 💀 CINEMATIC KILLER — aktif CUMA pas AutoThrow ON
-    -- Tiap frame: semua track weight 0 + char invisible
-    -- → cinematic game gak bisa muncul apapun yang terjadi
-    -- ═══════════════════════════════════════════════════════════
+    -- ═══ CINEMATIC KILLER — aktif CUMA pas ON ═══
     RunService:BindToRenderStep("VRILZ_CineKill",
         Enum.RenderPriority.Last.Value + 9, function()
             if not (Shared and Shared.AutoThrow_Enabled) then return end
@@ -611,10 +719,11 @@ local function initAutoThrow()
         end)
 
     -- ═══════════════════════════════════════════════════════════
-    -- 🎭 HOOK ANIMASI — weight 0 (script game TETEP SEHAT)
-    -- LoadAnimation → return track asli (BUKAN nil!)
-    -- Play → weight dipaksa 0 → gak keliatan, tapi event Stopped
-    -- tetap fire → game flow gak nyangkut → OFF = balik normal
+    -- 🎭 HOOK ANIMASI — AMAN (weight 0) — INI YANG LU MAU
+    -- LoadAnimation → return track ASLI (script game sehat, gak mati)
+    -- Play → weight DIPAKSA 0 → animasi 100% GAK KELIATAN pas ON
+    -- AdjustWeight → game gak bisa naikin weight balik
+    -- Event Stopped tetap fire → flow game utuh → OFF bersih
     -- ═══════════════════════════════════════════════════════════
     pcall(function()
         local localTracks = setmetatable({}, { __mode = "k" })
