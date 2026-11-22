@@ -115,8 +115,8 @@ end
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 AUTO THROW SYSTEM — CAMERA LOCK DI CLONE, TANPA BLOCK ANIMASI
--- Auto Throw ON = camera lock di clone, animasi gak nampil (char invisible)
+-- 🎯 AUTO THROW SYSTEM — CAMERA LOCK DI CLONE + BLOCK ANIMASI
+-- Auto Throw ON = camera lock total di clone, animasi di-block
 -- Auto Throw OFF = normal
 -- ═══════════════════════════════════════════════════════════
 local function initAutoThrow()
@@ -325,10 +325,10 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ LOOP AUTO THROW — CEPET ═══
+    -- ═══ LOOP AUTO THROW ═══
     task.spawn(function()
         while true do
-            task.wait(0.3)   -- ⭐ 0.3s, lebih cepet dari 0.5s
+            task.wait(0.5)
             if not ThrowState.autoThrow then continue end
             if not ThrowController or not ThrowController.Start then
                 Shared.Notify("Auto Throw", "ThrowController tidak ditemukan.", "error")
@@ -352,7 +352,7 @@ local function initAutoThrow()
             end
             if ClientState and ClientState.Busy then continue end
             pcall(ThrowController.Start)
-            task.wait(1.5)   -- ⭐ 1.5s antar throw, lebih cepet dari 3s
+            task.wait(3)
         end
     end)
 
@@ -368,7 +368,7 @@ local function initAutoThrow()
     end)
 
     -- ═══════════════════════════════════════════════════════════
-    -- 🎥 CAMERA LOCK — TANPA BLOCK ANIMASI
+    -- 🎥 CAMERA LOCK + BLOCK ANIMASI
     -- ═══════════════════════════════════════════════════════════
     local camera = Workspace.CurrentCamera
     local camAnchor = nil
@@ -440,13 +440,9 @@ local function initAutoThrow()
         if not camAnchor then return end
         pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
         local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-        local ghostOn = Shared and (Shared.GhostMode_Enabled or Shared.AutoThrow_Enabled)
-        if ghostOn then
-            camera.CameraType = Enum.CameraType.Scriptable
-        else
-            camera.CameraType = savedCameraType or Enum.CameraType.Custom
-            camera.CameraSubject = savedSubject or hum
-        end
+        -- ⭐ SELALU balikin normal — gak peduli ghostOn
+        camera.CameraType = savedCameraType or Enum.CameraType.Custom
+        camera.CameraSubject = savedSubject or hum
         savedSubject, savedCameraType = nil, nil
         camAnchor:Destroy()
         camAnchor = nil
@@ -475,8 +471,25 @@ local function initAutoThrow()
         end
     end)
 
-    -- ⭐ ANIMASI TIDAK DI-BLOCK — game butuh buat hitbox/reward
-    -- Char asli udah invisible (ghostHide), visual gak keliatan
+    -- ═══ BLOCK ANIMASI THROW DI CHAR ASLI ═══
+    pcall(function()
+        local mt = getrawmetatable(game)
+        local oldNamecall = mt.__namecall
+        setreadonly(mt, false)
+        mt.__namecall = newcclosure(function(self, ...)
+            local method = getnamecallmethod()
+            if method == "LoadAnimation" and self:IsA("Animator") then
+                local char = self.Parent
+                if char and char == LocalPlayer.Character then
+                    if Shared and Shared.AutoThrow_Enabled then
+                        return nil
+                    end
+                end
+            end
+            return oldNamecall(self, ...)
+        end)
+        setreadonly(mt, true)
+    end)
 
     if Shared then
         Shared.ThrowController_Ref = ThrowController
@@ -749,7 +762,6 @@ local function ghostHide(char)
                     t:Stop(0)
                 end
             end)
-            anim.Parent = nil
         end
         -- ⬆️⬆️ SAMPAI SINI ⬆️⬆️
     end
@@ -902,6 +914,7 @@ local function ghostDisable()
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         if cam and hum then
             cam.CameraSubject = hum
+            cam.CameraType = Enum.CameraType.Custom   -- ⭐ tambah ini
         end
     end
     GhostState.enabled = false
@@ -952,7 +965,6 @@ task.spawn(function()
                 if GhostState.savedAnimator == nil then
                     GhostState.savedAnimator = { anim = anim, parent = anim.Parent }
                 end
-                anim.Parent = nil
             end
         end
     end
