@@ -115,7 +115,7 @@ end
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 AUTO THROW SYSTEM — CAMERA LOCK DI CLONE, HOOK STATIS
+-- 🎯 AUTO THROW SYSTEM — FIXED
 -- ═══════════════════════════════════════════════════════════
 local function initAutoThrow()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -130,6 +130,8 @@ local function initAutoThrow()
         marker = nil,
         lastTap = 0,
         revealCache = setmetatable({}, { __mode = "k" }),
+        -- ⭐ flag transisi camera biar gak flip-flop
+        camPinned = false,
     }
 
     local function requirePlayerScript(...)
@@ -251,6 +253,7 @@ local function initAutoThrow()
         end
     end
 
+    -- ═══ Marker tracker ═══
     task.spawn(function()
         while true do
             task.wait(0.15)
@@ -268,6 +271,7 @@ local function initAutoThrow()
         end
     end)
 
+    -- ═══ Reveal screen handler ═══
     task.spawn(function()
         local pg = LocalPlayer:WaitForChild("PlayerGui")
         pg.DescendantAdded:Connect(function(d)
@@ -308,6 +312,7 @@ local function initAutoThrow()
         end
     end)
 
+    -- ═══ Auto best tap ═══
     RunService.RenderStepped:Connect(function()
         if not ThrowState.autoBest then return end
         local m = ThrowState.marker
@@ -354,6 +359,7 @@ local function initAutoThrow()
         end
     end)
 
+    -- ═══ Sync flag ═══
     task.spawn(function()
         while true do
             task.wait(0.3)
@@ -366,7 +372,7 @@ local function initAutoThrow()
     end)
 
     -- ═══════════════════════════════════════════════════════════
-    -- 🎥 CAMERA LOCK
+    -- 🎥 CAMERA LOCK — FIXED
     -- ═══════════════════════════════════════════════════════════
     local camera = Workspace.CurrentCamera
     local camAnchor = nil
@@ -426,7 +432,8 @@ local function initAutoThrow()
     end
 
     local function startCamPin()
-        if camAnchor and camAnchor.Parent then return end
+        if ThrowState.camPinned then return end
+        ThrowState.camPinned = true
         if camAnchor then pcall(function() camAnchor:Destroy() end) end
         camAnchor = createCamAnchor()
         savedSubject    = camera.CameraSubject
@@ -435,7 +442,9 @@ local function initAutoThrow()
         RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 10, hardStep)
     end
 
-        local function stopCamPin()
+    local function stopCamPin()
+        if not ThrowState.camPinned then return end
+        ThrowState.camPinned = false
         pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
         local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
         camera.CameraType = savedCameraType or Enum.CameraType.Custom
@@ -447,21 +456,25 @@ local function initAutoThrow()
         end
     end
 
+    -- ⭐ FIX #6: transisi camera cuma sekali, bukan tiap 0.05s
     task.spawn(function()
+        local wasOn = false
         while true do
-            task.wait(0.05)
-            if ThrowState.autoThrow then
-                if not camAnchor or not camAnchor.Parent then
-                    startCamPin()
-                end
-            else
+            task.wait(0.1)
+            local on = ThrowState.autoThrow
+            if on and not wasOn then
+                startCamPin()
+            elseif not on and wasOn then
                 stopCamPin()
             end
+            wasOn = on
         end
     end)
 
     LocalPlayer.CharacterAdded:Connect(function()
+        -- ⭐ FIX: reset camPinned biar startCamPin jalan lagi kalo perlu
         if ThrowState.autoThrow then
+            ThrowState.camPinned = false
             if camAnchor then
                 pcall(function() camAnchor:Destroy() end)
                 camAnchor = nil
@@ -470,7 +483,7 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ HOOK ANIMASI — STATIS, CEK FLAG TIAP PANGGILAN ═══
+    -- ═══ HOOK ANIMASI ═══
     pcall(function()
         local mt = getrawmetatable(game)
         local oldNamecall = mt.__namecall
