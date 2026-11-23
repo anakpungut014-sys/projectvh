@@ -123,7 +123,7 @@ local function initAutoThrow()
     -- ═══ Saved state ═══
     local savedTransparency = {}
     local savedConstraints = {}
-    local savedAnimWeights = {}   -- AnimTrack -> weight asli
+    local savedAnimWeights = {}
 
     local function requirePlayerScript(...)
         local ps = LocalPlayer:WaitForChild("PlayerScripts", 5)
@@ -309,7 +309,6 @@ local function initAutoThrow()
         end
         savedConstraints = {}
 
-        -- Restore animation weights (kalau ada yang di-AdjustWeight)
         for track, w in pairs(savedAnimWeights) do
             if track then
                 pcall(function() track:AdjustWeight(w, 0) end)
@@ -318,7 +317,7 @@ local function initAutoThrow()
         savedAnimWeights = {}
     end
 
-    -- ═══ Animation suppress + save weight (dipakai cine killer) ═══
+    -- ═══ Animation suppress + save weight ═══
     local function suppressAnimations(char)
         local hum = char and char:FindFirstChildOfClass("Humanoid")
         local animator = hum and hum:FindFirstChildOfClass("Animator")
@@ -352,9 +351,8 @@ local function initAutoThrow()
             end
             if ThrowState.autoThrow then
                 scanRevealScreens()
-              end
             end
-         end
+        end
     end)
 
     -- ═══ Reveal screen handler ═══
@@ -493,7 +491,7 @@ local function initAutoThrow()
         end
     end
 
-    -- ═══ BAR KILLER (function only, binding dipisah) ═══
+    -- ═══ BAR KILLER ═══
     local function killLetterboxBars()
         local pg = LocalPlayer:FindFirstChild("PlayerGui")
         local cam = Workspace.CurrentCamera
@@ -527,7 +525,7 @@ local function initAutoThrow()
     end
 
     -- ═══════════════════════════════════════════════════════════
-    -- START/STOP HOOKS — semua hook yang cuma aktif saat ON
+    -- START/STOP HOOKS
     -- ═══════════════════════════════════════════════════════════
     local function startCamPin()
         if ThrowState.camPinned then return end
@@ -702,7 +700,7 @@ local function initAutoThrow()
                     end
                 else
                     idleTicks = idleTicks + 1
-                    if idleTicks >= 13 then  -- ~2s idle → cleanup & break
+                    if idleTicks >= 13 then
                         local char = LocalPlayer.Character
                         local hum = char and char:FindFirstChildOfClass("Humanoid")
                         local animator = hum and hum:FindFirstChildOfClass("Animator")
@@ -730,7 +728,7 @@ local function initAutoThrow()
     end
 
     -- ═══════════════════════════════════════════════════════════
-    -- SET AUTO THROW — SINGLE SOURCE OF TRUTH
+    -- SET AUTO THROW
     -- ═══════════════════════════════════════════════════════════
     local function setAutoThrow(on)
         on = on == true
@@ -738,7 +736,6 @@ local function initAutoThrow()
         ThrowState.autoThrow = on
 
         if on then
-            -- cancel off-enforcer & suppressor kalau masih jalan
             pcall(function() RunService:UnbindFromRenderStep(BIND_OFF) end)
             pcall(function() RunService:UnbindFromRenderStep(BIND_SUP) end)
             startCamPin()
@@ -753,7 +750,7 @@ local function initAutoThrow()
         end
     end
 
-    -- ═══ Sync dari UI — panggil setAutoThrow (BUKAN set langsung) ═══
+    -- ═══ Sync dari UI ═══
     task.spawn(function()
         while true do
             task.wait(0.2)
@@ -768,9 +765,8 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ Respawn handling — anti-leak ═══
+    -- ═══ Respawn handling ═══
     LocalPlayer.CharacterAdded:Connect(function(newChar)
-        -- restore char lama dulu kalau masih ada (jaga-jaga)
         if LocalPlayer.Character and LocalPlayer.Character ~= newChar then
             pcall(restoreCharacter, LocalPlayer.Character)
         end
