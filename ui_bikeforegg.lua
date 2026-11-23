@@ -5229,16 +5229,22 @@ do
     local card, content = makeCard(throwPage, "🎯 AUTO THROW", 1)
 
     makeToggle(content, "Auto Throw", false, function(v)
-        Shared.AutoThrow_Enabled = v
+        -- ⚠️ JANGAN set Shared.AutoThrow_Enabled di sini
+        -- makeToggle udah handle flag + panggil setAutoThrow instan
+
+        -- Auto Best Throw ikut toggle (side-effect tambahan)
         Shared.AutoBestThrow_Enabled = v
 
-        -- ⭐ Semua setting di-lock (fix, gak bisa diubah user)
+        -- Lock semua setting (fix, gak bisa diubah user)
         Shared.TapPoint_Percent = 93
         Shared.UnequipDelay_Seconds = 0.3
         Shared.TpDelay_Seconds = 0.5
 
-        if v then notify("🎯 Auto Throw: ON (semua fungsi aktif)", "success")
-        else notify("🎯 Auto Throw: OFF", "info") end
+        if v then
+            notify("🎯 Auto Throw: ON (semua fungsi aktif)", "success")
+        else
+            notify("🎯 Auto Throw: OFF", "info")
+        end
     end, "AutoThrow_Enabled")
 end
 
