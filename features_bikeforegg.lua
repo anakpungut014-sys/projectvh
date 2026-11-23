@@ -353,7 +353,6 @@ local function initAutoThrow()
                 scanRevealScreens()
             end
         end
-        end
     end)
 
     -- ═══ Reveal screen handler ═══
