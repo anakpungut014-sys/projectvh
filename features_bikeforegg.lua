@@ -466,95 +466,43 @@ local function initAutoThrow()
         savedSubject, savedCameraType, savedCamMode = nil, nil, nil
     end
 
+        -- ═══════════════════════════════════════════════════════════
+    -- 🧊 ANIMATION BLOCK (FIX ERROR ANIMATIONLIBRARY)
+    -- Biarin animasi jalan, cuma sembunyiin karakternya (Transparency)
     -- ═══════════════════════════════════════════════════════════
-    -- 🧊 ANIMATION BLOCK — CLEAN TOGGLE (Gak Permanent)
-    -- ═══════════════════════════════════════════════════════════
-    local animBlocked = false
-    local animHookInstalled = false
-    local oldNamecall = nil
-    local hookedMT = nil
-    local blockedTracks = setmetatable({}, { __mode = "k" })
+    local savedTransparency = {}
 
-    local function installAnimHook()
-        if animHookInstalled then return end
-        animHookInstalled = true
-        pcall(function()
-            local mt = getrawmetatable(game)
-            hookedMT = mt
-            oldNamecall = mt.__namecall
-            setreadonly(mt, false)
-            mt.__namecall = newcclosure(function(self, ...)
-                if animBlocked and getnamecallmethod() == "LoadAnimation" and self:IsA("Animator") then
-                    local parent = self.Parent
-                    if parent and parent == LocalPlayer.Character then
-                        -- ⭐ JANGAN return nil — return track asli, tapi block weight
-                        local ok, track = pcall(oldNamecall, self, ...)
-                        if ok and track then
-                            blockedTracks[track] = true
-                            pcall(function() track:AdjustWeight(0.0001, 0) end)
-                            return track
-                        end
-                        return nil
-                    end
-                end
-                return oldNamecall(self, ...)
-            end)
-            setreadonly(mt, true)
-        end)
-    end
-
-    local function uninstallAnimHook()
-        if not animHookInstalled or not hookedMT or not oldNamecall then return end
-        pcall(function()
-            setreadonly(hookedMT, false)
-            hookedMT.__namecall = oldNamecall
-            setreadonly(hookedMT, true)
-        end)
-        hookedMT = nil
-        oldNamecall = nil
-        animHookInstalled = false
-        animBlocked = false
-    end
-
-    local function suppressCharacterAnimations(char)
+    local function hideCharacter(char)
         if not char then return end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local animator = hum and hum:FindFirstChildOfClass("Animator")
-        if not animator then return end
-        local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
-        if not ok or not tracks then return end
-        for _, t in ipairs(tracks) do
-            pcall(function()
-                if t.Weight > 0 then
-                    blockedTracks[t] = true
-                    t:AdjustWeight(0.0001, 0)
+        for _, d in ipairs(char:GetDescendants()) do
+            if d:IsA("BasePart") then
+                if savedTransparency[d] == nil then
+                    savedTransparency[d] = d.Transparency
                 end
-            end)
+                d.Transparency = 1
+                d.LocalTransparencyModifier = 1
+            elseif d:IsA("Decal") then
+                if savedTransparency[d] == nil then
+                    savedTransparency[d] = d.Transparency
+                end
+                d.Transparency = 1
+            end
         end
     end
 
-    local function restoreCharacterAnimations(char)
+    local function showCharacter(char)
         if not char then return end
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        local animator = hum and hum:FindFirstChildOfClass("Animator")
-        if not animator then return end
-        local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
-        if not ok or not tracks then return end
-        for _, t in ipairs(tracks) do
-            pcall(function()
-                if blockedTracks[t] then
-                    t:AdjustWeight(1, 0)
-                    blockedTracks[t] = nil
-                end
-            end)
+        for d, t in pairs(savedTransparency) do
+            if d and d.Parent then
+                d.Transparency = t
+                d.LocalTransparencyModifier = 0
+            end
         end
+        savedTransparency = {}
     end
 
-    -- Install hook SEKALI di init
-    installAnimHook()
-
     -- ═══════════════════════════════════════════════════════════
-    -- 🔄 TRANSISI ON/OFF (HANYA JALAN PAS BERUBAH)
+    -- 🔄 TRANSISI ON/OFF
     -- ═══════════════════════════════════════════════════════════
     task.spawn(function()
         local wasOn = false
@@ -563,20 +511,22 @@ local function initAutoThrow()
             local isOn = ThrowState.autoThrow
 
             if isOn and not wasOn then
-                -- ⭐ ON
-                animBlocked = true
+                -- ON: Sembunyiin karakter, Kamera ke Clone
+                hideCharacter(LocalPlayer.Character)
                 startCamPin()
             elseif not isOn and wasOn then
-                -- ⭐ OFF
-                animBlocked = false
+                -- OFF: Munculin karakter, Balikin Kamera
+                showCharacter(LocalPlayer.Character)
                 stopCamPin()
-                -- Restore animasi yang ke-block
-                restoreCharacterAnimations(LocalPlayer.Character)
             end
 
-            -- Kalau ON, keep suppress animasi yang mungkin lolos
-            if isOn then
-                suppressCharacterAnimations(LocalPlayer.Character)
+            -- Jaga-jaga kalau karakter tiba-tiba muncul pas ON
+            if isOn and LocalPlayer.Character then
+                for _, d in ipairs(LocalPlayer.Character:GetDescendants()) do
+                    if d:IsA("BasePart") and d.Transparency < 1 then
+                        d.Transparency = 1
+                    end
+                end
             end
 
             wasOn = isOn
@@ -592,10 +542,10 @@ local function initAutoThrow()
                 camAnchor = nil
             end
             ThrowState.camPinned = false
+            hideCharacter(newChar) -- Sembunyiin yang baru
             startCamPin()
         else
-            -- Pastiin animasi normal
-            restoreCharacterAnimations(newChar)
+            showCharacter(newChar) -- Munculin normal
         end
     end)
 
@@ -868,19 +818,6 @@ local function ghostHide(char)
             GhostState.savedDisplay = hum.DisplayDistanceType
         end
         hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-
-        -- ⬇️⬇️ TAMBAH BLOK INI ⬇️⬇️
-        local anim = hum:FindFirstChildOfClass("Animator")
-        if anim and GhostState.savedAnimator == nil then
-            GhostState.savedAnimator = { anim = anim, parent = anim.Parent }
-            pcall(function()
-                for _, t in ipairs(anim:GetPlayingAnimationTracks()) do
-                    t:Stop(0)
-                end
-            end)
-            anim.Parent = nil
-        end
-        -- ⬆️⬆️ SAMPAI SINI ⬆️⬆️
     end
     local hl = char:FindFirstChildOfClass("Highlight")
     if hl then hl.Enabled = false end
@@ -906,16 +843,6 @@ local function ghostRestore(char)
         hum.DisplayDistanceType = GhostState.savedDisplay
         GhostState.savedDisplay = nil
     end
-
-    -- ⬇️⬇️ TAMBAH BLOK INI ⬇️⬇️
-    if GhostState.savedAnimator then
-        local s = GhostState.savedAnimator
-        if s.anim and s.parent then
-            s.anim.Parent = s.parent
-        end
-        GhostState.savedAnimator = nil
-    end
-    -- ⬆️⬆️ SAMPAI SINI ⬆️⬆️
 
     local hl = char:FindFirstChildOfClass("Highlight")
     if hl then hl.Enabled = true end
@@ -1057,29 +984,6 @@ local function initGhostMode()
     -- pengawal Animator: jalan tiap 0.05s, tidak peduli transparency
     task.spawn(function()
         while true do
-            task.wait(0.05)
-            if not GhostState.enabled then continue end
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                local anim = hum:FindFirstChildOfClass("Animator")
-                if anim then
-                    pcall(function()
-                        for _, t in ipairs(anim:GetPlayingAnimationTracks()) do
-                            t:Stop(0)
-                        end
-                    end)
-                    if GhostState.savedAnimator == nil then
-                        GhostState.savedAnimator = { anim = anim, parent = anim.Parent }
-                    end
-                    anim.Parent = nil
-                end
-            end
-        end
-    end)
-
-    task.spawn(function()
-        while true do
             task.wait(0.5)
             -- ⭐ ghost ON kalau: toggle manual ATAU Auto Throw nyala
             local wantOn = Shared and (Shared.GhostMode_Enabled == true
@@ -1101,22 +1005,6 @@ local function initGhostMode()
                     if GhostState.clone and GhostState.clone.Parent
                         and hrp.Transparency < 1 then
                         pcall(ghostHide, char)
-                    end
-                                        -- cabut Animator SETIAP kali ada (jangan cek savedAnimator == nil)
-                    local humNow = char:FindFirstChildOfClass("Humanoid")
-                    if humNow then
-                        local anNow = humNow:FindFirstChildOfClass("Animator")
-                        if anNow then
-                            pcall(function()
-                                for _, t in ipairs(anNow:GetPlayingAnimationTracks()) do
-                                    t:Stop(0)
-                                end
-                            end)
-                            if GhostState.savedAnimator == nil then
-                                GhostState.savedAnimator = { anim = anNow, parent = anNow.Parent }
-                            end
-                            anNow.Parent = nil
-                        end
                     end
                 end
                 ghostHideGuis()
