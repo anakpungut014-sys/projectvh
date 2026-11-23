@@ -1,8 +1,7 @@
 -- ============================================================
--- VRILZHUB FEATURES — NAME GAME v1.0 — FULL FIXED v9
--- ON  : cinematic/animasi 0% keliatan (kamera nempel base + ghost)
--- OFF : INSTAN balik normal ke karakter (enforcer lawan game)
--- v9  : AnimationConstraint aware — hide Transparency + freeze constraint
+-- VRILZHUB FEATURES — NAME GAME v1.1 — HOOK-BASED CLEAN TOGGLE
+-- ON  : cinematic/animasi hidden + camera pinned (hook aktif)
+-- OFF : INSTANT restore — semua hook di-unbind, state direstore
 -- ============================================================
 
 local Features = {}
@@ -14,7 +13,7 @@ local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 
 -- ============================================================
--- ANTI-AFK — gak ganggu throw
+-- ANTI-AFK
 -- ============================================================
 function Features.startAntiAFK()
     if Features._antiAFKStarted then return end
@@ -27,10 +26,7 @@ function Features.startAntiAFK()
     local _actionBusy = false
 
     local function isAnyFeatureBusy()
-        if Shared and (Shared.AutoThrow_Enabled or Shared.AutoBestThrow_Enabled) then
-            return true
-        end
-        return false
+        return Shared and (Shared.AutoThrow_Enabled or Shared.AutoBestThrow_Enabled)
     end
 
     local function doAntiAFKAction()
@@ -107,7 +103,7 @@ function Features.startAntiAFK()
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 AUTO THROW SYSTEM — v9 (AnimationConstraint aware)
+-- 🎯 AUTO THROW SYSTEM — v1.1 (clean hook toggle)
 -- ═══════════════════════════════════════════════════════════
 local function initAutoThrow()
     local VirtualInputManager = game:GetService("VirtualInputManager")
@@ -124,9 +120,10 @@ local function initAutoThrow()
         camPinned = false,
     }
 
-    -- ═══ v9: saved state buat restore ═══
+    -- ═══ Saved state ═══
     local savedTransparency = {}
     local savedConstraints = {}
+    local savedAnimWeights = {}   -- AnimTrack -> weight asli
 
     local function requirePlayerScript(...)
         local ps = LocalPlayer:WaitForChild("PlayerScripts", 5)
@@ -142,13 +139,12 @@ local function initAutoThrow()
     local ThrowController = requirePlayerScript("Client", "Controllers", "ThrowController")
     local ClientState = requirePlayerScript("Client", "Controllers", "ClientState")
 
+    -- ═══ Utility ═══
     local function getEquippedAnimal()
         local char = LocalPlayer.Character
         if not char then return nil end
         local tool = char:FindFirstChildOfClass("Tool")
-        if tool and tool:GetAttribute("AnimalId") ~= nil then
-            return tool
-        end
+        if tool and tool:GetAttribute("AnimalId") ~= nil then return tool end
         return nil
     end
 
@@ -269,22 +265,18 @@ local function initAutoThrow()
         end
     end
 
-    -- ═══ v9: hide character (Transparency + freeze constraint) ═══
+    -- ═══ SAVE/HIDE ═══
     local function saveAndHideCharacter(char)
         if not char then return end
-        -- Layer 1: Transparency
         for _, d in ipairs(char:GetDescendants()) do
             if d:IsA("BasePart") then
                 if savedTransparency[d] == nil then
                     savedTransparency[d] = d.Transparency
                 end
-                if d.Transparency ~= 1 then
-                    d.Transparency = 1
-                end
+                if d.Transparency ~= 1 then d.Transparency = 1 end
                 d.LocalTransparencyModifier = 1
             end
         end
-        -- Layer 2: Freeze AnimationConstraint (R15 skinned mesh)
         for _, d in ipairs(char:GetDescendants()) do
             if d:IsA("AnimationConstraint") then
                 if savedConstraints[d] == nil then
@@ -299,8 +291,8 @@ local function initAutoThrow()
         end
     end
 
+    -- ═══ RESTORE — FULL & SAFE ═══
     local function restoreCharacter(char)
-        -- Restore Transparency
         for d, t in pairs(savedTransparency) do
             if d and d.Parent then
                 d.Transparency = t
@@ -308,7 +300,7 @@ local function initAutoThrow()
             end
         end
         savedTransparency = {}
-        -- Restore Constraints
+
         for d, s in pairs(savedConstraints) do
             if d and d.Parent then
                 d.Enabled = s.enabled
@@ -316,6 +308,34 @@ local function initAutoThrow()
             end
         end
         savedConstraints = {}
+
+        -- Restore animation weights (kalau ada yang di-AdjustWeight)
+        for track, w in pairs(savedAnimWeights) do
+            if track then
+                pcall(function() track:AdjustWeight(w, 0) end)
+            end
+        end
+        savedAnimWeights = {}
+    end
+
+    -- ═══ Animation suppress + save weight (dipakai cine killer) ═══
+    local function suppressAnimations(char)
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        local animator = hum and hum:FindFirstChildOfClass("Animator")
+        if not animator then return end
+        local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
+        if not ok or not tracks then return end
+        for _, t in ipairs(tracks) do
+            pcall(function()
+                local w = t.Weight
+                if type(w) == "number" and w > 0 then
+                    if savedAnimWeights[t] == nil then
+                        savedAnimWeights[t] = w
+                    end
+                    t:AdjustWeight(0.0001, 0)
+                end
+            end)
+        end
     end
 
     -- ═══ Marker tracker ═══
@@ -356,9 +376,7 @@ local function initAutoThrow()
                         ThrowState.revealCache[k] = nil
                         task.wait(0.35)
                         local result = nil
-                        if k.Parent then
-                            result = readRevealResult(k)
-                        end
+                        if k.Parent then result = readRevealResult(k) end
                         if result and Shared and Shared.Notify
                             and (result ~= lastResult or os.clock() - lastResultTime > 3) then
                             lastResult = result
@@ -403,9 +421,7 @@ local function initAutoThrow()
             end
             local busy = ClientState and ClientState.Busy
             local isActive = ThrowController.IsActive and ThrowController.IsActive()
-            if busy or isActive or getEquippedAnimal() then
-                continue
-            end
+            if busy or isActive or getEquippedAnimal() then continue end
             local char = LocalPlayer.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             if hrp and not hrp.Anchored and not isInThrowArea(hrp) then
@@ -419,28 +435,15 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ Sync flag ═══
-    task.spawn(function()
-        while true do
-            task.wait(0.3)
-            ThrowState.autoThrow = Shared.AutoThrow_Enabled == true
-            ThrowState.autoBest = Shared.AutoBestThrow_Enabled == true
-            ThrowState.tapPoint = (Shared.TapPoint_Percent or 93) / 100
-            ThrowState.unequipDelay = Shared.UnequipDelay_Seconds or 0.5
-            ThrowState.tpDelay = Shared.TpDelay_Seconds or 0.6
-        end
-    end)
-
     -- ═══════════════════════════════════════════════════════════
-    -- 🎥 CAMERA LOCK (saat ON)
+    -- 🎥 CAMERA HOOKS (bind/unbind)
     -- ═══════════════════════════════════════════════════════════
     local camAnchor = nil
-
     local BIND_HARD = "VRILZ_CamPin_Hard"
-    local BIND_OFF  = "VRILZ_OffEnforce"
-    local BIND_SUP  = "VRILZ_PostOffSuppress"
     local BIND_CINE = "VRILZ_CineKill"
     local BIND_BAR  = "VRILZ_BarKill"
+    local BIND_OFF  = "VRILZ_OffEnforce"
+    local BIND_SUP  = "VRILZ_PostOffSuppress"
     local BASE_POS   = Vector3.new(2.23, 6.01, 20.29)
     local CAM_OFFSET = Vector3.new(0, 6, 14)
 
@@ -448,9 +451,7 @@ local function initAutoThrow()
         local ghost = Workspace:FindFirstChild(LocalPlayer.Name .. "_Ghost")
         if ghost then
             local ghostHRP = ghost:FindFirstChild("HumanoidRootPart")
-            if ghostHRP then
-                return ghostHRP.Position
-            end
+            if ghostHRP then return ghostHRP.Position end
         end
         return BASE_POS
     end
@@ -466,9 +467,7 @@ local function initAutoThrow()
         a.CanTouch = false
         a.Massless = true
         local target = getLockTarget()
-        if not target or typeof(target) ~= "Vector3" then
-            target = BASE_POS
-        end
+        if not target or typeof(target) ~= "Vector3" then target = BASE_POS end
         a.CFrame = CFrame.new(target)
         a.Parent = Workspace
         return a
@@ -476,6 +475,7 @@ local function initAutoThrow()
 
     local function hardStep()
         local cam = Workspace.CurrentCamera
+        if not cam then return end
         if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then
             LocalPlayer.CameraMode = Enum.CameraMode.Classic
         end
@@ -492,6 +492,42 @@ local function initAutoThrow()
         end
     end
 
+    -- ═══ BAR KILLER (function only, binding dipisah) ═══
+    local function killLetterboxBars()
+        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+        local cam = Workspace.CurrentCamera
+        if not pg or not cam then return end
+        local vp = cam.ViewportSize
+        for _, gui in ipairs(pg:GetChildren()) do
+            if gui:IsA("ScreenGui") and gui.Enabled then
+                for _, d in ipairs(gui:GetDescendants()) do
+                    if (d:IsA("Frame") or d:IsA("ImageLabel")) and d.Visible then
+                        local okPos, pos = pcall(function() return d.AbsolutePosition end)
+                        local okSize, size = pcall(function() return d.AbsoluteSize end)
+                        if okPos and okSize and size.Y > 0 then
+                            local fullW = size.X >= vp.X * 0.9
+                            local thinH = size.Y <= vp.Y * 0.25 and size.Y >= vp.Y * 0.02
+                            local atTop = pos.Y <= 4
+                            local atBot = (pos.Y + size.Y) >= vp.Y - 4
+                            local dark = true
+                            if d:IsA("Frame") then
+                                local c = d.BackgroundColor3
+                                dark = (c.R + c.G + c.B) < 0.35
+                                    and d.BackgroundTransparency < 0.5
+                            end
+                            if fullW and thinH and (atTop or atBot) and dark then
+                                d.Visible = false
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- ═══════════════════════════════════════════════════════════
+    -- START/STOP HOOKS — semua hook yang cuma aktif saat ON
+    -- ═══════════════════════════════════════════════════════════
     local function startCamPin()
         if ThrowState.camPinned then return end
         ThrowState.camPinned = true
@@ -501,17 +537,66 @@ local function initAutoThrow()
         RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 10, hardStep)
     end
 
-    -- ═══ v9: INSTANT RESTORE — restore transparency + constraint ═══
+    local function stopCamPin()
+        pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
+        if camAnchor then
+            pcall(function() camAnchor:Destroy() end)
+            camAnchor = nil
+        end
+        ThrowState.camPinned = false
+    end
+
+    local function startCineKiller()
+        pcall(function() RunService:UnbindFromRenderStep(BIND_CINE) end)
+        RunService:BindToRenderStep(BIND_CINE,
+            Enum.RenderPriority.Last.Value + 999, function()
+                local char = LocalPlayer.Character
+                if not char then return end
+                saveAndHideCharacter(char)
+                suppressAnimations(char)
+
+                local hrp = char:FindFirstChild("HumanoidRootPart")
+                if hrp then
+                    if hrp.AssemblyLinearVelocity.Magnitude > 0.01 then
+                        hrp.AssemblyLinearVelocity = Vector3.zero
+                    end
+                    if hrp.AssemblyAngularVelocity.Magnitude > 0.01 then
+                        hrp.AssemblyAngularVelocity = Vector3.zero
+                    end
+                end
+                local hum = char:FindFirstChildOfClass("Humanoid")
+                if hum and hum.MoveDirection.Magnitude > 0.01 then
+                    pcall(function() hum:Move(Vector3.zero, false) end)
+                end
+            end)
+    end
+
+    local function stopCineKiller()
+        pcall(function() RunService:UnbindFromRenderStep(BIND_CINE) end)
+        local char = LocalPlayer.Character
+        if char then pcall(restoreCharacter, char) end
+    end
+
+    local function startBarKiller()
+        pcall(function() RunService:UnbindFromRenderStep(BIND_BAR) end)
+        RunService:BindToRenderStep(BIND_BAR,
+            Enum.RenderPriority.Last.Value + 998, function()
+                pcall(killLetterboxBars)
+            end)
+    end
+
+    local function stopBarKiller()
+        pcall(function() RunService:UnbindFromRenderStep(BIND_BAR) end)
+    end
+
+    -- ═══ INSTANT RESTORE ═══
     local function instantRestoreNormal()
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
 
-        -- Restore character state dulu
-        if char then
-            pcall(restoreCharacter, char)
-        end
+        if char then pcall(restoreCharacter, char) end
 
-        pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
+        stopCamPin()
 
         local cam = Workspace.CurrentCamera
         if cam then
@@ -519,9 +604,7 @@ local function initAutoThrow()
                 LocalPlayer.CameraMode = Enum.CameraMode.Classic
             end
             cam.CameraType = Enum.CameraType.Custom
-            if hum then
-                cam.CameraSubject = hum
-            end
+            if hum then cam.CameraSubject = hum end
         end
 
         local animator = hum and hum:FindFirstChildOfClass("Animator")
@@ -534,23 +617,16 @@ local function initAutoThrow()
             end
         end
 
-        if camAnchor then
-            pcall(function() camAnchor:Destroy() end)
-            camAnchor = nil
-        end
-        ThrowState.camPinned = false
-
         if hum and hum.Health > 0 then
             pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end)
         end
     end
 
-    -- ═══ OFF ENFORCER — kamera dipaksa ngikutin char (10s) ═══
+    -- ═══ OFF ENFORCER ═══
     local function startOffEnforcer()
         pcall(function() RunService:UnbindFromRenderStep(BIND_OFF) end)
         RunService:BindToRenderStep(BIND_OFF,
             Enum.RenderPriority.Last.Value + 11, function()
-                if ThrowState.autoThrow then return end
                 local char = LocalPlayer.Character
                 local hum = char and char:FindFirstChildOfClass("Humanoid")
                 local cam = Workspace.CurrentCamera
@@ -577,105 +653,7 @@ local function initAutoThrow()
         end)
     end
 
-    -- ═══════════════════════════════════════════════════════════
-    -- BAR KILLER — bunuh bar hitam cinematic
-    -- ═══════════════════════════════════════════════════════════
-    local function killLetterboxBars()
-        local pg = LocalPlayer:FindFirstChild("PlayerGui")
-        local cam = Workspace.CurrentCamera
-        if not pg or not cam then return end
-        local vp = cam.ViewportSize
-        for _, gui in ipairs(pg:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Enabled then
-                for _, d in ipairs(gui:GetDescendants()) do
-                    if (d:IsA("Frame") or d:IsA("ImageLabel")) and d.Visible then
-                        local okPos, pos = pcall(function() return d.AbsolutePosition end)
-                        local okSize, size = pcall(function() return d.AbsoluteSize end)
-                        if okPos and okSize and size.Y > 0 then
-                            local fullW   = size.X >= vp.X * 0.9
-                            local thinH   = size.Y <= vp.Y * 0.25 and size.Y >= vp.Y * 0.02
-                            local atTop   = pos.Y <= 4
-                            local atBot   = (pos.Y + size.Y) >= vp.Y - 4
-                            local dark    = true
-                            if d:IsA("Frame") then
-                                local c = d.BackgroundColor3
-                                dark = (c.R + c.G + c.B) < 0.35
-                                    and d.BackgroundTransparency < 0.5
-                            end
-                            if fullW and thinH and (atTop or atBot) and dark then
-                                d.Visible = false
-                            end
-                        end
-                    end
-                end
-            end
-        end
-    end
-
-    -- ═══════════════════════════════════════════════════════════
-    -- v9: CINEMATIC KILLER — Transparency + Freeze Constraint
-    -- Priority Last+999 = jalan PALING AKHIR tiap frame
-    -- ═══════════════════════════════════════════════════════════
-    pcall(function() RunService:UnbindFromRenderStep(BIND_CINE) end)
-    RunService:BindToRenderStep(BIND_CINE,
-        Enum.RenderPriority.Last.Value + 999, function()
-            if not (Shared and Shared.AutoThrow_Enabled) then return end
-            local char = LocalPlayer.Character
-            if not char then return end
-
-            -- Layer 1+2: hide + freeze constraint
-            saveAndHideCharacter(char)
-
-            -- Layer 3: AdjustWeight (jaga-jaga)
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            local animator = hum and hum:FindFirstChildOfClass("Animator")
-            if animator then
-                local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
-                if ok and tracks then
-                    for _, t in ipairs(tracks) do
-                        pcall(function()
-                            local w = t.Weight
-                            if type(w) == "number" and w > 0 then
-                                t:AdjustWeight(0.0001, 0)
-                            end
-                        end)
-                    end
-                end
-            end
-
-            -- Layer 4: Zero velocity
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                if hrp.AssemblyLinearVelocity.Magnitude > 0.01 then
-                    hrp.AssemblyLinearVelocity = Vector3.zero
-                end
-                if hrp.AssemblyAngularVelocity.Magnitude > 0.01 then
-                    hrp.AssemblyAngularVelocity = Vector3.zero
-                end
-            end
-            if hum and hum.MoveDirection.Magnitude > 0.01 then
-                pcall(function() hum:Move(Vector3.zero, false) end)
-            end
-        end)
-
-    -- ═══════════════════════════════════════════════════════════
-    -- BAR KILLER per-frame — priority Last+998
-    -- ═══════════════════════════════════════════════════════════
-    pcall(function() RunService:UnbindFromRenderStep(BIND_BAR) end)
-    RunService:BindToRenderStep(BIND_BAR,
-        Enum.RenderPriority.Last.Value + 998, function()
-            if not (Shared and Shared.AutoThrow_Enabled) then return end
-            pcall(killLetterboxBars)
-        end)
-
-    -- ═══════════════════════════════════════════════════════════
-    -- v9: POST-OFF SUPPRESSOR — priority Last+997
-    -- Jalan max 8s setelah OFF:
-    --   1. Animasi ditahan weight ~0 SELAMA game masih busy
-    --   2. Tap Space → cinematic di-skip cepet
-    --   3. Bar hitam dibunuh tiap 0.15s
-    --   4. Game idle → bersihin semua bekas → lepas → NORMAL TOTAL
-    -- ═══════════════════════════════════════════════════════════
+    -- ═══ POST-OFF SUPPRESSOR ═══
     local function startPostOffSuppressor()
         pcall(function() RunService:UnbindFromRenderStep(BIND_SUP) end)
 
@@ -684,33 +662,21 @@ local function initAutoThrow()
                 if ThrowState.autoThrow then return end
                 if not isThrowBusy() then return end
                 local char = LocalPlayer.Character
-                local hum = char and char:FindFirstChildOfClass("Humanoid")
-                local animator = hum and hum:FindFirstChildOfClass("Animator")
-                if animator then
-                    local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
-                    if ok and tracks then
-                        for _, t in ipairs(tracks) do
-                            pcall(function()
-                                local w = t.Weight
-                                if type(w) == "number" and w > 0 then
-                                    t:AdjustWeight(0.0001, 0)
-                                end
-                            end)
-                        end
-                    end
-                end
+                if char then suppressAnimations(char) end
             end)
 
         task.spawn(function()
             local deadline = os.clock() + 8
             local lastTap, lastNudge = 0, 0
+            local idleTicks = 0
             while os.clock() < deadline do
                 task.wait(0.15)
-                if ThrowState.autoThrow then break end
+                if ThrowState.autoThrow then break
 
                 pcall(killLetterboxBars)
 
                 if isThrowBusy() then
+                    idleTicks = 0
                     local tapped = false
                     for k in pairs(ThrowState.revealCache) do
                         if k.Parent and k.TextTransparency < 0.9 then
@@ -734,58 +700,83 @@ local function initAutoThrow()
                         end
                     end
                 else
-                    -- ✅ game idle → bersihin SEMUA bekas
-                    local char = LocalPlayer.Character
-                    local hum = char and char:FindFirstChildOfClass("Humanoid")
-                    local animator = hum and hum:FindFirstChildOfClass("Animator")
-                    if animator then
-                        local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
-                        if ok and tracks then
-                            for _, t in ipairs(tracks) do
-                                pcall(function() t:Stop(0) end)
+                    idleTicks = idleTicks + 1
+                    if idleTicks >= 13 then  -- ~2s idle → cleanup & break
+                        local char = LocalPlayer.Character
+                        local hum = char and char:FindFirstChildOfClass("Humanoid")
+                        local animator = hum and hum:FindFirstChildOfClass("Animator")
+                        if animator then
+                            local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
+                            if ok and tracks then
+                                for _, t in ipairs(tracks) do
+                                    pcall(function() t:Stop(0) end)
+                                end
                             end
                         end
+                        if char then pcall(restoreCharacter, char) end
+                        pcall(killLetterboxBars)
+                        if hum and hum.Health > 0 then
+                            pcall(function()
+                                hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+                            end)
+                        end
+                        break
                     end
-                    if char then
-                        pcall(restoreCharacter, char)
-                    end
-                    pcall(killLetterboxBars)
-                    if hum and hum.Health > 0 then
-                        pcall(function()
-                            hum:ChangeState(Enum.HumanoidStateType.GettingUp)
-                        end)
-                    end
-                    break
                 end
             end
             pcall(function() RunService:UnbindFromRenderStep(BIND_SUP) end)
         end)
     end
 
-    -- ═══ Transisi ON/OFF ═══
+    -- ═══════════════════════════════════════════════════════════
+    -- SET AUTO THROW — SINGLE SOURCE OF TRUTH
+    -- ═══════════════════════════════════════════════════════════
+    local function setAutoThrow(on)
+        on = on == true
+        if on == ThrowState.autoThrow then return end
+        ThrowState.autoThrow = on
+
+        if on then
+            -- cancel off-enforcer & suppressor kalau masih jalan
+            pcall(function() RunService:UnbindFromRenderStep(BIND_OFF) end)
+            pcall(function() RunService:UnbindFromRenderStep(BIND_SUP) end)
+            startCamPin()
+            startCineKiller()
+            startBarKiller()
+        else
+            stopCineKiller()
+            stopBarKiller()
+            instantRestoreNormal()
+            startOffEnforcer()
+            startPostOffSuppressor()
+        end
+    end
+
+    -- ═══ Sync dari UI — panggil setAutoThrow (BUKAN set langsung) ═══
     task.spawn(function()
-        local wasOn = false
         while true do
-            task.wait(0.1)
-            local on = ThrowState.autoThrow
-            if on and not wasOn then
-                pcall(function() RunService:UnbindFromRenderStep(BIND_OFF) end)
-                pcall(function() RunService:UnbindFromRenderStep(BIND_SUP) end)
-                startCamPin()
-            elseif not on and wasOn then
-                if Shared then Shared.GhostMode_Enabled = false end
-                instantRestoreNormal()
-                startOffEnforcer()
-                startPostOffSuppressor()
+            task.wait(0.2)
+            local wantOn = Shared and Shared.AutoThrow_Enabled == true
+            if wantOn ~= ThrowState.autoThrow then
+                pcall(setAutoThrow, wantOn)
             end
-            wasOn = on
+            ThrowState.autoBest = Shared and Shared.AutoBestThrow_Enabled == true
+            ThrowState.tapPoint = (Shared and Shared.TapPoint_Percent or 93) / 100
+            ThrowState.unequipDelay = (Shared and Shared.UnequipDelay_Seconds) or 0.5
+            ThrowState.tpDelay = (Shared and Shared.TpDelay_Seconds) or 0.6
         end
     end)
 
-    LocalPlayer.CharacterAdded:Connect(function()
-        -- Reset saved state pas respawn
+    -- ═══ Respawn handling — anti-leak ═══
+    LocalPlayer.CharacterAdded:Connect(function(newChar)
+        -- restore char lama dulu kalau masih ada (jaga-jaga)
+        if LocalPlayer.Character and LocalPlayer.Character ~= newChar then
+            pcall(restoreCharacter, LocalPlayer.Character)
+        end
         savedTransparency = {}
         savedConstraints = {}
+        savedAnimWeights = {}
+
         if ThrowState.autoThrow then
             ThrowState.camPinned = false
             if camAnchor then
@@ -796,20 +787,23 @@ local function initAutoThrow()
         end
     end)
 
-    -- ═══ Sync instan dari UI ═══
+    -- ═══ Expose ═══
     Features.ForceSyncThrow = function()
-        ThrowState.autoThrow = Shared.AutoThrow_Enabled == true
-        ThrowState.autoBest = Shared.AutoBestThrow_Enabled == true
+        local wantOn = Shared and Shared.AutoThrow_Enabled == true
+        pcall(setAutoThrow, wantOn)
+        ThrowState.autoBest = Shared and Shared.AutoBestThrow_Enabled == true
     end
+    Features.SetAutoThrow = setAutoThrow
 
     if Shared then
         Shared.ThrowController_Ref = ThrowController
         Shared.ClientState_Ref = ClientState
+        Shared.SetAutoThrow_Ref = setAutoThrow
     end
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🛒 AUTO BUY BEST FOOD + AUTO UPGRADE STAND
+-- 🛒 AUTO BUY + AUTO UPGRADE
 -- ═══════════════════════════════════════════════════════════
 local function initAutoShop()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
@@ -1001,7 +995,6 @@ end
 -- ============================================================
 -- 👻 GHOST MODE v6
 -- ============================================================
-
 local GHOST_CLONE_POS = Vector3.new(2.23, 6.01, 20.29) + Vector3.new(0, 3, 0)
 
 local GhostState = {
@@ -1140,14 +1133,12 @@ local function ghostCamToClone()
     local cam = Workspace.CurrentCamera
     local cloneHRP = GhostState.clone and GhostState.clone:FindFirstChild("HumanoidRootPart")
     if not (cam and cloneHRP) then return end
-
     if cam.CameraType ~= Enum.CameraType.Scriptable then
         cam.CameraType = Enum.CameraType.Scriptable
     end
     if cam.CameraSubject ~= cloneHRP then
         cam.CameraSubject = cloneHRP
     end
-
     local target = cloneHRP.Position
     local camPos = target + Vector3.new(0, 6, 14)
     cam.CFrame = CFrame.lookAt(camPos, target)
@@ -1179,9 +1170,7 @@ local function ghostDisable()
             LocalPlayer.CameraMode = Enum.CameraMode.Classic
         end
         cam.CameraType = Enum.CameraType.Custom
-        if hum then
-            cam.CameraSubject = hum
-        end
+        if hum then cam.CameraSubject = hum end
     end
     GhostState.enabled = false
 end
