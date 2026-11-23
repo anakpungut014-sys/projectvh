@@ -1,8 +1,8 @@
 -- ============================================================
--- VRILZHUB FEATURES — NAME GAME v1.0 — FULL FIXED v8
+-- VRILZHUB FEATURES — NAME GAME v1.0 — FULL FIXED v9
 -- ON  : cinematic/animasi 0% keliatan (kamera nempel base + ghost)
 -- OFF : INSTAN balik normal ke karakter (enforcer lawan game)
--- v8  : TANPA HOOK __namecall — pakai layer priority tertinggi
+-- v9  : AnimationConstraint aware — hide Transparency + freeze constraint
 -- ============================================================
 
 local Features = {}
@@ -107,7 +107,7 @@ function Features.startAntiAFK()
 end
 
 -- ═══════════════════════════════════════════════════════════
--- 🎯 AUTO THROW SYSTEM — v8 (TANPA HOOK, layer priority)
+-- 🎯 AUTO THROW SYSTEM — v9 (AnimationConstraint aware)
 -- ═══════════════════════════════════════════════════════════
 local function initAutoThrow()
     local VirtualInputManager = game:GetService("VirtualInputManager")
@@ -123,6 +123,10 @@ local function initAutoThrow()
         revealCache = setmetatable({}, { __mode = "k" }),
         camPinned = false,
     }
+
+    -- ═══ v9: saved state buat restore ═══
+    local savedTransparency = {}
+    local savedConstraints = {}
 
     local function requirePlayerScript(...)
         local ps = LocalPlayer:WaitForChild("PlayerScripts", 5)
@@ -263,6 +267,55 @@ local function initAutoThrow()
                 ThrowState.revealCache[v] = true
             end
         end
+    end
+
+    -- ═══ v9: hide character (Transparency + freeze constraint) ═══
+    local function saveAndHideCharacter(char)
+        if not char then return end
+        -- Layer 1: Transparency
+        for _, d in ipairs(char:GetDescendants()) do
+            if d:IsA("BasePart") then
+                if savedTransparency[d] == nil then
+                    savedTransparency[d] = d.Transparency
+                end
+                if d.Transparency ~= 1 then
+                    d.Transparency = 1
+                end
+                d.LocalTransparencyModifier = 1
+            end
+        end
+        -- Layer 2: Freeze AnimationConstraint (R15 skinned mesh)
+        for _, d in ipairs(char:GetDescendants()) do
+            if d:IsA("AnimationConstraint") then
+                if savedConstraints[d] == nil then
+                    savedConstraints[d] = {
+                        enabled = d.Enabled,
+                        transform = d.Transform,
+                    }
+                end
+                d.Transform = CFrame.identity
+                d.Enabled = false
+            end
+        end
+    end
+
+    local function restoreCharacter(char)
+        -- Restore Transparency
+        for d, t in pairs(savedTransparency) do
+            if d and d.Parent then
+                d.Transparency = t
+                d.LocalTransparencyModifier = 0
+            end
+        end
+        savedTransparency = {}
+        -- Restore Constraints
+        for d, s in pairs(savedConstraints) do
+            if d and d.Parent then
+                d.Enabled = s.enabled
+                d.Transform = s.transform
+            end
+        end
+        savedConstraints = {}
     end
 
     -- ═══ Marker tracker ═══
@@ -448,10 +501,15 @@ local function initAutoThrow()
         RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 10, hardStep)
     end
 
-    -- ═══ INSTANT RESTORE — OFF = langsung normal ═══
+    -- ═══ v9: INSTANT RESTORE — restore transparency + constraint ═══
     local function instantRestoreNormal()
         local char = LocalPlayer.Character
         local hum = char and char:FindFirstChildOfClass("Humanoid")
+
+        -- Restore character state dulu
+        if char then
+            pcall(restoreCharacter, char)
+        end
 
         pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
 
@@ -472,14 +530,6 @@ local function initAutoThrow()
             if ok and tracks then
                 for _, t in ipairs(tracks) do
                     pcall(function() t:Stop(0) end)
-                end
-            end
-        end
-
-        if char then
-            for _, d in ipairs(char:GetDescendants()) do
-                if d:IsA("BasePart") then
-                    d.LocalTransparencyModifier = 0
                 end
             end
         end
@@ -528,7 +578,7 @@ local function initAutoThrow()
     end
 
     -- ═══════════════════════════════════════════════════════════
-    -- ⭐ v8: BAR KILLER — bunuh bar hitam cinematic
+    -- BAR KILLER — bunuh bar hitam cinematic
     -- ═══════════════════════════════════════════════════════════
     local function killLetterboxBars()
         local pg = LocalPlayer:FindFirstChild("PlayerGui")
@@ -563,10 +613,8 @@ local function initAutoThrow()
     end
 
     -- ═══════════════════════════════════════════════════════════
-    -- ⭐⭐⭐ v8: CINEMATIC KILLER — aktif CUMA pas ON
+    -- v9: CINEMATIC KILLER — Transparency + Freeze Constraint
     -- Priority Last+999 = jalan PALING AKHIR tiap frame
-    -- (setelah semua script game selesai update animasi)
-    -- Tanpa hook: pakai AdjustWeight(0.0001) supaya track gak auto-stop
     -- ═══════════════════════════════════════════════════════════
     pcall(function() RunService:UnbindFromRenderStep(BIND_CINE) end)
     RunService:BindToRenderStep(BIND_CINE,
@@ -575,7 +623,10 @@ local function initAutoThrow()
             local char = LocalPlayer.Character
             if not char then return end
 
-            -- 1) Animasi di-suppress (weight hampir nol, tapi tetap playing)
+            -- Layer 1+2: hide + freeze constraint
+            saveAndHideCharacter(char)
+
+            -- Layer 3: AdjustWeight (jaga-jaga)
             local hum = char:FindFirstChildOfClass("Humanoid")
             local animator = hum and hum:FindFirstChildOfClass("Animator")
             if animator then
@@ -583,7 +634,8 @@ local function initAutoThrow()
                 if ok and tracks then
                     for _, t in ipairs(tracks) do
                         pcall(function()
-                            if t.Weight > 0 then
+                            local w = t.Weight
+                            if type(w) == "number" and w > 0 then
                                 t:AdjustWeight(0.0001, 0)
                             end
                         end)
@@ -591,14 +643,7 @@ local function initAutoThrow()
                 end
             end
 
-            -- 2) Sembunyikan semua part karakter
-            for _, d in ipairs(char:GetDescendants()) do
-                if d:IsA("BasePart") and d.LocalTransparencyModifier ~= 1 then
-                    d.LocalTransparencyModifier = 1
-                end
-            end
-
-            -- 3) Zero velocity + MoveDirection → cegah char geser/rebah
+            -- Layer 4: Zero velocity
             local hrp = char:FindFirstChild("HumanoidRootPart")
             if hrp then
                 if hrp.AssemblyLinearVelocity.Magnitude > 0.01 then
@@ -614,7 +659,7 @@ local function initAutoThrow()
         end)
 
     -- ═══════════════════════════════════════════════════════════
-    -- ⭐ v8: BAR KILLER per-frame — priority Last+998
+    -- BAR KILLER per-frame — priority Last+998
     -- ═══════════════════════════════════════════════════════════
     pcall(function() RunService:UnbindFromRenderStep(BIND_BAR) end)
     RunService:BindToRenderStep(BIND_BAR,
@@ -624,7 +669,7 @@ local function initAutoThrow()
         end)
 
     -- ═══════════════════════════════════════════════════════════
-    -- ⭐⭐⭐ v8: POST-OFF SUPPRESSOR — priority Last+997
+    -- v9: POST-OFF SUPPRESSOR — priority Last+997
     -- Jalan max 8s setelah OFF:
     --   1. Animasi ditahan weight ~0 SELAMA game masih busy
     --   2. Tap Space → cinematic di-skip cepet
@@ -646,7 +691,8 @@ local function initAutoThrow()
                     if ok and tracks then
                         for _, t in ipairs(tracks) do
                             pcall(function()
-                                if t.Weight > 0 then
+                                local w = t.Weight
+                                if type(w) == "number" and w > 0 then
                                     t:AdjustWeight(0.0001, 0)
                                 end
                             end)
@@ -688,6 +734,7 @@ local function initAutoThrow()
                         end
                     end
                 else
+                    -- ✅ game idle → bersihin SEMUA bekas
                     local char = LocalPlayer.Character
                     local hum = char and char:FindFirstChildOfClass("Humanoid")
                     local animator = hum and hum:FindFirstChildOfClass("Animator")
@@ -700,11 +747,7 @@ local function initAutoThrow()
                         end
                     end
                     if char then
-                        for _, d in ipairs(char:GetDescendants()) do
-                            if d:IsA("BasePart") then
-                                d.LocalTransparencyModifier = 0
-                            end
-                        end
+                        pcall(restoreCharacter, char)
                     end
                     pcall(killLetterboxBars)
                     if hum and hum.Health > 0 then
@@ -719,7 +762,7 @@ local function initAutoThrow()
         end)
     end
 
-    -- ═══ Transisi ON/OFF — v8 ═══
+    -- ═══ Transisi ON/OFF ═══
     task.spawn(function()
         local wasOn = false
         while true do
@@ -740,6 +783,9 @@ local function initAutoThrow()
     end)
 
     LocalPlayer.CharacterAdded:Connect(function()
+        -- Reset saved state pas respawn
+        savedTransparency = {}
+        savedConstraints = {}
         if ThrowState.autoThrow then
             ThrowState.camPinned = false
             if camAnchor then
@@ -1178,7 +1224,7 @@ local function initGhostMode()
                 end)
                 local tc = Shared and Shared.ThrowController_Ref
                 local active = false
-                pcall(function() active = tc and tc.IsActive and tc.IsActive() end)
+                pcall(function() active = tc and tc.IsActive and tc:IsActive() end)
 
                 if not (busy or active) then
                     local cam = Workspace.CurrentCamera
