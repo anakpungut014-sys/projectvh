@@ -1,5 +1,6 @@
 -- ============================================================
--- VRILZHUB FEATURES — NAME GAME v1.1 — CLEAN & FIXED
+-- VRILZHUB FEATURES — NAME GAME v1.0
+-- Halloween: Ambil SEMUA candy priority tertinggi → balik base → ulangi
 -- ============================================================
 
 local Features = {}
@@ -11,32 +12,44 @@ local Workspace = game:GetService("Workspace")
 local LocalPlayer = Players.LocalPlayer
 
 -- ============================================================
--- ANTI-AFK
+-- ANTI-AFK (FINAL v5) — SAFE, ANTI-KICK, ANTI-DOUBLE-FIRE
 -- ============================================================
 function Features.startAntiAFK()
     if Features._antiAFKStarted then return end
     Features._antiAFKStarted = true
+
     local VirtualUser = game:GetService("VirtualUser")
+    local UserInputService = game:GetService("UserInputService")
     if not Shared then Shared = {} end
     if Shared.AntiAFK_Enabled == nil then Shared.AntiAFK_Enabled = true end
+
+    -- ⭐ State lokal, aman dari race condition
     local _actionBusy = false
-    local function isAnyFeatureBusy()
-        return Shared and (Shared.AutoThrow_Enabled or Shared.AutoBestThrow_Enabled)
-    end
+
+local function isAnyFeatureBusy()
+    return false
+end
+
+    -- ⭐ ACTION: NGASIH INPUT BENERAN (movement + jump + mouse)
     local function doAntiAFKAction()
         if Shared.AntiAFK_Enabled == false then return end
         if _actionBusy then return end
         _actionBusy = true
+
+        -- ⭐ 1) VirtualUser capture (wajib, biar Roblox detect activity)
         pcall(function()
             VirtualUser:CaptureController()
             VirtualUser:Button2Down(Vector2.new(0, 0))
             task.wait(0.05)
             VirtualUser:Button2Up(Vector2.new(0, 0))
         end)
+
+        -- ⭐ 2) MOVEMENT BENERAN — gerak karakter, BUKAN cuma mouse
         if not isAnyFeatureBusy() then
             local char = LocalPlayer.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
             if hum and hum.Health > 0 and not hum.SeatPart and not hum.PlatformStand then
+                -- Gerak ke 4 arah bergantian biar server detect movement
                 local dirs = {
                     Vector3.new(0, 0, -1),
                     Vector3.new(1, 0, 0),
@@ -49,12 +62,15 @@ function Features.startAntiAFK()
                     pcall(function() h:Move(d, false) end)
                     task.wait(0.15)
                 end
+                -- Reset movement
                 local h2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
                 if h2 and not h2.SeatPart then
                     pcall(function() h2:Move(Vector3.new(0,0,0), false) end)
                 end
             end
         end
+
+        -- ⭐ 3) Jump sekali (kalo aman) — bikin server detect "player aktif"
         if not isAnyFeatureBusy() then
             local char = LocalPlayer.Character
             local hum = char and char:FindFirstChildOfClass("Humanoid")
@@ -62,45 +78,62 @@ function Features.startAntiAFK()
                 pcall(function() hum.Jump = true end)
             end
         end
+
+        -- ⭐ 4) Mouse move (kalo ada)
         if type(mousemoverel) == "function" then
             pcall(function() mousemoverel(10, 10) end)
             task.wait(0.05)
             pcall(function() mousemoverel(-10, -10) end)
         end
+
         task.delay(0.3, function() _actionBusy = false end)
     end
+
+    -- ═══ 1. IDLED LISTENER — TANPA THROTTLE 30s ═══
+    -- ⭐ Roblox fire Idled ~20s sekali. Jangan pernah skip.
     LocalPlayer.Idled:Connect(function()
         task.spawn(function()
             if Shared.AntiAFK_Enabled == false then return end
             doAntiAFKAction()
         end)
     end)
+
+    -- ═══ 2. PERIODIC 60s — lebih aman dari 90s ═══
     task.spawn(function()
-        task.wait(20)
+        task.wait(20) -- delay awal
         while true do
             task.wait(60)
             if Shared.AntiAFK_Enabled == false then continue end
-            doAntiAFKAction()
+            doAntiAFKAction()  -- ⭐ LANGSUNG panggil, jangan task.spawn (biar gak numpuk)
         end
     end)
+
+    -- ═══ 3. RESPAWN SAFETY ═══
     LocalPlayer.CharacterAdded:Connect(function()
         _actionBusy = false
     end)
 end
 
--- ============================================================
--- AUTO THROW
--- ============================================================
+-- ═══════════════════════════════════════════════════════════
+-- 🎯 AUTO THROW SYSTEM
+-- ═══════════════════════════════════════════════════════════
 local function initAutoThrow()
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
     local VirtualInputManager = game:GetService("VirtualInputManager")
-    local ThrowState = {
-        autoThrow = false, autoBest = false, tapPoint = 0.93, unequipDelay = 0.3, tpDelay = 0.5,
-        marker = nil, lastTap = 0, revealCache = setmetatable({}, { __mode = "k" }), camPinned = false,
-    }
-    local savedTransparency = {}
-    local savedConstraints = {}
-    local savedAnimWeights = {}
 
+    -- ═══ STATE ═══
+    local ThrowState = {
+        autoThrow = false,
+        autoBest = false,
+        tapPoint = 0.93,
+        unequipDelay = 0.3,
+        tpDelay = 0.5,
+        marker = nil,
+        lastTap = 0,
+        revealCache = setmetatable({}, { __mode = "k" }),
+    }
+
+    -- ═══ HELPER: ambil ThrowController, ClientState, TrainingController ═══
     local function requirePlayerScript(...)
         local ps = LocalPlayer:WaitForChild("PlayerScripts", 5)
         if not ps then return nil end
@@ -115,31 +148,18 @@ local function initAutoThrow()
     local ThrowController = requirePlayerScript("Client", "Controllers", "ThrowController")
     local ClientState = requirePlayerScript("Client", "Controllers", "ClientState")
 
+    -- ═══ HELPER: ambil animal tool yang sedang dipegang ═══
     local function getEquippedAnimal()
         local char = LocalPlayer.Character
         if not char then return nil end
         local tool = char:FindFirstChildOfClass("Tool")
-        if tool and tool:GetAttribute("AnimalId") ~= nil then return tool end
+        if tool and tool:GetAttribute("AnimalId") ~= nil then
+            return tool
+        end
         return nil
     end
 
-    local function isThrowBusy()
-        local busy = false
-        pcall(function() busy = (ClientState and ClientState.Busy) or false end)
-        local active = false
-        pcall(function()
-            active = (ThrowController and ThrowController.IsActive and ThrowController.IsActive()) or false
-        end)
-        return busy or active or getEquippedAnimal() ~= nil
-    end
-
-    local function tapSpace()
-        pcall(function() VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game) end)
-        task.delay(0.03, function()
-            pcall(function() VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game) end)
-        end)
-    end
-
+    -- ═══ HELPER: unequip tool ═══
     local function unequipTools()
         local char = LocalPlayer.Character
         if not char then return nil end
@@ -150,6 +170,7 @@ local function initAutoThrow()
         return true
     end
 
+    -- ═══ HELPER: cari StarterArea & CrossLine ═══
     local function getStarterArea()
         local sa = Workspace:FindFirstChild("StarterArea")
         if not sa then return nil, nil end
@@ -158,6 +179,7 @@ local function initAutoThrow()
         return sa, crossZ
     end
 
+    -- ═══ HELPER: cek apakah player sudah di throw area ═══
     local function isInThrowArea(hrp)
         local sa, crossZ = getStarterArea()
         if not (sa and hrp) then return false end
@@ -171,6 +193,7 @@ local function initAutoThrow()
         return true
     end
 
+    -- ═══ HELPER: teleport ke throw area ═══
     local function teleportToThrowArea()
         local char = LocalPlayer.Character
         if not char then return false end
@@ -179,27 +202,33 @@ local function initAutoThrow()
         local hum = char:FindFirstChildOfClass("Humanoid")
         local sa, crossZ = getStarterArea()
         if not (hrp and sa and hum) then return false end
+
         local pos = sa.Position
         local half = sa.Size / 2
         local x = math.clamp(hrp.Position.X, pos.X - half.X + 2, pos.X + half.X - 2)
         local z = math.clamp(crossZ - 3, pos.Z - half.Z + 1, crossZ - 1)
         local y = pos.Y + half.Y + hum.HipHeight + hrp.Size.Y / 2 + 0.1
+
         hrp.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         hrp.CFrame = CFrame.lookAt(Vector3.new(x, y, z), Vector3.new(x, y, z + 1))
         return true
     end
 
+    -- ═══ HELPER: cari power meter marker di PlayerGui ═══
     local function findMeterMarker()
         local pg = LocalPlayer:FindFirstChild("PlayerGui")
         if not pg then return nil end
         for _, v in ipairs(pg:GetDescendants()) do
-            if v.Name == "Marker" and v.Parent and v.Parent.Parent and v.Parent.Parent.Name == "Meter" then
+            if v.Name == "Marker" and v.Parent
+                and v.Parent.Parent
+                and v.Parent.Parent.Name == "Meter" then
                 return v
             end
         end
         return nil
     end
 
+       -- ═══ HELPER: deteksi teks reveal (case-insensitive) ═══
     local function isRevealText(txt)
         if type(txt) ~= "string" or txt == "" then return false end
         local lower = txt:lower()
@@ -209,12 +238,14 @@ local function initAutoThrow()
             or lower:find("click to skip", 1, true) ~= nil
     end
 
+    -- ═══ HELPER: baca isi reveal screen (hasil yang didapat) ═══
     local function readRevealResult(label)
         local ok, gui = pcall(function() return label:FindFirstAncestorOfClass("ScreenGui") end)
         if not ok or not gui then return nil end
         local parts = {}
         for _, d in ipairs(gui:GetDescendants()) do
-            if d:IsA("TextLabel") and d.Visible ~= false and d.Text ~= "" and not isRevealText(d.Text) then
+            if d:IsA("TextLabel") and d.Visible ~= false
+                and d.Text ~= "" and not isRevealText(d.Text) then
                 table.insert(parts, d.Text)
             end
         end
@@ -222,6 +253,7 @@ local function initAutoThrow()
         return table.concat(parts, " | ")
     end
 
+    -- ═══ HELPER: scan reveal screen ═══
     local function scanRevealScreens()
         local pg = LocalPlayer:FindFirstChild("PlayerGui")
         if not pg then return end
@@ -232,84 +264,37 @@ local function initAutoThrow()
         end
     end
 
-    local function saveAndHideCharacter(char)
-        if not char then return end
-        for _, d in ipairs(char:GetDescendants()) do
-            if d:IsA("BasePart") then
-                if savedTransparency[d] == nil then savedTransparency[d] = d.Transparency end
-                if d.Transparency ~= 1 then d.Transparency = 1 end
-                d.LocalTransparencyModifier = 1
-            end
-        end
-        for _, d in ipairs(char:GetDescendants()) do
-            if d:IsA("AnimationConstraint") then
-                if savedConstraints[d] == nil then
-                    savedConstraints[d] = { enabled = d.Enabled, transform = d.Transform }
-                end
-                d.Transform = CFrame.identity
-                d.Enabled = false
-            end
-        end
-    end
-
-    local function restoreCharacter(char)
-        for d, t in pairs(savedTransparency) do
-            if d and d.Parent then
-                d.Transparency = t
-                d.LocalTransparencyModifier = 0
-            end
-        end
-        savedTransparency = {}
-        for d, s in pairs(savedConstraints) do
-            if d and d.Parent then
-                d.Enabled = s.enabled
-                d.Transform = s.transform
-            end
-        end
-        savedConstraints = {}
-        for track, w in pairs(savedAnimWeights) do
-            if track then pcall(function() track:AdjustWeight(w, 0) end) end
-        end
-        savedAnimWeights = {}
-    end
-
-    local function suppressAnimations(char)
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        local animator = hum and hum:FindFirstChildOfClass("Animator")
-        if not animator then return end
-        local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
-        if not ok or not tracks then return end
-        for _, t in ipairs(tracks) do
-            pcall(function()
-                local w = t.Weight
-                if type(w) == "number" and w > 0 then
-                    if savedAnimWeights[t] == nil then savedAnimWeights[t] = w end
-                    t:AdjustWeight(0.0001, 0)
-                end
-            end)
-        end
-    end
-
+    -- ═══ LOOP: cari marker & reveal screen setiap 0.15s ═══
     task.spawn(function()
         while true do
             task.wait(0.15)
             if ThrowState.autoBest then
                 local m = ThrowState.marker
-                if m and not m.Parent then ThrowState.marker = findMeterMarker()
-                elseif not m then ThrowState.marker = findMeterMarker() end
+                if m and not m.Parent then
+                    ThrowState.marker = findMeterMarker()
+                elseif not m then
+                    ThrowState.marker = findMeterMarker()
+                end
             end
-            if ThrowState.autoThrow then scanRevealScreens() end
+            if ThrowState.autoThrow then
+                scanRevealScreens()
+            end
         end
     end)
 
+       -- ═══ REVEAL WATCHER v2: baca hasil → notify → skip pakai Spasi ═══
     task.spawn(function()
         local pg = LocalPlayer:WaitForChild("PlayerGui")
         pg.DescendantAdded:Connect(function(d)
             task.defer(function()
-                if d:IsA("TextLabel") and isRevealText(d.Text) then ThrowState.revealCache[d] = true end
+                if d:IsA("TextLabel") and isRevealText(d.Text) then
+                    ThrowState.revealCache[d] = true
+                end
             end)
         end)
+
         local lastResult, lastResultTime = nil, 0
+
         while true do
             task.wait(0.2)
             if not ThrowState.autoThrow then continue end
@@ -317,15 +302,25 @@ local function initAutoThrow()
                 if k.Parent then
                     if k.TextTransparency < 0.9 then
                         ThrowState.revealCache[k] = nil
+
+                        -- 1) tunggu teks result muncul, terus baca
                         task.wait(0.35)
                         local result = nil
-                        if k.Parent then result = readRevealResult(k) end
-                        if result and Shared and Shared.Notify and (result ~= lastResult or os.clock() - lastResultTime > 3) then
+                        if k.Parent then
+                            result = readRevealResult(k)
+                        end
+                        if result and Shared and Shared.Notify
+                            and (result ~= lastResult or os.clock() - lastResultTime > 3) then
                             lastResult = result
                             lastResultTime = os.clock()
                             Shared.Notify("Throw Result", result, "info")
                         end
-                        tapSpace()
+
+                        -- 2) baru skip
+                        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+                        task.delay(0.03, function()
+                            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+                        end)
                     end
                 else
                     ThrowState.revealCache[k] = nil
@@ -333,7 +328,8 @@ local function initAutoThrow()
             end
         end
     end)
-
+    
+    -- ═══ RENDER STEPPED: AUTO BEST THROW (tap meter di tapPoint) ═══
     RunService.RenderStepped:Connect(function()
         if not ThrowState.autoBest then return end
         local m = ThrowState.marker
@@ -342,10 +338,14 @@ local function initAutoThrow()
         local norm = 1 - m.Position.Y.Scale
         if norm >= ThrowState.tapPoint then
             ThrowState.lastTap = os.clock()
-            tapSpace()
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
+            task.delay(0.03, function()
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
+            end)
         end
     end)
 
+    -- ═══ LOOP: AUTO THROW (teleport → throw → unequip → skip → ulang) ═══
     task.spawn(function()
         while true do
             task.wait(0.5)
@@ -356,289 +356,169 @@ local function initAutoThrow()
                 Shared.AutoThrow_Enabled = false
                 continue
             end
+
+            -- Unequip dulu
             if Shared.UnequipDelay_Seconds and unequipTools() then
                 task.wait(Shared.UnequipDelay_Seconds or ThrowState.unequipDelay)
             end
+
             local busy = ClientState and ClientState.Busy
             local isActive = ThrowController.IsActive and ThrowController.IsActive()
-            if busy or isActive or getEquippedAnimal() then continue end
+            if busy or isActive or getEquippedAnimal() then
+                continue
+            end
+
+            -- Teleport kalo belum di area
             local char = LocalPlayer.Character
             local hrp = char and char:FindFirstChild("HumanoidRootPart")
             if hrp and not hrp.Anchored and not isInThrowArea(hrp) then
                 teleportToThrowArea()
                 task.wait(Shared.TpDelay_Seconds or ThrowState.tpDelay)
             end
+
+            -- Throw!
             if ClientState and ClientState.Busy then continue end
-            if not ThrowState.autoThrow then continue end
             pcall(ThrowController.Start)
             task.wait(3)
         end
     end)
 
-    local camAnchor = nil
-    local BIND_HARD, BIND_CINE, BIND_BAR, BIND_OFF, BIND_SUP = "VRILZ_CamPin_Hard", "VRILZ_CineKill", "VRILZ_BarKill", "VRILZ_OffEnforce", "VRILZ_PostOffSuppress"
-    local BASE_POS, CAM_OFFSET = Vector3.new(2.23, 6.01, 20.29), Vector3.new(0, 6, 14)
-
-    local function getLockTarget()
-        local ghost = Workspace:FindFirstChild(LocalPlayer.Name .. "_Ghost")
-        if ghost then
-            local ghostHRP = ghost:FindFirstChild("HumanoidRootPart")
-            if ghostHRP then return ghostHRP.Position end
+    -- ═══ SYNC STATE DARI SHARED ═══
+    task.spawn(function()
+        while true do
+            task.wait(0.3)
+            ThrowState.autoThrow = Shared.AutoThrow_Enabled == true
+            ThrowState.autoBest = Shared.AutoBestThrow_Enabled == true
+            ThrowState.tapPoint = (Shared.TapPoint_Percent or 93) / 100
+            ThrowState.unequipDelay = Shared.UnequipDelay_Seconds or 0.5
+            ThrowState.tpDelay = Shared.TpDelay_Seconds or 0.6
         end
-        return BASE_POS
-    end
+    end)
+
+        -- ═══ CAMERA PIN v2 — lock di base, anti-override dari game ═══
+    local camera = Workspace.CurrentCamera
+    local camAnchor = nil
+    local savedSubject = nil
+    local savedCameraType = nil
+
+    local BASE_POS  = Vector3.new(2.23, 6.01, 20.29)
+    local CAM_POS   = BASE_POS + Vector3.new(0, 6, 14) -- posisi kamera (khusus hard lock)
+    local HARD_LOCK = true
+
+    local BIND_SOFT = "VRILZ_CamPin_Soft"
+    local BIND_HARD = "VRILZ_CamPin_Hard"
 
     local function createCamAnchor()
         local a = Instance.new("Part")
-        a.Name, a.Size, a.Transparency, a.CanCollide = "VRILZ_CamAnchor", Vector3.new(1, 1, 1), 1, false
-        a.Anchored, a.CanQuery, a.CanTouch, a.Massless = true, false, false, true
-        local target = getLockTarget()
-        if not target or typeof(target) ~= "Vector3" then target = BASE_POS end
-        a.CFrame = CFrame.new(target)
+        a.Name = "VRILZ_CamAnchor"
+        a.Size = Vector3.new(1, 1, 1)
+        a.Transparency = 1
+        a.CanCollide = false
+        a.Anchored = true
+        a.CanQuery = false
+        a.CanTouch = false
+        a.Massless = true
+        a.CFrame = CFrame.new(BASE_POS)
         a.Parent = Workspace
         return a
     end
 
-    local function hardStep()
+    -- SOFT: kamera tetap bisa digerakin mouse, tapi subject dipaksa ke anchor
+    local function softStep()
         local cam = Workspace.CurrentCamera
-        if not cam then return end
-        if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then LocalPlayer.CameraMode = Enum.CameraMode.Classic end
-        if cam.CameraType ~= Enum.CameraType.Scriptable then cam.CameraType = Enum.CameraType.Scriptable end
-        local target = getLockTarget()
-        cam.CFrame = CFrame.lookAt(target + CAM_OFFSET, target)
-        if camAnchor and camAnchor.Parent and cam.CameraSubject ~= camAnchor then cam.CameraSubject = camAnchor end
+        if cam.CameraType ~= Enum.CameraType.Custom then
+            cam.CameraType = Enum.CameraType.Custom
+        end
+        if cam.CameraSubject ~= camAnchor then
+            cam.CameraSubject = camAnchor
+        end
     end
 
-    local function killLetterboxBars()
-        local pg = LocalPlayer:FindFirstChild("PlayerGui")
+    -- HARD: kamera dibekukan di titik fix, menang lawan cutscene game
+    local LOOK_AT = Vector3.new(2.23, 6.01, 20.29) -- arah pandang kamera (bebas diganti)
+
+    local function hardStep()
         local cam = Workspace.CurrentCamera
-        if not pg or not cam then return end
-        local vp = cam.ViewportSize
-        for _, gui in ipairs(pg:GetChildren()) do
-            if gui:IsA("ScreenGui") and gui.Enabled then
-                for _, d in ipairs(gui:GetDescendants()) do
-                    if (d:IsA("Frame") or d:IsA("ImageLabel")) and d.Visible then
-                        local okPos, pos = pcall(function() return d.AbsolutePosition end)
-                        local okSize, size = pcall(function() return d.AbsoluteSize end)
-                        if okPos and okSize and size.Y > 0 then
-                            local fullW, thinH = size.X >= vp.X * 0.9, size.Y <= vp.Y * 0.25 and size.Y >= vp.Y * 0.02
-                            local atTop, atBot = pos.Y <= 4, (pos.Y + size.Y) >= vp.Y - 4
-                            local dark = true
-                            if d:IsA("Frame") then
-                                local c = d.BackgroundColor3
-                                dark = (c.R + c.G + c.B) < 0.35 and d.BackgroundTransparency < 0.5
-                            end
-                            if fullW and thinH and (atTop or atBot) and dark then d.Visible = false end
-                        end
-                    end
-                end
-            end
+        -- blok game yang coba set first-person/lock
+        if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then
+            LocalPlayer.CameraMode = Enum.CameraMode.Classic
         end
+        if cam.CameraType ~= Enum.CameraType.Scriptable then
+            cam.CameraType = Enum.CameraType.Scriptable
+        end
+        cam.CFrame = CFrame.lookAt(CAM_POS, LOOK_AT)
     end
 
     local function startCamPin()
-        if ThrowState.camPinned then return end
-        ThrowState.camPinned = true
+        if camAnchor and camAnchor.Parent then return end
         if camAnchor then pcall(function() camAnchor:Destroy() end) end
+
         camAnchor = createCamAnchor()
-        pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
-        RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 10, hardStep)
+        savedSubject    = camera.CameraSubject
+        savedCameraType = camera.CameraType
+
+            if HARD_LOCK then
+            RunService:BindToRenderStep(BIND_HARD, Enum.RenderPriority.Last.Value + 1, hardStep)
+        else
+            RunService:BindToRenderStep(BIND_SOFT, Enum.RenderPriority.Camera.Value - 1, softStep)
+        end
     end
 
     local function stopCamPin()
+        if not camAnchor then return end
+        pcall(function() RunService:UnbindFromRenderStep(BIND_SOFT) end)
         pcall(function() RunService:UnbindFromRenderStep(BIND_HARD) end)
-        if camAnchor then pcall(function() camAnchor:Destroy() end) camAnchor = nil end
-        ThrowState.camPinned = false
-    end
-
-    local function startCineKiller()
-        pcall(function() RunService:UnbindFromRenderStep(BIND_CINE) end)
-        RunService:BindToRenderStep(BIND_CINE, Enum.RenderPriority.Last.Value + 999, function()
-            local char = LocalPlayer.Character
-            if not char then return end
-            saveAndHideCharacter(char)
-            suppressAnimations(char)
-            local hrp = char:FindFirstChild("HumanoidRootPart")
-            if hrp then
-                if hrp.AssemblyLinearVelocity.Magnitude > 0.01 then hrp.AssemblyLinearVelocity = Vector3.zero end
-                if hrp.AssemblyAngularVelocity.Magnitude > 0.01 then hrp.AssemblyAngularVelocity = Vector3.zero end
-            end
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum and hum.MoveDirection.Magnitude > 0.01 then pcall(function() hum:Move(Vector3.zero, false) end) end
-        end)
-    end
-
-    local function stopCineKiller()
-        pcall(function() RunService:UnbindFromRenderStep(BIND_CINE) end)
-        local char = LocalPlayer.Character
-        if char then pcall(restoreCharacter, char) end
-    end
-
-    local function startBarKiller()
-        pcall(function() RunService:UnbindFromRenderStep(BIND_BAR) end)
-        RunService:BindToRenderStep(BIND_BAR, Enum.RenderPriority.Last.Value + 998, function() pcall(killLetterboxBars) end)
-    end
-
-    local function stopBarKiller() pcall(function() RunService:UnbindFromRenderStep(BIND_BAR) end) end
-
-    local function instantRestoreNormal()
-        local char = LocalPlayer.Character
-        local hum = char and char:FindFirstChildOfClass("Humanoid")
-        if char then pcall(restoreCharacter, char) end
-        stopCamPin()
-        local cam = Workspace.CurrentCamera
-        if cam then
-            if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then LocalPlayer.CameraMode = Enum.CameraMode.Classic end
-            cam.CameraType = Enum.CameraType.Custom
-            if hum then cam.CameraSubject = hum end
-        end
-        local animator = hum and hum:FindFirstChildOfClass("Animator")
-        if animator then
-            local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
-            if ok and tracks then for _, t in ipairs(tracks) do pcall(function() t:Stop(0) end) end end
-        end
-        if hum and hum.Health > 0 then pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end) end
-    end
-
-    local function startOffEnforcer()
-        pcall(function() RunService:UnbindFromRenderStep(BIND_OFF) end)
-        RunService:BindToRenderStep(BIND_OFF, Enum.RenderPriority.Last.Value + 11, function()
-            local char = LocalPlayer.Character
-            local hum = char and char:FindFirstChildOfClass("Humanoid")
-            local cam = Workspace.CurrentCamera
-            if not (cam and hum) then return end
-            if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then LocalPlayer.CameraMode = Enum.CameraMode.Classic end
-            if cam.CameraType ~= Enum.CameraType.Custom then cam.CameraType = Enum.CameraType.Custom end
-            if cam.CameraSubject ~= hum then cam.CameraSubject = hum end
-        end)
-        task.spawn(function()
-            local deadline = os.clock() + 10
-            while os.clock() < deadline do
-                task.wait(0.25)
-                if ThrowState.autoThrow then break end
-                if not isThrowBusy() then break end
-            end
-            pcall(function() RunService:UnbindFromRenderStep(BIND_OFF) end)
-        end)
-    end
-
-    local function startPostOffSuppressor()
-        pcall(function() RunService:UnbindFromRenderStep(BIND_SUP) end)
-        RunService:BindToRenderStep(BIND_SUP, Enum.RenderPriority.Last.Value + 997, function()
-            if ThrowState.autoThrow then return end
-            if not isThrowBusy() then return end
-            local char = LocalPlayer.Character
-            if char then suppressAnimations(char) end
-        end)
-        task.spawn(function()
-            local deadline = os.clock() + 8
-            local lastTap, lastNudge = 0, 0
-            local idleTicks = 0
-            while os.clock() < deadline do
-                task.wait(0.15)
-                if ThrowState.autoThrow then break end
-                pcall(killLetterboxBars)
-                if isThrowBusy() then
-                    idleTicks = 0
-                    local tapped = false
-                    for k in pairs(ThrowState.revealCache) do
-                        if k.Parent and k.TextTransparency < 0.9 then
-                            ThrowState.revealCache[k] = nil
-                            tapSpace()
-                            tapped = true
-                        end
-                    end
-                    if not tapped and os.clock() - lastTap > 1.2 then
-                        lastTap = os.clock()
-                        tapSpace()
-                    end
-                    if os.clock() - lastNudge > 0.5 then
-                        lastNudge = os.clock()
-                        local char = LocalPlayer.Character
-                        local hum = char and char:FindFirstChildOfClass("Humanoid")
-                        if hum and hum.Health > 0 then pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end) end
-                    end
-                else
-                    idleTicks = idleTicks + 1
-                    if idleTicks >= 13 then
-                        local char = LocalPlayer.Character
-                        local hum = char and char:FindFirstChildOfClass("Humanoid")
-                        local animator = hum and hum:FindFirstChildOfClass("Animator")
-                        if animator then
-                            local ok, tracks = pcall(animator.GetPlayingAnimationTracks, animator)
-                            if ok and tracks then for _, t in ipairs(tracks) do pcall(function() t:Stop(0) end) end end
-                        end
-                        if char then pcall(restoreCharacter, char) end
-                        pcall(killLetterboxBars)
-                        if hum and hum.Health > 0 then pcall(function() hum:ChangeState(Enum.HumanoidStateType.GettingUp) end) end
-                        break
-                    end
-                end
-            end
-            pcall(function() RunService:UnbindFromRenderStep(BIND_SUP) end)
-        end)
-    end
-
-    local function setAutoThrow(on)
-        on = on == true
-        if on == ThrowState.autoThrow then return end
-        ThrowState.autoThrow = on
-        if on then
-            pcall(function() RunService:UnbindFromRenderStep(BIND_OFF) end)
-            pcall(function() RunService:UnbindFromRenderStep(BIND_SUP) end)
-            startCamPin()
-            startCineKiller()
-            startBarKiller()
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        -- jangan set Custom kalau ghost masih aktif (biar watchdog game tidak protes)
+        local ghostOn = _G.VRILZ_Shared
+            and (_G.VRILZ_Shared.GhostMode_Enabled or _G.VRILZ_Shared.AutoThrow_Enabled)
+        if ghostOn then
+            camera.CameraType = Enum.CameraType.Scriptable
         else
-            stopCineKiller()
-            stopBarKiller()
-            instantRestoreNormal()
-            startOffEnforcer()
-            startPostOffSuppressor()
+            camera.CameraType = savedCameraType or Enum.CameraType.Custom
         end
+        camera.CameraSubject = savedSubject or hum
+        savedSubject, savedCameraType = nil, nil
+        camAnchor:Destroy()
+        camAnchor = nil
     end
 
     task.spawn(function()
         while true do
-            task.wait(0.2)
-            local wantOn = Shared and Shared.AutoThrow_Enabled == true
-            if wantOn ~= ThrowState.autoThrow then pcall(setAutoThrow, wantOn) end
-            ThrowState.autoBest = Shared and Shared.AutoBestThrow_Enabled == true
-            ThrowState.tapPoint = (Shared and Shared.TapPoint_Percent or 93) / 100
-            ThrowState.unequipDelay = (Shared and Shared.UnequipDelay_Seconds) or 0.5
-            ThrowState.tpDelay = (Shared and Shared.TpDelay_Seconds) or 0.6
+            task.wait(0.1)
+            if ThrowState.autoThrow then
+                if not camAnchor or not camAnchor.Parent then
+                    startCamPin()
+                elseif not HARD_LOCK then
+                    softStep() -- safety net tambahan
+                end
+            else
+                stopCamPin()
+            end
         end
     end)
 
-    LocalPlayer.CharacterAdded:Connect(function(newChar)
-        if LocalPlayer.Character and LocalPlayer.Character ~= newChar then pcall(restoreCharacter, LocalPlayer.Character) end
-        savedTransparency, savedConstraints, savedAnimWeights = {}, {}, {}
-        if ThrowState.autoThrow then
-            ThrowState.camPinned = false
-            if camAnchor then pcall(function() camAnchor:Destroy() end) camAnchor = nil end
-            startCamPin()
-        end
+    -- Respawn safety: Roblox auto-reset subject pas character baru
+    LocalPlayer.CharacterAdded:Connect(function()
+        task.delay(0.5, function()
+            if ThrowState.autoThrow then startCamPin() end
+        end)
     end)
-
-    Features.ForceSyncThrow = function()
-        local wantOn = Shared and Shared.AutoThrow_Enabled == true
-        pcall(setAutoThrow, wantOn)
-        ThrowState.autoBest = Shared and Shared.AutoBestThrow_Enabled == true
-    end
-    Features.SetAutoThrow = setAutoThrow
-    if Shared then
-        Shared.ThrowController_Ref = ThrowController
-        Shared.ClientState_Ref = ClientState
-        Shared.SetAutoThrow_Ref = setAutoThrow
-    end
 end
 
--- ============================================================
--- AUTO BUY + AUTO UPGRADE
--- ============================================================
+-- ═══════════════════════════════════════════════════════════
+-- 🛒 AUTO BUY BEST FOOD + AUTO UPGRADE STAND
+-- ═══════════════════════════════════════════════════════════
 local function initAutoShop()
     local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local State = { autoBuy = false, autoUpgrade = false, lastBuyNotify = 0, lastUpgradeNotify = 0 }
+
+    local State = {
+        autoBuy = false,
+        autoUpgrade = false,
+        lastBuyNotify = 0,
+        lastUpgradeNotify = 0,
+    }
+
     local function requireShared(folder, ...)
         local node = ReplicatedStorage:WaitForChild(folder, 5)
         if not node then return nil end
@@ -649,6 +529,7 @@ local function initAutoShop()
         local ok, mod = pcall(require, node)
         return ok and mod or nil
     end
+
     local function requirePlayerScript(...)
         local ps = LocalPlayer:WaitForChild("PlayerScripts", 5)
         if not ps then return nil end
@@ -659,133 +540,240 @@ local function initAutoShop()
         local ok, mod = pcall(require, ps)
         return ok and mod or nil
     end
-    local FoodsConfig, StandsConfig, Remotes = requireShared("Config", "FoodsConfig"), requireShared("Config", "StandsConfig"), requireShared("Shared", "Remotes")
-    local DataController, PlotController = requirePlayerScript("Client", "Controllers", "DataController"), requirePlayerScript("Client", "Controllers", "PlotController")
-    local TrainingController, ClientState = requirePlayerScript("Client", "Controllers", "TrainingController"), requirePlayerScript("Client", "Controllers", "ClientState")
 
-    local function isBusy() return ClientState and ClientState.Busy == true end
-    local function notifySafe(t, c) if Shared and Shared.Notify then pcall(Shared.Notify, t .. ": " .. c, "info") end end
-    local function notifyThrottled(f, t, c, i)
-        local n = os.clock()
-        if n - (State[f] or 0) < (i or 5) then return end
-        State[f] = n
-        notifySafe(t, c)
+    local FoodsConfig = requireShared("Config", "FoodsConfig")
+    local StandsConfig = requireShared("Config", "StandsConfig")
+    local Remotes = requireShared("Shared", "Remotes")
+
+    local DataController = requirePlayerScript("Client", "Controllers", "DataController")
+    local PlotController = requirePlayerScript("Client", "Controllers", "PlotController")
+    local TrainingController = requirePlayerScript("Client", "Controllers", "TrainingController")
+    local ClientState = requirePlayerScript("Client", "Controllers", "ClientState")
+
+    local function isBusy()
+        local busy = false
+        if ClientState then
+            pcall(function() busy = ClientState.Busy == true end)
+        end
+        return busy
     end
+
+    local function notifySafe(title, content)
+        if Shared and Shared.Notify then
+            pcall(Shared.Notify, title .. ": " .. content, "info")
+        end
+    end
+
+    local function notifyThrottled(field, title, content, interval)
+        local now = os.clock()
+        if now - (State[field] or 0) < (interval or 5) then return end
+        State[field] = now
+        notifySafe(title, content)
+    end
+
     local function stopTraining()
         if not TrainingController or not TrainingController.IsRunning then return end
-        if not (TrainingController.IsRunning and TrainingController.IsRunning()) then return end
+        local running = false
+        pcall(function() running = TrainingController.IsRunning() end)
+        if not running then return end
         pcall(function() TrainingController.Stop() end)
-        local s = os.clock()
-        while os.clock() - s < 6 do
-            if not (TrainingController.IsRunning and TrainingController.IsRunning()) then break end
+        local start = os.clock()
+        while os.clock() - start < 6 do
+            local still = false
+            pcall(function() still = TrainingController.IsRunning() end)
+            if not still then break end
             task.wait(0.2)
         end
     end
+
+    -- ═══ FOOD ═══
     local function buildFoodList()
-        local l = {}
-        if not FoodsConfig then return l end
-        local ok, t = pcall(FoodsConfig.CountAll)
-        if not ok or type(t) ~= "number" then return l end
-        for i = 1, t do
-            local g, f = pcall(FoodsConfig.GetAny, i)
-            if g and f then
-                local lk = false
-                pcall(function() lk = FoodsConfig.IsLocked(f.Index) and true or false end)
-                if not lk then table.insert(l, { slot = i, food = f }) end
+        local list = {}
+        if not FoodsConfig then return list end
+        local okCount, total = pcall(FoodsConfig.CountAll)
+        if not okCount or type(total) ~= "number" then return list end
+        for i = 1, total do
+            local okGet, food = pcall(FoodsConfig.GetAny, i)
+            if okGet and food then
+                local locked = false
+                pcall(function()
+                    locked = FoodsConfig.IsLocked(food.Index) and true or false
+                end)
+                if not locked then
+                    table.insert(list, { slot = i, food = food })
+                end
             end
         end
-        table.sort(l, function(a, b)
-            local ta, tb = a.food.Tier or 0, b.food.Tier or 0
+        table.sort(list, function(a, b)
+            local ta = a.food.Tier or 0
+            local tb = b.food.Tier or 0
             if ta == tb then return (a.food.Price or 0) > (b.food.Price or 0) end
             return tb < ta
         end)
-        return l
+        return list
     end
-    local function isFoodOwned(f)
+
+    local function isFoodOwned(food)
         if not DataController then return false end
-        local ok, o = pcall(function() return DataController:GetPath("OwnedFoods." .. f.Index) == true end)
-        return ok and o or false
+        local ok, owned = pcall(function()
+            return DataController:GetPath("OwnedFoods." .. food.Index) == true
+        end)
+        return ok and owned or false
     end
+
     local function runShopCycle()
-        if not (FoodsConfig and DataController and Remotes) or isBusy() then return end
-        local m = 0
-        pcall(function() m = DataController:Get("Money") or 0 end)
-        for _, e in ipairs(buildFoodList()) do
-            if not isFoodOwned(e.food) and (e.food.Price or math.huge) <= m then
-                local ok, res = pcall(Remotes.Invoke, "Shop_Buy", e.slot)
-                if ok and res and res.Ok then
-                    notifyThrottled("lastBuyNotify", "Auto Buy", "Bought " .. tostring(e.food.Name) .. "!", 3)
+        if not (FoodsConfig and DataController and Remotes) then return end
+        if isBusy() then return end
+        local money = 0
+        pcall(function() money = DataController:Get("Money") or 0 end)
+        for _, entry in ipairs(buildFoodList()) do
+            local food = entry.food
+            if isFoodOwned(food) then return end
+            if (food.Price or math.huge) <= money then
+                local okBuy, res = pcall(Remotes.Invoke, "Shop_Buy", entry.slot)
+                if okBuy and res and res.Ok then
+                    notifyThrottled("lastBuyNotify", "Auto Buy", "Bought " .. tostring(food.Name) .. "!", 3)
                     return
                 end
             end
         end
     end
+
+    -- ═══ STAND ═══
     local function tryUpgradeStand()
         if not (Remotes and DataController and StandsConfig) then return nil end
-        local l, m = 0, 0
-        pcall(function() l = DataController:Get("Stand") or 0; m = DataController:Get("Money") or 0 end)
-        local ok, ns = pcall(StandsConfig.Get, l + 1)
-        if not ok or not ns or m < (ns.Price or math.huge) then return nil end
+        local level, money = 0, 0
+        pcall(function()
+            level = DataController:Get("Stand") or 0
+            money = DataController:Get("Money") or 0
+        end)
+        local okNext, nextStand = pcall(StandsConfig.Get, level + 1)
+        if not okNext or not nextStand then return nil end
+        if money < (nextStand.Price or math.huge) then return nil end
         if TrainingController then stopTraining() end
         if isBusy() then return nil end
-        local okU, res = pcall(Remotes.Invoke, "Stand_Upgrade")
-        local u = okU and res and res.Ok
-        if not u and PlotController and PlotController.TeleportToStand then
+        local okUp, res = pcall(Remotes.Invoke, "Stand_Upgrade")
+        local upgraded = okUp and res and res.Ok
+        if not upgraded and PlotController and PlotController.TeleportToStand then
             pcall(PlotController.TeleportToStand, false)
             task.wait(0.6)
-            local ok2, res2 = pcall(Remotes.Invoke, "Stand_Upgrade")
-            u = ok2 and res2 and res2.Ok
+            local okUp2, res2 = pcall(Remotes.Invoke, "Stand_Upgrade")
+            upgraded = okUp2 and res2 and res2.Ok
             res = res2
         end
-        if u and res then
-            local okN, nst = pcall(StandsConfig.Get, res.NewIndex)
-            notifyThrottled("lastUpgradeNotify", "Upgrade", "Upgraded to " .. tostring((okN and nst and nst.Name) or "a new stand") .. "!", 3)
+        if upgraded and res then
+            local okName, newStand = pcall(StandsConfig.Get, res.NewIndex)
+            local standName = (okName and newStand and newStand.Name) or "a new stand"
+            notifyThrottled("lastUpgradeNotify", "Upgrade", "Upgraded to " .. tostring(standName) .. "!", 3)
         end
-        return u
+        return upgraded
     end
-    task.spawn(function() while true do task.wait(1.5) if State.autoBuy then pcall(runShopCycle) end end end)
-    task.spawn(function() while true do task.wait(2) if State.autoUpgrade and not isBusy() and not (Shared and Shared.AutoThrow_Enabled) then pcall(tryUpgradeStand) end end end)
-    task.spawn(function() while true do task.wait(0.3) if Shared then State.autoBuy = Shared.AutoBuy_Enabled == true; State.autoUpgrade = Shared.AutoUpgradeStand_Enabled == true end end end)
+
+    -- ═══ LOOP SHOP ═══
+    task.spawn(function()
+        while true do
+            task.wait(1.5)
+            if State.autoBuy then pcall(runShopCycle) end
+        end
+    end)
+
+    -- ═══ LOOP STAND ═══
+    task.spawn(function()
+        while true do
+            task.wait(2)
+            if State.autoUpgrade
+                and not isBusy()
+                and not (Shared and Shared.AutoThrow_Enabled) then
+                pcall(tryUpgradeStand)
+            end
+        end
+    end)
+
+    -- ═══ SYNC FLAG ═══
+    task.spawn(function()
+        while true do
+            task.wait(0.3)
+            if Shared then
+                State.autoBuy = Shared.AutoBuy_Enabled == true
+                State.autoUpgrade = Shared.AutoUpgradeStand_Enabled == true
+            end
+        end
+    end)
 end
 
 -- ============================================================
--- GHOST MODE
+-- 👻 GHOST MODE v5 (THROW) — char invisible + clone fix di base
+-- Auto ON pas Auto Throw nyala. GUI game dihide. Camera di clone.
 -- ============================================================
-local GHOST_CLONE_POS = Vector3.new(2.23, 6.01, 20.29) + Vector3.new(0, 3, 0)
-local GhostState = { enabled = false, clone = nil, saved = {}, savedDisplay = nil, savedGuis = {} }
 
+local GHOST_CLONE_POS = Vector3.new(2.23, 6.01, 20.29) + Vector3.new(0, 3, 0) -- base + tinggi HRP
+
+local GhostState = {
+    enabled      = false,
+    clone        = nil,
+    saved        = {},
+    savedDisplay = nil,
+    savedGuis    = {},
+    savedAnimator = nil,
+}
+
+-- ═══ GUI: hide semua ScreenGui KECUALI yang mengandung "vrilz" ═══
 local function ghostHideGuis()
     local pg = LocalPlayer:FindFirstChild("PlayerGui")
     if not pg then return end
     for _, g in ipairs(pg:GetChildren()) do
         if g:IsA("ScreenGui") and g.Name:lower():find("vrilz") == nil then
-            if GhostState.savedGuis[g] == nil then GhostState.savedGuis[g] = g.Enabled end
+            if GhostState.savedGuis[g] == nil then
+                GhostState.savedGuis[g] = g.Enabled
+            end
             g.Enabled = false
         end
     end
 end
 
 local function ghostRestoreGuis()
-    for g, v in pairs(GhostState.savedGuis) do if g and g.Parent then g.Enabled = v end end
+    for g, v in pairs(GhostState.savedGuis) do
+        if g and g.Parent then g.Enabled = v end
+    end
     GhostState.savedGuis = {}
 end
 
+-- ═══ Sembunyikan real char ═══
 local function ghostHide(char)
     for _, d in ipairs(char:GetDescendants()) do
         if d:IsA("BasePart") then
             if GhostState.saved[d] == nil then GhostState.saved[d] = d.Transparency end
-            d.Transparency, d.LocalTransparencyModifier = 1, 1
+            d.Transparency = 1
+            d.LocalTransparencyModifier = 1
         elseif d:IsA("Decal") then
             if GhostState.saved[d] == nil then GhostState.saved[d] = d.Transparency end
             d.Transparency = 1
-        elseif d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam") or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles") or d:IsA("BillboardGui") or d:IsA("SurfaceGui") then
+        elseif d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam")
+            or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles") then
+            d.Enabled = false
+        elseif d:IsA("BillboardGui") or d:IsA("SurfaceGui") then
             d.Enabled = false
         end
     end
     local hum = char:FindFirstChildOfClass("Humanoid")
     if hum then
-        if GhostState.savedDisplay == nil then GhostState.savedDisplay = hum.DisplayDistanceType end
+        if GhostState.savedDisplay == nil then
+            GhostState.savedDisplay = hum.DisplayDistanceType
+        end
         hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+
+        -- ⬇️⬇️ TAMBAH BLOK INI ⬇️⬇️
+        local anim = hum:FindFirstChildOfClass("Animator")
+        if anim and GhostState.savedAnimator == nil then
+            GhostState.savedAnimator = { anim = anim, parent = anim.Parent }
+            pcall(function()
+                for _, t in ipairs(anim:GetPlayingAnimationTracks()) do
+                    t:Stop(0)
+                end
+            end)
+            anim.Parent = nil
+        end
+        -- ⬆️⬆️ SAMPAI SINI ⬆️⬆️
     end
     local hl = char:FindFirstChildOfClass("Highlight")
     if hl then hl.Enabled = false end
@@ -793,59 +781,118 @@ end
 
 local function ghostRestore(char)
     for d, t in pairs(GhostState.saved) do
-        if d and d.Parent then d.Transparency = t; d.LocalTransparencyModifier = 0 end
+        if d and d.Parent then
+            d.Transparency = t
+            d.LocalTransparencyModifier = 0
+        end
     end
     GhostState.saved = {}
     for _, d in ipairs(char:GetDescendants()) do
-        if d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam") or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles") or d:IsA("BillboardGui") or d:IsA("SurfaceGui") then
+        if d:IsA("ParticleEmitter") or d:IsA("Trail") or d:IsA("Beam")
+            or d:IsA("Fire") or d:IsA("Smoke") or d:IsA("Sparkles")
+            or d:IsA("BillboardGui") or d:IsA("SurfaceGui") then
             d.Enabled = true
         end
     end
-    local hum = char:FindFirstChildOfClass("Humanoid")
-    if hum and GhostState.savedDisplay then hum.DisplayDistanceType = GhostState.savedDisplay; GhostState.savedDisplay = nil end
+        local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum and GhostState.savedDisplay then
+        hum.DisplayDistanceType = GhostState.savedDisplay
+        GhostState.savedDisplay = nil
+    end
+
+    -- ⬇️⬇️ TAMBAH BLOK INI ⬇️⬇️
+    if GhostState.savedAnimator then
+        local s = GhostState.savedAnimator
+        if s.anim and s.parent then
+            s.anim.Parent = s.parent
+        end
+        GhostState.savedAnimator = nil
+    end
+    -- ⬆️⬆️ SAMPAI SINI ⬆️⬆️
+
     local hl = char:FindFirstChildOfClass("Highlight")
     if hl then hl.Enabled = true end
 end
 
+-- ═══ Clone: fix di base, berbaju, diem ═══
 local function ghostCreateClone(char)
-    if GhostState.clone then GhostState.clone:Destroy(); GhostState.clone = nil end
-    local oa = char.Archivable
-    char.Archivable = true
-    local ok, c = pcall(function() return char:Clone() end)
-    char.Archivable = oa
-    if not ok or not c then return end
-    for _, d in ipairs(c:GetDescendants()) do
-        if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then d:Destroy() end
+    if GhostState.clone then
+        GhostState.clone:Destroy()
+        GhostState.clone = nil
     end
-    for _, d in ipairs(c:GetChildren()) do if d:IsA("Tool") then d:Destroy() end end
-    local hum = c:FindFirstChildOfClass("Humanoid")
+
+    local oldArch = char.Archivable
+    char.Archivable = true
+    local ok, clone = pcall(function() return char:Clone() end)
+    char.Archivable = oldArch
+    if not ok or not clone then return end
+
+    for _, d in ipairs(clone:GetDescendants()) do
+        if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
+            d:Destroy()
+        end
+    end
+    for _, d in ipairs(clone:GetChildren()) do
+        if d:IsA("Tool") then d:Destroy() end
+    end
+    
+    -- Humanoid dipertahankan biar BAJU ke-render, di-neuter
+    local hum = clone:FindFirstChildOfClass("Humanoid")
     if hum then
         hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
-        hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
-        hum.PlatformStand = true
+        hum.HealthDisplayType  = Enum.HumanoidHealthDisplayType.AlwaysOff
+        hum.PlatformStand      = true
         pcall(function() hum.EvaluateStateMachine = false end)
+
+        -- ⭐ FIX: cabut Animator — game gak bisa muter animasi lempar di clone
+        local anim = hum:FindFirstChildOfClass("Animator")
+        if anim then anim:Destroy() end
     end
+
     for _, cls in ipairs({"Shirt", "Pants", "ShirtGraphic"}) do
-        local s = char:FindFirstChildOfClass(cls)
-        if s then local o = c:FindFirstChildOfClass(cls); if o then o:Destroy() end; s:Clone().Parent = c end
+        local src = char:FindFirstChildOfClass(cls)
+        if src then
+            local old = clone:FindFirstChildOfClass(cls)
+            if old then old:Destroy() end
+            src:Clone().Parent = clone
+        end
     end
-    c:PivotTo(CFrame.new(GHOST_CLONE_POS))
-    for _, d in ipairs(c:GetDescendants()) do
-        if d:IsA("BasePart") then d.Anchored = true; d.CanCollide = false; d.Massless = true end
+
+    -- ⭐ POSISI FIX di base — gak ikut char yang teleport/lempar
+    clone:PivotTo(CFrame.new(GHOST_CLONE_POS))
+
+    for _, d in ipairs(clone:GetDescendants()) do
+        if d:IsA("BasePart") then
+            d.Anchored = true
+            d.CanCollide = false
+            d.Massless = true
+        end
     end
-    c.Name = char.Name .. "_Ghost"
-    c.Parent = Workspace
-    GhostState.clone = c
+
+    -- ⭐ FIX: nama beda — workspace[namalu] selalu dapat char ASLI, bukan clone
+    clone.Name = char.Name .. "_Ghost"
+    clone.Parent = Workspace
+    GhostState.clone = clone
+end
+
+-- ═══ Camera ikut clone (KECUALI throw cam pin lagi aktif) ═══
+local function throwCamActive()
+    return Workspace:FindFirstChild("VRILZ_CamAnchor") ~= nil
 end
 
 local function ghostCamToClone()
     local cam = Workspace.CurrentCamera
-    local chrp = GhostState.clone and GhostState.clone:FindFirstChild("HumanoidRootPart")
-    if not (cam and chrp) then return end
-    if cam.CameraType ~= Enum.CameraType.Scriptable then cam.CameraType = Enum.CameraType.Scriptable end
-    if cam.CameraSubject ~= chrp then cam.CameraSubject = chrp end
-    local t = chrp.Position
-    cam.CFrame = CFrame.lookAt(t + Vector3.new(0, 6, 14), t)
+    local cloneHRP = GhostState.clone and GhostState.clone:FindFirstChild("HumanoidRootPart")
+    if not (cam and cloneHRP) then return end
+
+    -- game paksa Scriptable saat cinematic → kita ikut Scriptable,
+    -- tapi CFrame-nya KITA yang isi, menghadap clone
+    if cam.CameraType ~= Enum.CameraType.Scriptable then
+        cam.CameraType = Enum.CameraType.Scriptable
+    end
+    local target = cloneHRP.Position
+    local camPos = target + Vector3.new(0, 6, 14)
+    cam.CFrame = CFrame.lookAt(camPos, target)
 end
 
 local function ghostEnable()
@@ -863,57 +910,107 @@ local function ghostDisable()
     local char = LocalPlayer.Character
     if char then ghostRestore(char) end
     ghostRestoreGuis()
-    if GhostState.clone then GhostState.clone:Destroy(); GhostState.clone = nil end
-    local cam = Workspace.CurrentCamera
-    local hum = char and char:FindFirstChildOfClass("Humanoid")
-    if cam then
-        if LocalPlayer.CameraMode ~= Enum.CameraMode.Classic then LocalPlayer.CameraMode = Enum.CameraMode.Classic end
-        cam.CameraType = Enum.CameraType.Custom
-        if hum then cam.CameraSubject = hum end
+    if GhostState.clone then
+        GhostState.clone:Destroy()
+        GhostState.clone = nil
+    end
+    if not throwCamActive() then
+        local cam = Workspace.CurrentCamera
+        local hum = char and char:FindFirstChildOfClass("Humanoid")
+        if cam and hum then
+            cam.CameraSubject = hum
+        end
     end
     GhostState.enabled = false
 end
 
 local function initGhostMode()
     LocalPlayer.CharacterAdded:Connect(function()
-        if GhostState.clone then GhostState.clone:Destroy(); GhostState.clone = nil end
-        if GhostState.enabled then task.wait(2); pcall(ghostEnable) end
+        if GhostState.clone then
+            GhostState.clone:Destroy()
+            GhostState.clone = nil
+        end
+        if GhostState.enabled then
+            task.wait(2)
+            pcall(ghostEnable)
+        end
     end)
-    RunService:BindToRenderStep("VRILZ_GhostCamOverride", Enum.RenderPriority.Last.Value + 5, function()
-        if not GhostState.enabled then return end
-        if not (Shared and (Shared.GhostMode_Enabled or Shared.AutoThrow_Enabled)) then return end
-        ghostCamToClone()
-    end)
+
+    -- ⬇️⬇️ TAMBAH BLOK INI ⬇️⬇️
+    -- Bind di priority Last+2 → jalan SETELAH hardStep (Last+1) di initAutoThrow,
+    -- jadi menimpa Scriptable/CFrame fixed → camera ikut clone
+    RunService:BindToRenderStep("VRILZ_GhostCamOverride",
+        Enum.RenderPriority.Last.Value + 5, function()
+            if not GhostState.enabled then return end
+            local SharedNow = Shared
+            if not SharedNow then return end
+            if not (SharedNow.GhostMode_Enabled or SharedNow.AutoThrow_Enabled) then return end
+            ghostCamToClone()
+        end)
+    -- pengawal Animator: jalan tiap 0.05s, tidak peduli transparency
     task.spawn(function()
         while true do
-            task.wait(0.1)
-            local w = Shared and (Shared.GhostMode_Enabled == true or Shared.AutoThrow_Enabled == true)
-            if w and not GhostState.enabled then pcall(ghostEnable)
-            elseif not w and GhostState.enabled then pcall(ghostDisable) end
-            if not w then
-                local b = false
-                pcall(function() local cs = Shared and Shared.ClientState_Ref; b = (cs and cs.Busy) or false end)
-                local tc = Shared and Shared.ThrowController_Ref
-                local a = false
-                pcall(function() a = tc and tc.IsActive and tc:IsActive() end)
-                if not (b or a) then
-                    local cam = Workspace.CurrentCamera
-                    local char = LocalPlayer.Character
-                    local hum = char and char:FindFirstChildOfClass("Humanoid")
-                    if cam and hum then
-                        if cam.CameraType ~= Enum.CameraType.Custom then cam.CameraType = Enum.CameraType.Custom end
-                        if cam.CameraSubject ~= hum then cam.CameraSubject = hum end
+            task.wait(0.05)
+            if not GhostState.enabled then continue end
+            local char = LocalPlayer.Character
+            local hum = char and char:FindFirstChildOfClass("Humanoid")
+            if hum then
+                local anim = hum:FindFirstChildOfClass("Animator")
+                if anim then
+                    pcall(function()
+                        for _, t in ipairs(anim:GetPlayingAnimationTracks()) do
+                            t:Stop(0)
+                        end
+                    end)
+                    if GhostState.savedAnimator == nil then
+                        GhostState.savedAnimator = { anim = anim, parent = anim.Parent }
                     end
-                    local anc = Workspace:FindFirstChild("VRILZ_CamAnchor")
-                    if anc then pcall(function() anc:Destroy() end) end
+                    anim.Parent = nil
                 end
             end
+        end
+    end)
+
+    task.spawn(function()
+        while true do
+            task.wait(0.5)
+            -- ⭐ ghost ON kalau: toggle manual ATAU Auto Throw nyala
+            local wantOn = Shared and (Shared.GhostMode_Enabled == true
+                or Shared.AutoThrow_Enabled == true)
+
+            if wantOn and not GhostState.enabled then
+                pcall(ghostEnable)
+            elseif not wantOn and GhostState.enabled then
+                pcall(ghostDisable)
+            end
+
             if GhostState.enabled then
                 local char = LocalPlayer.Character
                 local hrp = char and char:FindFirstChild("HumanoidRootPart")
-                if hrp then
-                    if GhostState.clone and not GhostState.clone.Parent then pcall(ghostCreateClone, char) end
-                    if GhostState.clone and GhostState.clone.Parent and hrp.Transparency < 1 then pcall(ghostHide, char) end
+                                if hrp then
+                    if GhostState.clone and not GhostState.clone.Parent then
+                        pcall(ghostCreateClone, char)
+                    end
+                    if GhostState.clone and GhostState.clone.Parent
+                        and hrp.Transparency < 1 then
+                        pcall(ghostHide, char)
+                    end
+                                        -- cabut Animator SETIAP kali ada (jangan cek savedAnimator == nil)
+                    local humNow = char:FindFirstChildOfClass("Humanoid")
+                    if humNow then
+                        local anNow = humNow:FindFirstChildOfClass("Animator")
+                        if anNow then
+                            pcall(function()
+                                for _, t in ipairs(anNow:GetPlayingAnimationTracks()) do
+                                    t:Stop(0)
+                                end
+                            end)
+                            if GhostState.savedAnimator == nil then
+                                GhostState.savedAnimator = { anim = anNow, parent = anNow.Parent }
+                            end
+                            anNow.Parent = nil
+                        end
+                    end
                 end
                 ghostHideGuis()
                 ghostCamToClone()
@@ -923,17 +1020,36 @@ local function initGhostMode()
 end
 
 -- ============================================================
--- INIT
+-- FEATURES.INIT
 -- ============================================================
 function Features.Init(sharedState)
     Shared = sharedState
+
+    -- ⭐ update _G refs SEKARANG (Shared udah beneran ada)
     _G.VRILZ_Shared = Shared
     _G.VRILZ_UI_Shared = Shared
-    if not Features._antiAFKStarted then Features._antiAFKStarted = true; Features.startAntiAFK() end
-    if not Features._autoThrowStarted then Features._autoThrowStarted = true; pcall(initAutoThrow) end
-    if not Features._autoShopStarted then Features._autoShopStarted = true; pcall(initAutoShop) end
-    if not Features._ghostStarted then Features._ghostStarted = true; pcall(initGhostMode) end
-end
 
+    if not Features._antiAFKStarted then
+        Features._antiAFKStarted = true
+        Features.startAntiAFK()
+    end
+
+    if not Features._autoThrowStarted then
+        Features._autoThrowStarted = true
+        pcall(initAutoThrow)
+    end
+                if not Features._autoShopStarted then
+        Features._autoShopStarted = true
+        pcall(initAutoShop)
+    end
+
+    -- ⭐ GHOST MODE
+    if not Features._ghostStarted then
+        Features._ghostStarted = true
+        pcall(initGhostMode)
+    end
+end
+    
 _G.VRILZ_Features = Features
+
 return Features
