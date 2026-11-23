@@ -970,16 +970,23 @@ local function initGhostMode()
         end
     end)
 
-    -- ⬇️⬇️ TAMBAH BLOK INI ⬇️⬇️
-    -- Bind di priority Last+2 → jalan SETELAH hardStep (Last+1) di initAutoThrow,
-    -- jadi menimpa Scriptable/CFrame fixed → camera ikut clone
+    -- ⭐ PRIORITY LEBIH TINGGI DARI hardStep (Last+10) BIAR NIMPA CINEMATIC GAME
     RunService:BindToRenderStep("VRILZ_GhostCamOverride",
-        Enum.RenderPriority.Last.Value + 5, function()
+        Enum.RenderPriority.Last.Value + 15, function()
             if not GhostState.enabled then return end
             local SharedNow = Shared
             if not SharedNow then return end
             if not (SharedNow.GhostMode_Enabled or SharedNow.AutoThrow_Enabled) then return end
-            ghostCamToClone()
+            
+            -- ⭐ PAKSA KAMERA NEMPEL KE CLONE, ABISIN CINEMATIC GAME
+            local cam = Workspace.CurrentCamera
+            local cloneHRP = GhostState.clone and GhostState.clone:FindFirstChild("HumanoidRootPart")
+            if cam and cloneHRP then
+                cam.CameraType = Enum.CameraType.Scriptable -- Paksa Scriptable
+                local target = cloneHRP.Position
+                cam.CFrame = CFrame.lookAt(target + Vector3.new(0, 6, 14), target)
+                cam.CameraSubject = cloneHRP -- Paksa subject ke clone
+            end
         end)
     -- pengawal Animator: jalan tiap 0.05s, tidak peduli transparency
     task.spawn(function()
