@@ -352,8 +352,9 @@ local function initAutoThrow()
             end
             if ThrowState.autoThrow then
                 scanRevealScreens()
+              end
             end
-        end
+         end
     end)
 
     -- ═══ Reveal screen handler ═══
