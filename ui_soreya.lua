@@ -3878,7 +3878,7 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     end)
     closeConfirmBtn.MouseLeave:Connect(function()
         TweenService:Create(closeConfirmBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
-            BackgroundColor3 = C.Error
+            BackgroundColor3 = Color3.fromRGB(220, 38, 48)
         }):Play()
         TweenService:Create(cbStroke, TweenInfo.new(0.18), { Transparency = 0.4 }):Play()
         TweenService:Create(cbInnerStroke, TweenInfo.new(0.18), { Transparency = 0.9 }):Play()
