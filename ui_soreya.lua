@@ -3658,10 +3658,10 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     descLbl.Parent = popup
     registerTheme(descLbl, "Muted", "TextColor3")
 
-    -- Button row
+        -- Button row
     local btnRow = Instance.new("Frame")
-    btnRow.Size = UDim2.new(1, -32, 0, 38)
-    btnRow.Position = UDim2.new(0, 16, 0, 152)
+    btnRow.Size = UDim2.new(1, -32, 0, 44)          -- ⬆ lebih tinggi biar lega
+    btnRow.Position = UDim2.new(0, 16, 0, 148)
     btnRow.BackgroundTransparency = 1
     btnRow.ZIndex = 903
     btnRow.Parent = popup
@@ -3670,13 +3670,17 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     btnLayout.FillDirection = Enum.FillDirection.Horizontal
     btnLayout.Padding = UDim.new(0, 10)
     btnLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+    btnLayout.VerticalAlignment = Enum.VerticalAlignment.Center
     btnLayout.Parent = btnRow
 
-    -- Go Back (safe)
+    -- ============================================================
+    -- ✨ GO BACK BUTTON (Safe) — glassy & soft
+    -- ============================================================
     local backBtn = Instance.new("TextButton")
     backBtn.Size = UDim2.new(0.5, -5, 1, 0)
     backBtn.BackgroundColor3 = C.Surface3
-    backBtn.Text = "← Go Back"
+    backBtn.BackgroundTransparency = 0.15
+    backBtn.Text = "←  Go Back"
     backBtn.TextColor3 = C.Text
     backBtn.Font = Enum.Font.GothamBold
     backBtn.TextSize = 12
@@ -3684,24 +3688,37 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     backBtn.AutoButtonColor = false
     backBtn.LayoutOrder = 1
     backBtn.ZIndex = 904
+    backBtn.ClipsDescendants = true
     backBtn.Parent = btnRow
     registerTheme(backBtn, "Surface3", "BackgroundColor3")
 
     local bbCorner = Instance.new("UICorner")
-    bbCorner.CornerRadius = UDim.new(0, 10)
+    bbCorner.CornerRadius = UDim.new(0, 12)
     bbCorner.Parent = backBtn
+
+    -- subtle top highlight
+    local bbGrad = Instance.new("UIGradient")
+    bbGrad.Rotation = 90
+    bbGrad.Transparency = NumberSequence.new({
+        NumberSequenceKeypoint.new(0, 0.75),
+        NumberSequenceKeypoint.new(1, 0.95),
+    })
+    bbGrad.Color = ColorSequence.new(Color3.fromRGB(255,255,255))
+    bbGrad.Parent = backBtn
 
     local bbStroke = Instance.new("UIStroke")
     bbStroke.Color = C.Text
     bbStroke.Thickness = 1
-    bbStroke.Transparency = 0.7
+    bbStroke.Transparency = 0.75
     bbStroke.Parent = backBtn
 
-    -- Close (danger)
+    -- ============================================================
+    -- ✨ CLOSE BUTTON (Danger) — premium gradient + glow
+    -- ============================================================
     local closeConfirmBtn = Instance.new("TextButton")
     closeConfirmBtn.Size = UDim2.new(0.5, -5, 1, 0)
     closeConfirmBtn.BackgroundColor3 = C.Error
-    closeConfirmBtn.Text = "✕ Close Script"
+    closeConfirmBtn.Text = "✕  Close Script"
     closeConfirmBtn.TextColor3 = Color3.new(1, 1, 1)
     closeConfirmBtn.Font = Enum.Font.GothamBlack
     closeConfirmBtn.TextSize = 12
@@ -3709,35 +3726,80 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     closeConfirmBtn.AutoButtonColor = false
     closeConfirmBtn.LayoutOrder = 2
     closeConfirmBtn.ZIndex = 904
+    closeConfirmBtn.ClipsDescendants = true
     closeConfirmBtn.Parent = btnRow
 
     local cbc = Instance.new("UICorner")
-    cbc.CornerRadius = UDim.new(0, 10)
+    cbc.CornerRadius = UDim.new(0, 12)
     cbc.Parent = closeConfirmBtn
 
+    -- 🔥 red gradient biar keliatan glossy
+    local cbGrad = Instance.new("UIGradient")
+    cbGrad.Rotation = 90
+    cbGrad.Color = ColorSequence.new({
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 120, 130)),
+        ColorSequenceKeypoint.new(0.45, C.Error),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 20, 30)),
+    })
+    cbGrad.Parent = closeConfirmBtn
+
     local cbStroke = Instance.new("UIStroke")
-    cbStroke.Color = Color3.fromRGB(255, 180, 180)
+    cbStroke.Color = Color3.fromRGB(255, 200, 200)
     cbStroke.Thickness = 1
-    cbStroke.Transparency = 0.5
+    cbStroke.Transparency = 0.35
     cbStroke.Parent = closeConfirmBtn
 
-    -- Hover
+    -- ✨ soft glow outer (UIShadow via Frame tidak ada, pakai UIStroke tipis + glow effect)
+    local cbGlow = Instance.new("Frame")
+    cbGlow.Name = "Glow"
+    cbGlow.Size = UDim2.fromScale(1, 1)
+    cbGlow.Position = UDim2.fromScale(0, 0)
+    cbGlow.BackgroundColor3 = C.Error
+    cbGlow.BackgroundTransparency = 1
+    cbGlow.BorderSizePixel = 0
+    cbGlow.ZIndex = 903
+    cbGlow.Parent = closeConfirmBtn
+
+    local cbGlowCorner = Instance.new("UICorner")
+    cbGlowCorner.CornerRadius = UDim.new(0, 12)
+    cbGlowCorner.Parent = cbGlow
+
+    local cbGlowStroke = Instance.new("UIStroke")
+    cbGlowStroke.Color = C.Error
+    cbGlowStroke.Thickness = 6
+    cbGlowStroke.Transparency = 0.85
+    cbGlowStroke.Parent = cbGlow
+    
+        -- Hover — Go Back
     backBtn.MouseEnter:Connect(function()
-        TweenService:Create(backBtn, TweenInfo.new(0.15), { BackgroundColor3 = C.Surface2 }):Play()
+        TweenService:Create(backBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
+            BackgroundColor3 = C.Surface2,
+            BackgroundTransparency = 0
+        }):Play()
+        TweenService:Create(bbStroke, TweenInfo.new(0.18), { Transparency = 0.5 }):Play()
     end)
     backBtn.MouseLeave:Connect(function()
-        TweenService:Create(backBtn, TweenInfo.new(0.15), { BackgroundColor3 = C.Surface3 }):Play()
+        TweenService:Create(backBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
+            BackgroundColor3 = C.Surface3,
+            BackgroundTransparency = 0.15
+        }):Play()
+        TweenService:Create(bbStroke, TweenInfo.new(0.18), { Transparency = 0.75 }):Play()
     end)
 
+    -- Hover — Close Script (danger)
     closeConfirmBtn.MouseEnter:Connect(function()
-        TweenService:Create(closeConfirmBtn, TweenInfo.new(0.15), {
+        TweenService:Create(closeConfirmBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
             BackgroundColor3 = Color3.fromRGB(255, 90, 100)
         }):Play()
+        TweenService:Create(cbGlowStroke, TweenInfo.new(0.18), { Transparency = 0.55 }):Play()
+        TweenService:Create(cbStroke, TweenInfo.new(0.18), { Transparency = 0.1 }):Play()
     end)
     closeConfirmBtn.MouseLeave:Connect(function()
-        TweenService:Create(closeConfirmBtn, TweenInfo.new(0.15), {
+        TweenService:Create(closeConfirmBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
             BackgroundColor3 = C.Error
         }):Play()
+        TweenService:Create(cbGlowStroke, TweenInfo.new(0.18), { Transparency = 0.85 }):Play()
+        TweenService:Create(cbStroke, TweenInfo.new(0.18), { Transparency = 0.35 }):Play()
     end)
 
     -- Animate in
