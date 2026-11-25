@@ -3666,13 +3666,12 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     titleLbl.Position = UDim2.new(0, 20, 0, 88)
     titleLbl.BackgroundTransparency = 1
     titleLbl.Text = "Are you sure you want to close?"
-    titleLbl.TextColor3 = C.Text
+    titleLbl.TextColor3 = Color3.fromRGB(255, 255, 255)
     titleLbl.Font = Enum.Font.GothamBlack
     titleLbl.TextSize = 15
     titleLbl.TextXAlignment = Enum.TextXAlignment.Center
     titleLbl.ZIndex = 903
     titleLbl.Parent = popup
-    registerTheme(titleLbl, "Text", "TextColor3")
 
     -- Description
     local descLbl = Instance.new("TextLabel")
@@ -3680,14 +3679,13 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     descLbl.Position = UDim2.new(0, 20, 0, 114)
     descLbl.BackgroundTransparency = 1
     descLbl.Text = "All features will stop working and\nthe script will be fully unloaded."
-    descLbl.TextColor3 = C.Muted
+    descLbl.TextColor3 = Color3.fromRGB(200, 195, 200)
     descLbl.Font = Enum.Font.GothamMedium
     descLbl.TextSize = 11
     descLbl.TextWrapped = true
     descLbl.TextYAlignment = Enum.TextYAlignment.Top
     descLbl.ZIndex = 903
     descLbl.Parent = popup
-    registerTheme(descLbl, "Muted", "TextColor3")
 
     -- Divider with center fade
     local divider = Instance.new("Frame")
@@ -3730,7 +3728,7 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     backBtn.BackgroundColor3 = C.Surface3
     backBtn.BackgroundTransparency = 0
     backBtn.Text = "←  Go Back"
-    backBtn.TextColor3 = C.Text
+    backBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     backBtn.Font = Enum.Font.GothamBold
     backBtn.TextSize = 12
     backBtn.BorderSizePixel = 0
