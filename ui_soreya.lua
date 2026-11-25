@@ -3595,9 +3595,9 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     local pgrad = Instance.new("UIGradient")
     pgrad.Rotation = 135
     pgrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(38, 24, 27)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(22, 14, 16)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(12, 7, 8)),
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(52, 38, 42)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(34, 24, 28)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(22, 15, 18)),
     })
     pgrad.Parent = popup
 
@@ -3691,7 +3691,7 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     local divider = Instance.new("Frame")
     divider.Size = UDim2.new(1, -40, 0, 1)
     divider.Position = UDim2.new(0, 20, 0, 156)
-    divider.BackgroundColor3 = C.Text
+    divider.BackgroundColor3 = Color3.fromRGB(120, 120, 130)
     divider.BackgroundTransparency = 0.88
     divider.BorderSizePixel = 0
     divider.ZIndex = 903
@@ -3725,7 +3725,7 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     -- ============================================================
     local backBtn = Instance.new("TextButton")
     backBtn.Size = UDim2.new(0.5, -5, 1, 0)
-    backBtn.BackgroundColor3 = C.Surface3
+    backBtn.BackgroundColor3 = Color3.fromRGB(58, 58, 70)
     backBtn.BackgroundTransparency = 0
     backBtn.Text = "←  Go Back"
     backBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
@@ -3737,7 +3737,6 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     backBtn.ZIndex = 904
     backBtn.ClipsDescendants = true
     backBtn.Parent = btnRow
-    registerTheme(backBtn, "Surface3", "BackgroundColor3")
 
     local bbCorner = Instance.new("UICorner")
     bbCorner.CornerRadius = UDim.new(0, 12)
@@ -3753,7 +3752,7 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     bbSheen.Parent = backBtn
 
     local bbStroke = Instance.new("UIStroke")
-    bbStroke.Color = C.Text
+    bbStroke.Color = Color3.fromRGB(180, 180, 195)
     bbStroke.Thickness = 1
     bbStroke.Transparency = 0.84
     bbStroke.Parent = backBtn
@@ -3856,14 +3855,14 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     -- ============================================================
     backBtn.MouseEnter:Connect(function()
         TweenService:Create(backBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
-            BackgroundColor3 = C.Surface2
+                BackgroundColor3 = Color3.fromRGB(74, 74, 88)
         }):Play()
         TweenService:Create(bbStroke, TweenInfo.new(0.18), { Transparency = 0.65 }):Play()
         TweenService:Create(bbInnerStroke, TweenInfo.new(0.18), { Transparency = 0.85 }):Play()
     end)
     backBtn.MouseLeave:Connect(function()
         TweenService:Create(backBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
-            BackgroundColor3 = C.Surface3
+                 BackgroundColor3 = Color3.fromRGB(58, 58, 70)
         }):Play()
         TweenService:Create(bbStroke, TweenInfo.new(0.18), { Transparency = 0.84 }):Play()
         TweenService:Create(bbInnerStroke, TweenInfo.new(0.18), { Transparency = 0.94 }):Play()
