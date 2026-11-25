@@ -3562,7 +3562,7 @@ function _G.VRILZ_Presence.Start()
 end
 
 -- ============================================================
--- ⚠️ CLOSE CONFIRMATION POPUP
+-- ⚠️ CLOSE CONFIRMATION POPUP (polished)
 -- ============================================================
 local function showCloseConfirmation(parent, onConfirm, onCancel)
     -- Dim background blocker
@@ -3570,7 +3570,7 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     blocker.Name = "CloseConfirmBlocker"
     blocker.Size = UDim2.fromScale(1, 1)
     blocker.BackgroundColor3 = Color3.fromRGB(0, 0, 0)
-    blocker.BackgroundTransparency = 0.4
+    blocker.BackgroundTransparency = 0.45
     blocker.Text = ""
     blocker.AutoButtonColor = false
     blocker.ZIndex = 900
@@ -3589,31 +3589,41 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     popup.Parent = blocker
 
     local pc = Instance.new("UICorner")
-    pc.CornerRadius = UDim.new(0, 16)
+    pc.CornerRadius = UDim.new(0, 18)
     pc.Parent = popup
 
     local pgrad = Instance.new("UIGradient")
     pgrad.Rotation = 135
     pgrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(32, 20, 22)),
-        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(18, 12, 14)),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(8, 5, 6)),
+        ColorSequenceKeypoint.new(0, Color3.fromRGB(34, 22, 24)),
+        ColorSequenceKeypoint.new(0.5, Color3.fromRGB(20, 13, 15)),
+        ColorSequenceKeypoint.new(1, Color3.fromRGB(10, 6, 7)),
     })
     pgrad.Parent = popup
 
     local pstroke = Instance.new("UIStroke")
     pstroke.Color = C.Error
-    pstroke.Thickness = 2
-    pstroke.Transparency = 0.2
+    pstroke.Thickness = 1.5
+    pstroke.Transparency = 0.35
     pstroke.Parent = popup
 
-    -- Warning icon
+    -- soft inner top highlight
+    local pHighlight = Instance.new("Frame")
+    pHighlight.Size = UDim2.new(1, -2, 0, 1)
+    pHighlight.Position = UDim2.new(0, 1, 0, 1)
+    pHighlight.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+    pHighlight.BackgroundTransparency = 0.88
+    pHighlight.BorderSizePixel = 0
+    pHighlight.ZIndex = 902
+    pHighlight.Parent = popup
+
+    -- Warning icon (ring style, lebih rapi)
     local iconFrame = Instance.new("Frame")
-    iconFrame.Size = UDim2.fromOffset(48, 48)
-    iconFrame.Position = UDim2.new(0.5, 0, 0, 18)
+    iconFrame.Size = UDim2.fromOffset(46, 46)
+    iconFrame.Position = UDim2.new(0.5, 0, 0, 20)
     iconFrame.AnchorPoint = Vector2.new(0.5, 0)
     iconFrame.BackgroundColor3 = C.Error
-    iconFrame.BackgroundTransparency = 0.85
+    iconFrame.BackgroundTransparency = 0.9
     iconFrame.BorderSizePixel = 0
     iconFrame.ZIndex = 903
     iconFrame.Parent = popup
@@ -3621,47 +3631,65 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     ifc.CornerRadius = UDim.new(1, 0)
     ifc.Parent = iconFrame
 
+    local iconStroke = Instance.new("UIStroke")
+    iconStroke.Color = C.Error
+    iconStroke.Thickness = 1
+    iconStroke.Transparency = 0.55
+    iconStroke.Parent = iconFrame
+
     local iconLbl = Instance.new("TextLabel")
     iconLbl.Size = UDim2.fromScale(1, 1)
     iconLbl.BackgroundTransparency = 1
     iconLbl.Text = "⚠"
     iconLbl.TextColor3 = C.Error
     iconLbl.Font = Enum.Font.GothamBlack
-    iconLbl.TextSize = 26
+    iconLbl.TextSize = 22
     iconLbl.ZIndex = 904
     iconLbl.Parent = iconFrame
 
     -- Title
     local titleLbl = Instance.new("TextLabel")
-    titleLbl.Size = UDim2.new(1, -32, 0, 24)
-    titleLbl.Position = UDim2.new(0, 16, 0, 76)
+    titleLbl.Size = UDim2.new(1, -36, 0, 22)
+    titleLbl.Position = UDim2.new(0, 18, 0, 78)
     titleLbl.BackgroundTransparency = 1
     titleLbl.Text = "Are you sure you want to close?"
     titleLbl.TextColor3 = C.Text
     titleLbl.Font = Enum.Font.GothamBlack
     titleLbl.TextSize = 15
+    titleLbl.TextXAlignment = Enum.TextXAlignment.Center
     titleLbl.ZIndex = 903
     titleLbl.Parent = popup
     registerTheme(titleLbl, "Text", "TextColor3")
 
     -- Description
     local descLbl = Instance.new("TextLabel")
-    descLbl.Size = UDim2.new(1, -32, 0, 40)
-    descLbl.Position = UDim2.new(0, 16, 0, 102)
+    descLbl.Size = UDim2.new(1, -36, 0, 34)
+    descLbl.Position = UDim2.new(0, 18, 0, 104)
     descLbl.BackgroundTransparency = 1
     descLbl.Text = "All features will stop working and\nthe script will be fully unloaded."
     descLbl.TextColor3 = C.Muted
-    descLbl.Font = Enum.Font.GothamSemibold
+    descLbl.Font = Enum.Font.GothamMedium
     descLbl.TextSize = 11
     descLbl.TextWrapped = true
+    descLbl.TextYAlignment = Enum.TextYAlignment.Top
     descLbl.ZIndex = 903
     descLbl.Parent = popup
     registerTheme(descLbl, "Muted", "TextColor3")
 
-        -- Button row
+    -- Divider line
+    local divider = Instance.new("Frame")
+    divider.Size = UDim2.new(1, -36, 0, 1)
+    divider.Position = UDim2.new(0, 18, 0, 148)
+    divider.BackgroundColor3 = C.Text
+    divider.BackgroundTransparency = 0.9
+    divider.BorderSizePixel = 0
+    divider.ZIndex = 903
+    divider.Parent = popup
+
+    -- Button row
     local btnRow = Instance.new("Frame")
-    btnRow.Size = UDim2.new(1, -32, 0, 44)          -- ⬆ lebih tinggi biar lega
-    btnRow.Position = UDim2.new(0, 16, 0, 148)
+    btnRow.Size = UDim2.new(1, -36, 0, 40)
+    btnRow.Position = UDim2.new(0, 18, 0, 160)
     btnRow.BackgroundTransparency = 1
     btnRow.ZIndex = 903
     btnRow.Parent = popup
@@ -3674,12 +3702,12 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     btnLayout.Parent = btnRow
 
     -- ============================================================
-    -- ✨ GO BACK BUTTON (Safe) — glassy & soft
+    -- GO BACK BUTTON (Safe)
     -- ============================================================
     local backBtn = Instance.new("TextButton")
     backBtn.Size = UDim2.new(0.5, -5, 1, 0)
     backBtn.BackgroundColor3 = C.Surface3
-    backBtn.BackgroundTransparency = 0.15
+    backBtn.BackgroundTransparency = 0.1
     backBtn.Text = "←  Go Back"
     backBtn.TextColor3 = C.Text
     backBtn.Font = Enum.Font.GothamBold
@@ -3693,34 +3721,24 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     registerTheme(backBtn, "Surface3", "BackgroundColor3")
 
     local bbCorner = Instance.new("UICorner")
-    bbCorner.CornerRadius = UDim.new(0, 12)
+    bbCorner.CornerRadius = UDim.new(0, 11)
     bbCorner.Parent = backBtn
-
-    -- subtle top highlight
-    local bbGrad = Instance.new("UIGradient")
-    bbGrad.Rotation = 90
-    bbGrad.Transparency = NumberSequence.new({
-        NumberSequenceKeypoint.new(0, 0.75),
-        NumberSequenceKeypoint.new(1, 0.95),
-    })
-    bbGrad.Color = ColorSequence.new(Color3.fromRGB(255,255,255))
-    bbGrad.Parent = backBtn
 
     local bbStroke = Instance.new("UIStroke")
     bbStroke.Color = C.Text
     bbStroke.Thickness = 1
-    bbStroke.Transparency = 0.75
+    bbStroke.Transparency = 0.82
     bbStroke.Parent = backBtn
 
     -- ============================================================
-    -- ✨ CLOSE BUTTON (Danger) — premium gradient + glow
+    -- CLOSE BUTTON (Danger) — X tipis & bersih
     -- ============================================================
     local closeConfirmBtn = Instance.new("TextButton")
     closeConfirmBtn.Size = UDim2.new(0.5, -5, 1, 0)
     closeConfirmBtn.BackgroundColor3 = C.Error
     closeConfirmBtn.Text = "✕  Close Script"
     closeConfirmBtn.TextColor3 = Color3.new(1, 1, 1)
-    closeConfirmBtn.Font = Enum.Font.GothamBlack
+    closeConfirmBtn.Font = Enum.Font.GothamBold
     closeConfirmBtn.TextSize = 12
     closeConfirmBtn.BorderSizePixel = 0
     closeConfirmBtn.AutoButtonColor = false
@@ -3730,81 +3748,49 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     closeConfirmBtn.Parent = btnRow
 
     local cbc = Instance.new("UICorner")
-    cbc.CornerRadius = UDim.new(0, 12)
+    cbc.CornerRadius = UDim.new(0, 11)
     cbc.Parent = closeConfirmBtn
 
-    -- 🔥 red gradient biar keliatan glossy
-    local cbGrad = Instance.new("UIGradient")
-    cbGrad.Rotation = 90
-    cbGrad.Color = ColorSequence.new({
-        ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 120, 130)),
-        ColorSequenceKeypoint.new(0.45, C.Error),
-        ColorSequenceKeypoint.new(1, Color3.fromRGB(150, 20, 30)),
-    })
-    cbGrad.Parent = closeConfirmBtn
-
     local cbStroke = Instance.new("UIStroke")
-    cbStroke.Color = Color3.fromRGB(255, 200, 200)
+    cbStroke.Color = Color3.fromRGB(255, 210, 210)
     cbStroke.Thickness = 1
-    cbStroke.Transparency = 0.35
+    cbStroke.Transparency = 0.45
     cbStroke.Parent = closeConfirmBtn
 
-    -- ✨ soft glow outer (UIShadow via Frame tidak ada, pakai UIStroke tipis + glow effect)
-    local cbGlow = Instance.new("Frame")
-    cbGlow.Name = "Glow"
-    cbGlow.Size = UDim2.fromScale(1, 1)
-    cbGlow.Position = UDim2.fromScale(0, 0)
-    cbGlow.BackgroundColor3 = C.Error
-    cbGlow.BackgroundTransparency = 1
-    cbGlow.BorderSizePixel = 0
-    cbGlow.ZIndex = 903
-    cbGlow.Parent = closeConfirmBtn
-
-    local cbGlowCorner = Instance.new("UICorner")
-    cbGlowCorner.CornerRadius = UDim.new(0, 12)
-    cbGlowCorner.Parent = cbGlow
-
-    local cbGlowStroke = Instance.new("UIStroke")
-    cbGlowStroke.Color = C.Error
-    cbGlowStroke.Thickness = 6
-    cbGlowStroke.Transparency = 0.85
-    cbGlowStroke.Parent = cbGlow
-    
-        -- Hover — Go Back
+    -- ============================================================
+    -- HOVER
+    -- ============================================================
     backBtn.MouseEnter:Connect(function()
         TweenService:Create(backBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
             BackgroundColor3 = C.Surface2,
             BackgroundTransparency = 0
         }):Play()
-        TweenService:Create(bbStroke, TweenInfo.new(0.18), { Transparency = 0.5 }):Play()
+        TweenService:Create(bbStroke, TweenInfo.new(0.18), { Transparency = 0.6 }):Play()
     end)
     backBtn.MouseLeave:Connect(function()
         TweenService:Create(backBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
             BackgroundColor3 = C.Surface3,
-            BackgroundTransparency = 0.15
+            BackgroundTransparency = 0.1
         }):Play()
-        TweenService:Create(bbStroke, TweenInfo.new(0.18), { Transparency = 0.75 }):Play()
+        TweenService:Create(bbStroke, TweenInfo.new(0.18), { Transparency = 0.82 }):Play()
     end)
 
-    -- Hover — Close Script (danger)
     closeConfirmBtn.MouseEnter:Connect(function()
         TweenService:Create(closeConfirmBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
-            BackgroundColor3 = Color3.fromRGB(255, 90, 100)
+            BackgroundColor3 = Color3.fromRGB(255, 92, 102)
         }):Play()
-        TweenService:Create(cbGlowStroke, TweenInfo.new(0.18), { Transparency = 0.55 }):Play()
-        TweenService:Create(cbStroke, TweenInfo.new(0.18), { Transparency = 0.1 }):Play()
+        TweenService:Create(cbStroke, TweenInfo.new(0.18), { Transparency = 0.15 }):Play()
     end)
     closeConfirmBtn.MouseLeave:Connect(function()
         TweenService:Create(closeConfirmBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
             BackgroundColor3 = C.Error
         }):Play()
-        TweenService:Create(cbGlowStroke, TweenInfo.new(0.18), { Transparency = 0.85 }):Play()
-        TweenService:Create(cbStroke, TweenInfo.new(0.18), { Transparency = 0.35 }):Play()
+        TweenService:Create(cbStroke, TweenInfo.new(0.18), { Transparency = 0.45 }):Play()
     end)
 
     -- Animate in
     local targetW = IS_MOBILE and math.min(320, (workspace.CurrentCamera and workspace.CurrentCamera.ViewportSize.X or 400) - 40) or 340
-    local targetH = 210
+    local targetH = 216
     popup.Size = UDim2.fromOffset(0, 0)
     TweenService:Create(popup, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
         Size = UDim2.fromOffset(targetW, targetH)
@@ -3834,9 +3820,9 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
         end)
     end)
 
-        -- Click outside = cancel (safe default)
+    -- Click outside = cancel (safe default)
     blocker.MouseButton1Click:Connect(function(input)
-        if not input then return end -- ⭐ FIX ERROR: cegah index nil
+        if not input then return end
         if input.UserInputType == Enum.UserInputType.MouseButton1
             or input.UserInputType == Enum.UserInputType.Touch then
             local pos = input.Position
