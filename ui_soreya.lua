@@ -3725,10 +3725,10 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     -- ============================================================
     local backBtn = Instance.new("TextButton")
     backBtn.Size = UDim2.new(0.5, -5, 1, 0)
-    backBtn.BackgroundColor3 = Color3.fromRGB(58, 58, 70)
+    backBtn.BackgroundColor3 = Color3.fromRGB(46, 160, 90)
     backBtn.BackgroundTransparency = 0
     backBtn.Text = "←  Go Back"
-    backBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    backBtn.TextColor3 = Color3.fromRGB(220, 220, 225)
     backBtn.Font = Enum.Font.GothamBold
     backBtn.TextSize = 12
     backBtn.BorderSizePixel = 0
@@ -3855,14 +3855,14 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     -- ============================================================
     backBtn.MouseEnter:Connect(function()
         TweenService:Create(backBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
-                BackgroundColor3 = Color3.fromRGB(74, 74, 88)
+                    BackgroundColor3 = Color3.fromRGB(58, 185, 108)
         }):Play()
         TweenService:Create(bbStroke, TweenInfo.new(0.18), { Transparency = 0.65 }):Play()
         TweenService:Create(bbInnerStroke, TweenInfo.new(0.18), { Transparency = 0.85 }):Play()
     end)
     backBtn.MouseLeave:Connect(function()
         TweenService:Create(backBtn, TweenInfo.new(0.18, Enum.EasingStyle.Quad), {
-                 BackgroundColor3 = Color3.fromRGB(58, 58, 70)
+                         BackgroundColor3 = Color3.fromRGB(46, 160, 90)
         }):Play()
         TweenService:Create(bbStroke, TweenInfo.new(0.18), { Transparency = 0.84 }):Play()
         TweenService:Create(bbInnerStroke, TweenInfo.new(0.18), { Transparency = 0.94 }):Play()
