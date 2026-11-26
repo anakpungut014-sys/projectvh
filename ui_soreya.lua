@@ -1266,6 +1266,54 @@ local function makeToggle(parent, text, default, callback, sharedKey)
     end
 end
 
+    -- ⭐ REGISTER buat lock system (Solo Mode ↔ Auto Summit)
+    if sharedKey then
+        local reasonLabel = Instance.new("TextLabel")
+        reasonLabel.Size = UDim2.new(1, 0, 0, 10)
+        reasonLabel.Position = UDim2.new(0, 0, 1, -8)
+        reasonLabel.BackgroundTransparency = 1
+        reasonLabel.Text = ""
+        reasonLabel.TextColor3 = C.Error
+        reasonLabel.Font = Enum.Font.GothamBold
+        reasonLabel.TextSize = CFG.FONT_MUTED - 1
+        reasonLabel.TextXAlignment = Enum.TextXAlignment.Left
+        reasonLabel.ZIndex = 4
+        reasonLabel.Visible = false
+        reasonLabel.Parent = frame
+        registerTheme(reasonLabel, "Error", "TextColor3")
+
+        _G.VRILZ_ToggleRegistry[sharedKey] = {
+            frame = frame, btn = btn, label = label,
+            stroke = btnStroke, baseText = text, reasonLabel = reasonLabel,
+        }
+    end
+
+-- ============================================================
+-- 🔒 TOGGLE LOCK REGISTRY
+-- ============================================================
+_G.VRILZ_ToggleRegistry = _G.VRILZ_ToggleRegistry or {}
+
+local function _applyToggleLock(entry, locked, reason)
+    if not entry then return end
+    entry.btn.Interactable = not locked
+    entry.btn.AutoButtonColor = not locked
+    entry.frame.BackgroundTransparency = locked and 0.7 or 1
+    entry.label.TextColor3 = locked and C.Muted or C.Text
+    entry.label.Text = entry.baseText .. (locked and "  🔒" or "")
+    if entry.reasonLabel then
+        entry.reasonLabel.Text = locked and ("⚠ " .. reason) or ""
+        entry.reasonLabel.Visible = locked
+    end
+    if entry.stroke then
+        entry.stroke.Transparency = locked and 0.85 or 0.15
+    end
+end
+
+_G.VRILZ_LockToggleByKey = function(key, locked, reason)
+    local entry = _G.VRILZ_ToggleRegistry[key]
+    if entry then _applyToggleLock(entry, locked, reason) end
+end
+
 -- ====== DROPDOWN GLOBAL ======
 _G.VRILZ_DropdownLayer = nil
 _G.VRILZ_DropdownCloseOverlay = nil
@@ -5371,6 +5419,38 @@ do
             notify("🏔 Auto Summit: OFF", "info")
         end
     end, "AutoSummit_Enabled")
+
+    -- ⭐ Toggle Solo Mode (Clone @ CP1)
+    makeToggle(summitContent, "Solo Mode (Clone @ CP1)", false, function(v)
+        if v and Shared.AutoSummit_Enabled then
+            Shared.SoloSummit_Enabled = false
+            if _G.VRILZ_Notify then
+                _G.VRILZ_Notify("⚠ Disable Auto Summit first!", "error")
+            end
+            return
+        end
+        Shared.SoloSummit_Enabled = v
+        if v then Shared.AutoSummit_Enabled = false end
+        if _G.VRILZ_Notify then
+            _G.VRILZ_Notify("🏔 Solo Mode: " .. (v and "ON" or "OFF"),
+                v and "success" or "info")
+        end
+    end, "SoloSummit_Enabled")
+
+    -- ⭐ Lock loop: Solo ON → lock Auto Summit, Auto Summit ON → lock Solo
+    task.spawn(function()
+        while summitContent.Parent do
+            task.wait(0.3)
+            local autoOn = Shared.AutoSummit_Enabled == true
+            local soloOn = Shared.SoloSummit_Enabled == true
+            if _G.VRILZ_LockToggleByKey then
+                _G.VRILZ_LockToggleByKey("AutoSummit_Enabled", soloOn,
+                    "Disable Solo Mode first")
+                _G.VRILZ_LockToggleByKey("SoloSummit_Enabled", autoOn,
+                    "Disable Auto Summit first")
+            end
+        end
+    end)
 
     -- ⭐ Label Dropdown Start CP
     local cpLabel = Instance.new("TextLabel")
