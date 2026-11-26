@@ -1270,23 +1270,9 @@ local function makeToggle(parent, text, default, callback, sharedKey)
 
     -- ⭐ REGISTER buat lock system (Solo Mode ↔ Auto Summit)
     if sharedKey then
-        local reasonLabel = Instance.new("TextLabel")
-        reasonLabel.Size = UDim2.new(1, 0, 0, 10)
-        reasonLabel.Position = UDim2.new(0, 0, 1, -8)
-        reasonLabel.BackgroundTransparency = 1
-        reasonLabel.Text = ""
-        reasonLabel.TextColor3 = C.Error
-        reasonLabel.Font = Enum.Font.GothamBold
-        reasonLabel.TextSize = CFG.FONT_MUTED - 1
-        reasonLabel.TextXAlignment = Enum.TextXAlignment.Left
-        reasonLabel.ZIndex = 4
-        reasonLabel.Visible = false
-        reasonLabel.Parent = frame
-        registerTheme(reasonLabel, "Error", "TextColor3")
-
         _G.VRILZ_ToggleRegistry[sharedKey] = {
-            frame = frame, btn = btn, label = label,
-            stroke = btnStroke, baseText = text, reasonLabel = reasonLabel,
+            frame = frame, btn = btn, knob = knob,
+            label = label, stroke = btnStroke, baseText = text,
         }
     end
 end
@@ -1298,17 +1284,27 @@ _G.VRILZ_ToggleRegistry = _G.VRILZ_ToggleRegistry or {}
 
 local function _applyToggleLock(entry, locked, reason)
     if not entry then return end
-    entry.btn.Interactable = not locked
-    entry.btn.AutoButtonColor = not locked
-    entry.frame.BackgroundTransparency = locked and 0.7 or 1
-    entry.label.TextColor3 = locked and C.Muted or C.Text
-    entry.label.Text = entry.baseText .. (locked and "  🔒" or "")
-    if entry.reasonLabel then
-        entry.reasonLabel.Text = locked and ("⚠ " .. reason) or ""
-        entry.reasonLabel.Visible = locked
-    end
-    if entry.stroke then
-        entry.stroke.Transparency = locked and 0.85 or 0.15
+
+    if locked then
+        -- ⭐ SEMBUNYIIN TOTAL — tapi space tetap (frame tetap ada)
+        entry.btn.Visible = false
+        entry.knob.Visible = false
+        entry.label.Visible = false
+        if entry.reasonLabel then
+            entry.reasonLabel.Visible = false
+        end
+    else
+        -- ⭐ MUNCULIN LAGI — normal
+        entry.btn.Visible = true
+        entry.knob.Visible = true
+        entry.label.Visible = true
+        entry.btn.Interactable = true
+        entry.btn.AutoButtonColor = true
+        entry.label.TextColor3 = C.Text
+        entry.label.Text = entry.baseText
+        if entry.stroke then
+            entry.stroke.Transparency = 0.15
+        end
     end
 end
 
