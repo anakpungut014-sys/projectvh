@@ -88,6 +88,9 @@ local JSONBIN_KEY = "$2a$10$91ForV6oQEOZDxOiokdjRu/lrrb26tyJns1XdLwDXEUFc/Mhkyj6
 
 local CFG = IS_MOBILE and UI_CONFIG.MOBILE or UI_CONFIG.PC
 
+-- ⭐ Registry toggle (buat lock system)
+_G.VRILZ_ToggleRegistry = _G.VRILZ_ToggleRegistry or {}
+
 -- ====== THEME ======
 local Themes = {
     Brutal = {
@@ -1254,7 +1257,7 @@ local function makeToggle(parent, text, default, callback, sharedKey)
         if callback then callback(newState) end
     end)
 
-    -- ⭐ REGISTER KE REFRESH SYSTEM
+        -- ⭐ REGISTER KE REFRESH SYSTEM
     if sharedKey and _G.VRILZ_RegisterWidget then
         _G.VRILZ_RegisterWidget(function()
             if not btn.Parent then return end
@@ -1264,7 +1267,6 @@ local function makeToggle(parent, text, default, callback, sharedKey)
             end
         end)
     end
-end
 
     -- ⭐ REGISTER buat lock system (Solo Mode ↔ Auto Summit)
     if sharedKey then
@@ -1287,7 +1289,8 @@ end
             stroke = btnStroke, baseText = text, reasonLabel = reasonLabel,
         }
     end
-
+end
+    
 -- ============================================================
 -- 🔒 TOGGLE LOCK REGISTRY
 -- ============================================================
@@ -5420,7 +5423,11 @@ do
         end
     end, "AutoSummit_Enabled")
 
-    -- ⭐ Toggle Solo Mode (Clone @ CP1)
+    -- ════════════════════════════════════════════════════════════
+    -- ⭐ PATCH C — Solo Mode Toggle + Lock Loop
+    -- ════════════════════════════════════════════════════════════
+
+    -- Toggle Solo Mode (Clone @ CP1)
     makeToggle(summitContent, "Solo Mode (Clone @ CP1)", false, function(v)
         if v and Shared.AutoSummit_Enabled then
             Shared.SoloSummit_Enabled = false
@@ -5437,7 +5444,7 @@ do
         end
     end, "SoloSummit_Enabled")
 
-    -- ⭐ Lock loop: Solo ON → lock Auto Summit, Auto Summit ON → lock Solo
+    -- Lock loop: Solo ON → lock Auto Summit, Auto Summit ON → lock Solo
     task.spawn(function()
         while summitContent.Parent do
             task.wait(0.3)
@@ -5451,6 +5458,10 @@ do
             end
         end
     end)
+
+    -- ⬇️ BARIS INI TETAP ADA
+    -- ⭐ Label Dropdown Start CP
+    local cpLabel = Instance.new("TextLabel")
 
     -- ⭐ Label Dropdown Start CP
     local cpLabel = Instance.new("TextLabel")
