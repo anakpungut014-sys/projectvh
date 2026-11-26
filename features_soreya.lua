@@ -1914,6 +1914,295 @@ local function initAutoJoin()
 end
 
 -- ============================================================
+-- 🏔 SOLO SUMMIT MODE
+-- ============================================================
+local SoloState = {
+    enabled = false,
+    clone = nil,
+    savedTransp = {},
+    savedDisplay = nil,
+    status = "⏸️ Idle",
+    loopCount = 0,
+    summitCount = 0,
+}
+
+local function soloRoot()
+    local ch = LocalPlayer.Character
+    return ch and ch:FindFirstChild("HumanoidRootPart")
+end
+
+-- ═══ HIDE real char (transparency=1, TANPA lock speed/anchor) ═══
+local function soloHideRealChar()
+    local char = LocalPlayer.Character
+    if not char then return end
+    for _, d in ipairs(char:GetDescendants()) do
+        if d:IsA("BasePart") then
+            if SoloState.savedTransp[d] == nil then
+                SoloState.savedTransp[d] = d.Transparency
+            end
+            d.Transparency = 1
+            d.LocalTransparencyModifier = 1
+        elseif d:IsA("Decal") then
+            if SoloState.savedTransp[d] == nil then
+                SoloState.savedTransp[d] = d.Transparency
+            end
+            d.Transparency = 1
+        end
+    end
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum then
+        if SoloState.savedDisplay == nil then
+            SoloState.savedDisplay = hum.DisplayDistanceType
+        end
+        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+    end
+end
+
+local function soloRestoreRealChar()
+    local char = LocalPlayer.Character
+    if not char then return end
+    for d, t in pairs(SoloState.savedTransp) do
+        if d and d.Parent then
+            d.Transparency = t
+            d.LocalTransparencyModifier = 0
+        end
+    end
+    SoloState.savedTransp = {}
+    local hum = char:FindFirstChildOfClass("Humanoid")
+    if hum and SoloState.savedDisplay then
+        hum.DisplayDistanceType = SoloState.savedDisplay
+        SoloState.savedDisplay = nil
+    end
+end
+
+-- ═══ SPAWN CLONE di CP1 + camera nempel clone ═══
+local function soloSpawnClone()
+    if SoloState.clone then
+        SoloState.clone:Destroy()
+        SoloState.clone = nil
+    end
+    local char = LocalPlayer.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+
+    local oldArch = char.Archivable
+    char.Archivable = true
+    local ok, clone = pcall(function() return char:Clone() end)
+    char.Archivable = oldArch
+    if not ok or not clone then return end
+
+    for _, d in ipairs(clone:GetDescendants()) do
+        if d:IsA("Script") or d:IsA("LocalScript") or d:IsA("ModuleScript") then
+            d:Destroy()
+        end
+    end
+    for _, d in ipairs(clone:GetChildren()) do
+        if d:IsA("Tool") then d:Destroy() end
+    end
+
+    local hum = clone:FindFirstChildOfClass("Humanoid")
+    if hum then
+        hum.DisplayDistanceType = Enum.HumanoidDisplayDistanceType.None
+        hum.HealthDisplayType = Enum.HumanoidHealthDisplayType.AlwaysOff
+        hum.PlatformStand = true
+        pcall(function() hum.EvaluateStateMachine = false end)
+    end
+
+    for _, cls in ipairs({"Shirt", "Pants", "ShirtGraphic"}) do
+        local src = char:FindFirstChildOfClass(cls)
+        if src then
+            local old = clone:FindFirstChildOfClass(cls)
+            if old then old:Destroy() end
+            src:Clone().Parent = clone
+        end
+    end
+
+    -- Pivot ke CP1
+    local cp1 = SummitCheckpoints[1].position
+    local offset = Vector3.new(0, SummitCfg.TPHeight, 0)
+    clone:PivotTo(CFrame.new(cp1 + offset))
+
+    for _, d in ipairs(clone:GetDescendants()) do
+        if d:IsA("BasePart") then
+            d.Anchored = true
+            d.CanCollide = false
+            d.Massless = true
+        end
+    end
+
+    clone.Name = char.Name
+    clone.Parent = workspace
+    SoloState.clone = clone
+
+    -- camera nempel clone HRP
+    local cam = workspace.CurrentCamera
+    local cloneHRP = clone:FindFirstChild("HumanoidRootPart")
+    if cam and cloneHRP then
+        cam.CameraSubject = cloneHRP
+    end
+end
+
+local function soloDestroyClone()
+    if SoloState.clone then
+        SoloState.clone:Destroy()
+        SoloState.clone = nil
+    end
+end
+
+-- ═══ TP STEP-BY-STEP TANPA ANCHOR ═══
+local function soloTpStepByStep(targetPos, label)
+    local root = soloRoot()
+    if not root then return false end
+
+    local target = targetPos + Vector3.new(0, SummitCfg.TPHeight, 0)
+    local startPos = root.Position
+    local totalDist = (target - startPos).Magnitude
+    local steps = math.ceil(totalDist / SummitCfg.StepDistance)
+    if steps < 1 then steps = 1 end
+
+    local dir = target - startPos
+    dir = Vector3.new(dir.X, 0, dir.Z)
+    if dir.Magnitude < 1 then
+        dir = Vector3.new(0, 0, -1)
+    else
+        dir = dir.Unit
+    end
+
+    -- ⭐ CFrame langsung TANPA Anchored
+    for i = 1, steps do
+        if not SoloState.enabled then return false end
+        local r = soloRoot()
+        if not r then return false end
+        local dist = math.min(SummitCfg.StepDistance * i, totalDist)
+        local pos = startPos + dir * dist + Vector3.new(0, SummitCfg.TPHeight, 0)
+        pos = Vector3.new(pos.X, target.Y, pos.Z)
+        r.CFrame = CFrame.new(pos)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+        SoloState.status = string.format("%s [%d/%d] (no-anchor)", label or "TP", i, steps)
+        task.wait(SummitCfg.WaitBetweenStep)
+    end
+
+    local r = soloRoot()
+    if r then
+        r.CFrame = CFrame.new(target)
+        r.Velocity = Vector3.zero
+        r.AssemblyLinearVelocity = Vector3.zero
+    end
+    return true
+end
+
+-- ═══ ANCHOR PAS NYAMPE CP (0.3s → unanchor) ═══
+local function soloAnchorAtCP()
+    local root = soloRoot()
+    if not root then return end
+    root.Anchored = true
+    root.Velocity = Vector3.zero
+    root.AssemblyLinearVelocity = Vector3.zero
+    task.wait(0.3)
+    root.Anchored = false
+end
+
+-- ═══ MAIN LOOP ═══
+local function soloMainLoop()
+    for i = math.floor(SummitCfg.StartRenderDelay), 1, -1 do
+        if not SoloState.enabled then return end
+        SoloState.status = "⏳ Render... (" .. i .. "s)"
+        task.wait(1)
+    end
+
+    local startNum = tonumber(Shared.AutoSummit_StartCP) or 1
+    if startNum < 1 then startNum = 1 end
+    if startNum > #SummitCheckpoints then startNum = #SummitCheckpoints end
+
+    while SoloState.enabled do
+        SoloState.loopCount += 1
+        local n = SoloState.loopCount
+
+        for i = startNum, #SummitCheckpoints do
+            if not SoloState.enabled then return end
+            local cp = SummitCheckpoints[i]
+            SoloState.status = "🏔️ Solo Loop #" .. n .. " — CP " .. cp.number
+
+            soloTpStepByStep(cp.position, "CP " .. cp.number)
+            task.wait(0.15)
+            soloAnchorAtCP()
+
+            SoloState.status = "✅ CP " .. cp.number .. " done"
+            task.wait(SummitCfg.WaitBetweenCP)
+        end
+
+        if not SoloState.enabled then return end
+
+        SoloState.status = "⭐ Loop #" .. n .. " — SUMMIT"
+        soloTpStepByStep(SummitTopPos, "SUMMIT")
+        task.wait(0.15)
+        soloAnchorAtCP()
+        SoloState.summitCount += 1
+
+        task.wait(SummitCfg.SummitWaitBeforeReturn)
+        if not SoloState.enabled then return end
+
+        SoloState.status = "🏠 Balik ke BackBC..."
+        soloTpStepByStep(SummitBackBCPos, "🏠 BackBC")
+        task.wait(0.15)
+        soloAnchorAtCP()
+        task.wait(SummitCfg.WaitAtBackBC)
+
+        startNum = 1
+        task.wait(0.5)
+    end
+end
+
+local function initSoloSummit()
+    task.spawn(function()
+        while true do
+            task.wait(0.3)
+            if not Shared then continue end
+            local wantOn = Shared.SoloSummit_Enabled == true
+
+            if wantOn and not SoloState.enabled then
+                if Shared.AutoSummit_Enabled == true then
+                    Shared.AutoSummit_Enabled = false
+                    task.wait(0.8)
+                end
+                if Shared.GhostMode_Enabled == true then
+                    Shared.GhostMode_Enabled = false
+                    task.wait(0.5)
+                end
+                SoloState.enabled = true
+                SoloState.status = "🚀 Starting Solo Mode..."
+                soloSpawnClone()
+                task.wait(0.3)
+                soloHideRealChar()
+                task.spawn(soloMainLoop)
+            elseif not wantOn and SoloState.enabled then
+                SoloState.enabled = false
+                SoloState.status = "⏹ Stopping..."
+                soloDestroyClone()
+                soloRestoreRealChar()
+                local char = LocalPlayer.Character
+                local hum = char and char:FindFirstChildOfClass("Humanoid")
+                local cam = workspace.CurrentCamera
+                if cam and hum then cam.CameraSubject = hum end
+            end
+        end
+    end)
+
+    LocalPlayer.CharacterAdded:Connect(function()
+        SoloState.savedTransp = {}
+        SoloState.savedDisplay = nil
+        if SoloState.enabled then
+            task.wait(2)
+            soloSpawnClone()
+            soloHideRealChar()
+        end
+    end)
+
+    _G.VRILZ_SoloState = SoloState
+end
+
+
+-- ============================================================
 -- FEATURES.INIT
 -- ============================================================
 function Features.Init(sharedState)
@@ -1953,6 +2242,11 @@ function Features.Init(sharedState)
     if not Features._autoJoinStarted then
         Features._autoJoinStarted = true
         pcall(initAutoJoin)
+    end
+    -- ⭐ SOLO SUMMIT MODE
+    if not Features._soloSummitStarted then
+        Features._soloSummitStarted = true
+        pcall(initSoloSummit)
     end
 end
 
