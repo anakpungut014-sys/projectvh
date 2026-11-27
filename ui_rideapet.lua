@@ -11695,7 +11695,7 @@ task.spawn(function()
 
 
     -- ⚡ SKIP KEY SYSTEM — hapus blok ini kalau mau balik ke key system
-if true then
+if false then
     Shared.KeyType = "FREE"
     Shared.KeyExpiresAt = 0
     startLoading()
