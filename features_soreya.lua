@@ -135,8 +135,8 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
 Shared = Shared or {}
 
--- ⚙ CONFIG — speed dinamis dari UI (0.1 - 0.5)
-local SPEED_MIN = 0.1
+-- ⚙ CONFIG
+local SPEED_MIN = 0.05
 local SPEED_MAX = 0.5
 local SPEED_DEFAULT = 0.1
 
@@ -618,7 +618,12 @@ end
 local function startFishLoop()
     task.spawn(function()
         while true do
-            task.wait(FishSpeed.loopDelay)
+            -- ⚡ kalau loopDelay <= 0.01, pakai Heartbeat (lebih responsif)
+            if FishSpeed.loopDelay <= 0.01 then
+                RunService.Heartbeat:Wait()
+            else
+                task.wait(FishSpeed.loopDelay)
+            end
             if not FishState.enabled then continue end
             local char = LocalPlayer.Character
             if not char then FishState.status = "No character"; continue end
