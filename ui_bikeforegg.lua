@@ -9110,7 +9110,7 @@ task.spawn(function()
     restoreSavedKeySync()
 
 -- ⚡ SKIP KEY SYSTEM (tetap seperti sekarang)
-if true then
+if false then
     Shared.KeyType = "FREE"
     Shared.KeyExpiresAt = 0
     startLoading()
