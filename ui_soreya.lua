@@ -5617,7 +5617,7 @@ do
     turboLayout.Padding = UDim.new(0, CFG.CARD_GAP)
     turboLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-    local SPEED_MIN = 0.05
+    local SPEED_MIN = 0
     local SPEED_MAX = 0.5
     local SPEED_DEFAULT = 0.1
 
