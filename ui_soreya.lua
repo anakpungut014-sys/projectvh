@@ -3851,7 +3851,7 @@ local function showCloseConfirmation(parent, onConfirm, onCancel)
     local closeConfirmBtn = Instance.new("TextButton")
     closeConfirmBtn.Size = UDim2.new(0.5, -5, 1, 0)
     closeConfirmBtn.BackgroundColor3 = C.Error
-    closeConfirmBtn.Text = "✕  Close Script"
+    closeConfirmBtn.Text = "X  Close Script"
     closeConfirmBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     closeConfirmBtn.Font = Enum.Font.GothamBold
     closeConfirmBtn.TextSize = 12
