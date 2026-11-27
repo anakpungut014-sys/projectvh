@@ -8560,34 +8560,34 @@ do
     -- ⭐ DATA — 3 SPOT PER AREA
     -- ══════════════════════════════════════════════
     local AREA_DATA = {
-        {
-            name = "Telaga", icon = "🌊",
-            color = Color3.fromRGB(80, 180, 255),
-            spots = {
-                { name = "Spot 1", pos = Vector3.new(0, 0, 0) },
-                { name = "Spot 2", pos = Vector3.new(0, 0, 0) },
-                { name = "Spot 3", pos = Vector3.new(0, 0, 0) },
-            },
+    {
+        name = "Core", icon = "💎",
+        color = Color3.fromRGB(180, 120, 255),
+        spots = {
+            { name = "Spot 1", pos = Vector3.new(-9185, 1250, -6634) },
+            { name = "Spot 2", pos = Vector3.new(-9098, 1251, -6592) },
+            { name = "Spot 3", pos = Vector3.new(-9013, 1250, -6560) },
         },
-        {
-            name = "Core", icon = "💎",
-            color = Color3.fromRGB(180, 120, 255),
-            spots = {
-                { name = "Spot 1", pos = Vector3.new(0, 0, 0) },
-                { name = "Spot 2", pos = Vector3.new(0, 0, 0) },
-                { name = "Spot 3", pos = Vector3.new(0, 0, 0) },
-            },
+    },
+    {
+        name = "Fish", icon = "🐟",
+        color = Color3.fromRGB(255, 200, 80),
+        spots = {
+            { name = "Spot 1", pos = Vector3.new(-8295, 1228, -6312) },
+            { name = "Spot 2", pos = Vector3.new(-8381, 1245, -6157) },
+            { name = "Spot 3", pos = Vector3.new(-7871, 1236, -6306) },
         },
-        {
-            name = "Fish", icon = "🐟",
-            color = Color3.fromRGB(255, 200, 80),
-            spots = {
-                { name = "Spot 1", pos = Vector3.new(0, 0, 0) },
-                { name = "Spot 2", pos = Vector3.new(0, 0, 0) },
-                { name = "Spot 3", pos = Vector3.new(0, 0, 0) },
-            },
+    },
+    {
+        name = "Telaga", icon = "🌊",
+        color = Color3.fromRGB(80, 180, 255),
+        spots = {
+            { name = "Spot 1", pos = Vector3.new(-9377, 1334, -10380) },
+            { name = "Spot 2", pos = Vector3.new(-9291, 1336, -10362) },
+            { name = "Spot 3", pos = Vector3.new(-9504, 1334, -10428) },
         },
-    }
+    },
+}
 
     -- ══════════════════════════════════════════════
     -- BADGE STATE — sama persis TpPlayer
