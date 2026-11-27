@@ -5617,7 +5617,7 @@ do
     turboLayout.Padding = UDim.new(0, CFG.CARD_GAP)
     turboLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
-    local SPEED_MIN = 0.1
+    local SPEED_MIN = 0.05
     local SPEED_MAX = 0.5
     local SPEED_DEFAULT = 0.1
 
@@ -5661,14 +5661,16 @@ do
             presetHolder.ZIndex = 3
             presetHolder.Parent = turboContainer
 
-            local PRESETS = {
-                ["🐢 Slow"]   = { cd = 0.5,  taps = 3,  loop = 0.08, label = "Slow"   },
-                ["🚶 Normal"] = { cd = 0.35, taps = 5,  loop = 0.05, label = "Normal" },
-                ["🏃 Fast"]   = { cd = 0.2,  taps = 8,  loop = 0.03, label = "Fast"   },
-                ["⚡ Turbo"]  = { cd = 0.1,  taps = 12, loop = 0.02, label = "Turbo"  },
-                ["🔥 Insane"] = { cd = 0.1,  taps = 20, loop = 0.01, label = "Insane" },
+                        local PRESETS = {
+                ["🐢 Slow"]     = { cd = 0.5,   taps = 3,  loop = 0.08,  label = "Slow"     },
+                ["🚶 Normal"]   = { cd = 0.35,  taps = 5,  loop = 0.05,  label = "Normal"   },
+                ["🏃 Fast"]     = { cd = 0.2,   taps = 8,  loop = 0.03,  label = "Fast"     },
+                ["⚡ Turbo"]    = { cd = 0.1,   taps = 12, loop = 0.02,  label = "Turbo"    },
+                ["🔥 Insane"]   = { cd = 0.1,   taps = 20, loop = 0.01,  label = "Insane"   },
+                ["💀 Extreme"]  = { cd = 0.07,  taps = 30, loop = 0.005, label = "Extreme"  },
+                ["☠️ Godmode"]  = { cd = 0.05,  taps = 50, loop = 0.001, label = "Godmode"  },
             }
-            local PRESET_NAMES = { "🐢 Slow", "🚶 Normal", "🏃 Fast", "⚡ Turbo", "🔥 Insane" }
+            local PRESET_NAMES = { "🐢 Slow", "🚶 Normal", "🏃 Fast", "⚡ Turbo", "🔥 Insane", "💀 Extreme", "☠️ Godmode" }
 
                         -- Cari preset yang cocok dengan Shared sekarang (cd + taps + loop)
             local curPreset = "⚡ Turbo"
