@@ -238,6 +238,14 @@ end
 if Shared and Shared.AutoFish_Speed == nil then
     Shared.AutoFish_Speed = SPEED_DEFAULT
 end
+-- ⭐ Init AutoFish OFF
+if Shared and Shared.AutoFish_Enabled == nil then
+    Shared.AutoFish_Enabled = false
+end
+-- ⭐ Init Turbo OFF
+if Shared and Shared.AutoFish_Turbo == nil then
+    Shared.AutoFish_Turbo = false
+end
 refreshSpeed()
 
 local FishState = {
@@ -667,14 +675,6 @@ local function initAutoFish()
             task.wait(0.3)
             -- ⭐ re-check Turbo + speed tiap 0.3s (biar kalau user ganti input, langsung kepake)
             refreshSpeed()
-
-            -- ⭐ Turbo ON tapi AutoFish OFF → paksa AutoFish ON
-            --    (turbo butuh AutoFish jalan)
-            if isTurboOn() and Shared.AutoFish_Enabled ~= true then
-                Shared.AutoFish_Enabled = true
-            end
-            -- ⭐ CATATAN: gak ada auto-OFF Turbo di sini
-            --    biar user bisa manual OFF toggle Turbo kapan aja
 
             local wantOn = (Shared.AutoFish_Enabled == true)
             if wantOn ~= FishState.enabled then
