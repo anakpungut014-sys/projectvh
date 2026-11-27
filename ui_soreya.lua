@@ -8382,11 +8382,11 @@ do
 end
 
 -- ========================================================
--- 🎯 AREA TELEPORT TAB — all-in-one (UI + Logic)
+-- 🎯 AREA TELEPORT TAB — dropdown + 3 spot/area + style TpPlayer
 -- ========================================================
 do
     -- ══════════════════════════════════════════════
-    -- LOGIC (langsung di UI, gak perlu file Features)
+    -- LOGIC
     -- ══════════════════════════════════════════════
     local AreaTP = {
         enabled       = false,
@@ -8436,6 +8436,7 @@ do
         local root = areaRoot()
         if not root then return false end
         AreaTP.busy = true
+        AreaTP.enabled = true
         AreaTP.status = "🛫 TP by Step → " .. (label or "target")
         local start = root.Position
         local total = (targetPos - start).Magnitude
@@ -8473,27 +8474,9 @@ do
         return true
     end
 
-    local function areaTpInstant(targetPos, label)
-        local root = areaRoot()
-        if not root then return false end
-        AreaTP.status = "⚡ TP Instant → " .. (label or "target")
-        root.CFrame = CFrame.new(targetPos)
-        root.Velocity = Vector3.zero
-        root.AssemblyLinearVelocity = Vector3.zero
-        if AreaTP.anchorAfter then
-            task.wait(0.15)
-            areaAnchor(AreaTP.anchorSeconds)
-        end
-        return true
-    end
-
     _G.VRILZ_AreaTP = {
         TpByStep = function(x, y, z)
-            AreaTP.enabled = true
             return areaTpStep(Vector3.new(tonumber(x) or 0, tonumber(y) or 0, tonumber(z) or 0), "Coord")
-        end,
-        TpInstant = function(x, y, z)
-            return areaTpInstant(Vector3.new(tonumber(x) or 0, tonumber(y) or 0, tonumber(z) or 0), "Coord")
         end,
         AnchorNow = function(sec) return areaAnchor(tonumber(sec) or AreaTP.anchorSeconds) end,
         SetAnchorAfter = function(b) AreaTP.anchorAfter = b == true end,
@@ -8503,7 +8486,7 @@ do
     }
 
     -- ══════════════════════════════════════════════
-    -- UI
+    -- UI PAGE
     -- ══════════════════════════════════════════════
     local areaPage = Instance.new("Frame")
     areaPage.Name = "AreaTp"
@@ -8526,7 +8509,7 @@ do
     local hTitle = Instance.new("TextLabel")
     hTitle.Size = UDim2.new(1, 0, 0, 24)
     hTitle.BackgroundTransparency = 1
-    hTitle.Text = "🗺️  AREA TELEPORT"
+    hTitle.Text = "🎯  AREA TELEPORT"
     hTitle.TextColor3 = C.Text
     hTitle.Font = Enum.Font.GothamBold
     hTitle.TextSize = IS_MOBILE and 13 or 15
@@ -8539,7 +8522,7 @@ do
     hInfo.Size = UDim2.new(1, 0, 0, 18)
     hInfo.Position = UDim2.fromOffset(0, 24)
     hInfo.BackgroundTransparency = 1
-    hInfo.Text = "Pilih map → pilih spot → TP"
+    hInfo.Text = "Klik area → pilih spot → TP"
     hInfo.TextColor3 = C.Muted
     hInfo.Font = Enum.Font.GothamSemibold
     hInfo.TextSize = CFG.FONT_MUTED
@@ -8573,57 +8556,308 @@ do
     aPad.PaddingBottom = UDim.new(0, 10)
     aPad.Parent = aList
 
-    -- DATA
+    -- ══════════════════════════════════════════════
+    -- ⭐ DATA — 3 SPOT PER AREA
+    -- ══════════════════════════════════════════════
     local AREA_DATA = {
         {
-            name = "Telaga", icon = "🌊", color = Color3.fromRGB(80, 180, 255),
+            name = "Telaga", icon = "🌊",
+            color = Color3.fromRGB(80, 180, 255),
             spots = {
                 { name = "Spot 1", pos = Vector3.new(0, 0, 0) },
                 { name = "Spot 2", pos = Vector3.new(0, 0, 0) },
                 { name = "Spot 3", pos = Vector3.new(0, 0, 0) },
-                { name = "Core 1", pos = Vector3.new(0, 0, 0) },
-                { name = "Core 2", pos = Vector3.new(0, 0, 0) },
-                { name = "Core 3", pos = Vector3.new(0, 0, 0) },
-                { name = "Fish 1", pos = Vector3.new(0, 0, 0) },
-                { name = "Fish 2", pos = Vector3.new(0, 0, 0) },
-                { name = "Fish 3", pos = Vector3.new(0, 0, 0) },
             },
         },
         {
-            name = "Pantai", icon = "🏖️", color = Color3.fromRGB(255, 200, 80),
+            name = "Core", icon = "💎",
+            color = Color3.fromRGB(180, 120, 255),
             spots = {
                 { name = "Spot 1", pos = Vector3.new(0, 0, 0) },
                 { name = "Spot 2", pos = Vector3.new(0, 0, 0) },
                 { name = "Spot 3", pos = Vector3.new(0, 0, 0) },
-                { name = "Core 1", pos = Vector3.new(0, 0, 0) },
-                { name = "Core 2", pos = Vector3.new(0, 0, 0) },
-                { name = "Core 3", pos = Vector3.new(0, 0, 0) },
-                { name = "Fish 1", pos = Vector3.new(0, 0, 0) },
-                { name = "Fish 2", pos = Vector3.new(0, 0, 0) },
-                { name = "Fish 3", pos = Vector3.new(0, 0, 0) },
             },
         },
         {
-            name = "Gunung", icon = "⛰️", color = Color3.fromRGB(180, 140, 255),
+            name = "Fish", icon = "🐟",
+            color = Color3.fromRGB(255, 200, 80),
             spots = {
                 { name = "Spot 1", pos = Vector3.new(0, 0, 0) },
                 { name = "Spot 2", pos = Vector3.new(0, 0, 0) },
                 { name = "Spot 3", pos = Vector3.new(0, 0, 0) },
-                { name = "Core 1", pos = Vector3.new(0, 0, 0) },
-                { name = "Core 2", pos = Vector3.new(0, 0, 0) },
-                { name = "Core 3", pos = Vector3.new(0, 0, 0) },
-                { name = "Fish 1", pos = Vector3.new(0, 0, 0) },
-                { name = "Fish 2", pos = Vector3.new(0, 0, 0) },
-                { name = "Fish 3", pos = Vector3.new(0, 0, 0) },
             },
         },
     }
 
-    local SPOT_H = IS_MOBILE and 44 or 48
+    -- ══════════════════════════════════════════════
+    -- BADGE STATE — sama persis TpPlayer
+    -- ══════════════════════════════════════════════
+    local function setBadgeState(badge, label, state)
+        if not badge or not badge.Parent then return end
+        if state == "idle" then
+            TweenService:Create(badge, TweenInfo.new(0.18),
+                {BackgroundColor3 = C.Accent, BackgroundTransparency = 0.05}):Play()
+            label.Text = "TP"
+            label.TextColor3 = Color3.new(1, 1, 1)
+            label.TextSize = IS_MOBILE and 10 or 11
+        elseif state == "loading" then
+            TweenService:Create(badge, TweenInfo.new(0.18),
+                {BackgroundColor3 = Color3.fromRGB(255, 190, 70), BackgroundTransparency = 0}):Play()
+            label.Text = "..."
+            label.TextColor3 = Color3.new(1, 1, 1)
+            label.TextSize = IS_MOBILE and 11 or 12
+        elseif state == "success" then
+            TweenService:Create(badge, TweenInfo.new(0.18),
+                {BackgroundColor3 = Color3.fromRGB(60, 200, 110), BackgroundTransparency = 0}):Play()
+            label.Text = "Success"
+            label.TextColor3 = Color3.new(1, 1, 1)
+            label.TextSize = IS_MOBILE and 9 or 10
+            task.delay(1.4, function()
+                if badge and badge.Parent and label and label.Parent then
+                    setBadgeState(badge, label, "idle")
+                end
+            end)
+        elseif state == "failed" then
+            TweenService:Create(badge, TweenInfo.new(0.18),
+                {BackgroundColor3 = Color3.fromRGB(230, 70, 70), BackgroundTransparency = 0}):Play()
+            label.Text = "Failed"
+            label.TextColor3 = Color3.new(1, 1, 1)
+            label.TextSize = IS_MOBILE and 9 or 10
+            task.delay(1.4, function()
+                if badge and badge.Parent and label and label.Parent then
+                    setBadgeState(badge, label, "idle")
+                end
+            end)
+        end
+    end
+
+    -- ══════════════════════════════════════════════
+    -- SPOT ROW BUILDER — style TpPlayer
+    -- ══════════════════════════════════════════════
+    local function createSpotRow(spot, mapData, layoutOrder, parentFrame)
+        local rowHeight = IS_MOBILE and 62 or 68
+        local pad = 10
+
+        local row = Instance.new("Frame")
+        row.Name = mapData.name .. "_" .. spot.name
+        row.Size = UDim2.new(1, -4, 0, rowHeight)
+        row.BackgroundColor3 = C.Surface2
+        row.BackgroundTransparency = 0.05
+        row.BorderSizePixel = 0
+        row.ClipsDescendants = false
+        row.LayoutOrder = layoutOrder
+        row.ZIndex = 9
+        row.Parent = parentFrame
+        registerTheme(row, "Surface2", "BackgroundColor3")
+
+        local rowCorner = Instance.new("UICorner")
+        rowCorner.CornerRadius = UDim.new(0, 14)
+        rowCorner.Parent = row
+
+        local rowStroke = Instance.new("UIStroke")
+        rowStroke.Color = C.Accent
+        rowStroke.Thickness = 1
+        rowStroke.Transparency = 0.85
+        rowStroke.Parent = row
+        registerTheme(rowStroke, "Accent", "Color")
+
+        -- ICON RING + BOX bulat
+        local iconSize = IS_MOBILE and 46 or 50
+
+        local iconRing = Instance.new("Frame")
+        iconRing.Size = UDim2.fromOffset(iconSize + 4, iconSize + 4)
+        iconRing.Position = UDim2.new(0, pad - 2, 0.5, -(iconSize + 4) / 2)
+        iconRing.BackgroundColor3 = mapData.color
+        iconRing.BackgroundTransparency = 0.45
+        iconRing.BorderSizePixel = 0
+        iconRing.ZIndex = 9
+        iconRing.Active = false
+        iconRing.Selectable = false
+        iconRing.Parent = row
+
+        local ringCorner = Instance.new("UICorner")
+        ringCorner.CornerRadius = UDim.new(1, 0)
+        ringCorner.Parent = iconRing
+
+        local iconBox = Instance.new("Frame")
+        iconBox.Size = UDim2.fromOffset(iconSize, iconSize)
+        iconBox.Position = UDim2.new(0, pad, 0.5, -iconSize / 2)
+        iconBox.BackgroundColor3 = mapData.color
+        iconBox.BackgroundTransparency = 0.85
+        iconBox.BorderSizePixel = 0
+        iconBox.ZIndex = 10
+        iconBox.Active = false
+        iconBox.Selectable = false
+        iconBox.Parent = row
+
+        local iconBoxCorner = Instance.new("UICorner")
+        iconBoxCorner.CornerRadius = UDim.new(1, 0)
+        iconBoxCorner.Parent = iconBox
+
+        local iconLbl = Instance.new("TextLabel")
+        iconLbl.Size = UDim2.fromScale(1, 1)
+        iconLbl.BackgroundTransparency = 1
+        iconLbl.Text = mapData.icon
+        iconLbl.Font = Enum.Font.GothamBold
+        iconLbl.TextSize = IS_MOBILE and 22 or 24
+        iconLbl.Active = false
+        iconLbl.Selectable = false
+        iconLbl.ZIndex = 11
+        iconLbl.Parent = iconBox
+
+        -- TEXT 2 BARIS
+        local textX = pad + iconSize + 12
+
+        local spotName = Instance.new("TextLabel")
+        spotName.Size = UDim2.new(1, -(textX + 100), 0, 22)
+        spotName.Position = UDim2.fromOffset(textX, IS_MOBILE and 10 or 13)
+        spotName.BackgroundTransparency = 1
+        spotName.Text = mapData.name .. " • " .. spot.name
+        spotName.TextColor3 = C.Text
+        spotName.Font = Enum.Font.GothamBold
+        spotName.TextSize = IS_MOBILE and 12 or 13
+        spotName.TextXAlignment = Enum.TextXAlignment.Left
+        spotName.TextTruncate = Enum.TextTruncate.AtEnd
+        spotName.Active = false
+        spotName.Selectable = false
+        spotName.ZIndex = 10
+        spotName.Parent = row
+        registerTheme(spotName, "Text", "TextColor3")
+
+        local subRow = Instance.new("Frame")
+        subRow.Size = UDim2.new(1, -(textX + 100), 0, 16)
+        subRow.Position = UDim2.fromOffset(textX, IS_MOBILE and 32 or 37)
+        subRow.BackgroundTransparency = 1
+        subRow.ZIndex = 10
+        subRow.Active = false
+        subRow.Selectable = false
+        subRow.Parent = row
+
+        local statusDot = Instance.new("Frame")
+        statusDot.Size = UDim2.fromOffset(6, 6)
+        statusDot.Position = UDim2.new(0, 0, 0.5, -3)
+        statusDot.BackgroundColor3 = mapData.color
+        statusDot.BorderSizePixel = 0
+        statusDot.ZIndex = 10
+        statusDot.Active = false
+        statusDot.Selectable = false
+        statusDot.Parent = subRow
+
+        local dotCorner = Instance.new("UICorner")
+        dotCorner.CornerRadius = UDim.new(1, 0)
+        dotCorner.Parent = statusDot
+
+        local coordLbl = Instance.new("TextLabel")
+        coordLbl.Size = UDim2.new(1, -12, 1, 0)
+        coordLbl.Position = UDim2.fromOffset(12, 0)
+        coordLbl.BackgroundTransparency = 1
+        coordLbl.Text = string.format("X:%d  Y:%d  Z:%d",
+            math.floor(spot.pos.X), math.floor(spot.pos.Y), math.floor(spot.pos.Z))
+        coordLbl.TextColor3 = C.Muted
+        coordLbl.Font = Enum.Font.GothamSemibold
+        coordLbl.TextSize = IS_MOBILE and 9 or 10
+        coordLbl.TextXAlignment = Enum.TextXAlignment.Left
+        coordLbl.TextTruncate = Enum.TextTruncate.AtEnd
+        coordLbl.Active = false
+        coordLbl.Selectable = false
+        coordLbl.ZIndex = 10
+        coordLbl.Parent = subRow
+        registerTheme(coordLbl, "Muted", "TextColor3")
+
+        -- BADGE TP
+        local badgeW = IS_MOBILE and 64 or 72
+        local badgeH = 30
+
+        local badge = Instance.new("TextButton")
+        badge.Text = ""
+        badge.AutoButtonColor = false
+        badge.Active = true
+        badge.Selectable = true
+        badge.Size = UDim2.fromOffset(badgeW, badgeH)
+        badge.Position = UDim2.new(1, -(badgeW + 12), 0.5, -badgeH / 2)
+        badge.BackgroundColor3 = C.Accent
+        badge.BackgroundTransparency = 0.05
+        badge.BorderSizePixel = 0
+        badge.ZIndex = 10
+        badge.Parent = row
+        registerTheme(badge, "Accent", "BackgroundColor3")
+
+        local badgeCorner = Instance.new("UICorner")
+        badgeCorner.CornerRadius = UDim.new(1, 0)
+        badgeCorner.Parent = badge
+
+        local badgeGradient = Instance.new("UIGradient")
+        badgeGradient.Color = ColorSequence.new({
+            ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+            ColorSequenceKeypoint.new(1, Color3.fromRGB(220, 220, 220)),
+        })
+        badgeGradient.Transparency = NumberSequence.new({
+            NumberSequenceKeypoint.new(0, 0.75),
+            NumberSequenceKeypoint.new(1, 1),
+        })
+        badgeGradient.Rotation = 45
+        badgeGradient.Parent = badge
+
+        local badgeLabel = Instance.new("TextLabel")
+        badgeLabel.Size = UDim2.fromScale(1, 1)
+        badgeLabel.BackgroundTransparency = 1
+        badgeLabel.Text = "TP"
+        badgeLabel.TextColor3 = Color3.new(1, 1, 1)
+        badgeLabel.Font = Enum.Font.GothamBold
+        badgeLabel.TextSize = IS_MOBILE and 10 or 11
+        badgeLabel.Active = false
+        badgeLabel.Selectable = false
+        badgeLabel.ZIndex = 11
+        badgeLabel.Parent = badge
+
+        badge.MouseButton1Click:Connect(function()
+            if not _G.VRILZ_AreaTP then
+                notify("❌ AreaTP not ready", "error")
+                setBadgeState(badge, badgeLabel, "failed")
+                return
+            end
+            setBadgeState(badge, badgeLabel, "loading")
+            notify("🚶 TP ke " .. mapData.name .. " • " .. spot.name, "info")
+            task.spawn(function()
+                local ok = _G.VRILZ_AreaTP.TpByStep(spot.pos.X, spot.pos.Y, spot.pos.Z)
+                if ok then
+                    setBadgeState(badge, badgeLabel, "success")
+                    notify("✓ Sampai di " .. spot.name, "success")
+                else
+                    setBadgeState(badge, badgeLabel, "failed")
+                    notify("✗ TP gagal", "error")
+                end
+            end)
+        end)
+
+        badge.MouseEnter:Connect(function()
+            TweenService:Create(badge, TweenInfo.new(0.12),
+                {BackgroundTransparency = -0.1}):Play()
+            TweenService:Create(rowStroke, TweenInfo.new(0.12),
+                {Transparency = 0.4}):Play()
+        end)
+
+        badge.MouseLeave:Connect(function()
+            TweenService:Create(badge, TweenInfo.new(0.12),
+                {BackgroundTransparency = 0.05}):Play()
+            TweenService:Create(rowStroke, TweenInfo.new(0.12),
+                {Transparency = 0.85}):Play()
+        end)
+
+        return row
+    end
+
+    -- ══════════════════════════════════════════════
+    -- MAP CARD BUILDER — dropdown expand/collapse
+    -- ══════════════════════════════════════════════
+    local SPOT_H = IS_MOBILE and 62 or 68
+    local SPOT_GAP = 6
+    local HEADER_H = IS_MOBILE and 62 or 68
 
     local function buildMapCard(mapData, order)
         local container = Instance.new("Frame")
-        container.Size = UDim2.new(1, -4, 0, IS_MOBILE and 62 or 68)
+        container.Name = "Map_" .. mapData.name
+        container.Size = UDim2.new(1, -4, 0, HEADER_H)
         container.BackgroundTransparency = 1
         container.ClipsDescendants = true
         container.LayoutOrder = order
@@ -8631,13 +8865,13 @@ do
         container.Parent = aList
 
         local cLayout = Instance.new("UIListLayout")
-        cLayout.Padding = UDim.new(0, 6)
+        cLayout.Padding = UDim.new(0, SPOT_GAP)
         cLayout.SortOrder = Enum.SortOrder.LayoutOrder
         cLayout.Parent = container
 
-        -- HEADER CARD
+        -- ═══ HEADER CARD (klik buat expand) ═══
         local mapCard = Instance.new("Frame")
-        mapCard.Size = UDim2.new(1, 0, 0, IS_MOBILE and 62 or 68)
+        mapCard.Size = UDim2.new(1, 0, 0, HEADER_H)
         mapCard.BackgroundColor3 = C.Surface2
         mapCard.BackgroundTransparency = 0.05
         mapCard.BorderSizePixel = 0
@@ -8657,57 +8891,87 @@ do
         ms.Parent = mapCard
         registerTheme(ms, "Accent", "Color")
 
-        local iSz = IS_MOBILE and 42 or 46
+        -- icon ring + box bulat (sama style TpPlayer)
+        local iSz = IS_MOBILE and 46 or 50
+
+        local iRing = Instance.new("Frame")
+        iRing.Size = UDim2.fromOffset(iSz + 4, iSz + 4)
+        iRing.Position = UDim2.new(0, 8, 0.5, -(iSz + 4) / 2)
+        iRing.BackgroundColor3 = mapData.color
+        iRing.BackgroundTransparency = 0.45
+        iRing.BorderSizePixel = 0
+        iRing.ZIndex = 9
+        iRing.Active = false
+        iRing.Selectable = false
+        iRing.Parent = mapCard
+
+        local irc = Instance.new("UICorner")
+        irc.CornerRadius = UDim.new(1, 0)
+        irc.Parent = iRing
+
         local iBox = Instance.new("Frame")
         iBox.Size = UDim2.fromOffset(iSz, iSz)
         iBox.Position = UDim2.new(0, 10, 0.5, -iSz / 2)
         iBox.BackgroundColor3 = mapData.color
-        iBox.BackgroundTransparency = 0.82
+        iBox.BackgroundTransparency = 0.85
         iBox.BorderSizePixel = 0
         iBox.ZIndex = 10
+        iBox.Active = false
+        iBox.Selectable = false
         iBox.Parent = mapCard
-        local ic = Instance.new("UICorner")
-        ic.CornerRadius = UDim.new(0, 10)
-        ic.Parent = iBox
+
+        local ibc = Instance.new("UICorner")
+        ibc.CornerRadius = UDim.new(1, 0)
+        ibc.Parent = iBox
 
         local iLbl = Instance.new("TextLabel")
         iLbl.Size = UDim2.fromScale(1, 1)
         iLbl.BackgroundTransparency = 1
         iLbl.Text = mapData.icon
         iLbl.Font = Enum.Font.GothamBold
-        iLbl.TextSize = IS_MOBILE and 20 or 22
+        iLbl.TextSize = IS_MOBILE and 22 or 24
+        iLbl.Active = false
+        iLbl.Selectable = false
         iLbl.ZIndex = 11
         iLbl.Parent = iBox
 
+        -- nama map + jumlah spot
+        local textX = 10 + iSz + 12
+
         local nLbl = Instance.new("TextLabel")
-        nLbl.Size = UDim2.new(1, -(iSz + 90), 0, 22)
-        nLbl.Position = UDim2.fromOffset(iSz + 20, IS_MOBILE and 12 or 15)
+        nLbl.Size = UDim2.new(1, -(textX + 60), 0, 22)
+        nLbl.Position = UDim2.fromOffset(textX, IS_MOBILE and 10 or 13)
         nLbl.BackgroundTransparency = 1
         nLbl.Text = mapData.name
         nLbl.TextColor3 = C.Text
         nLbl.Font = Enum.Font.GothamBold
         nLbl.TextSize = IS_MOBILE and 12 or 13
         nLbl.TextXAlignment = Enum.TextXAlignment.Left
+        nLbl.Active = false
+        nLbl.Selectable = false
         nLbl.ZIndex = 10
         nLbl.Parent = mapCard
         registerTheme(nLbl, "Text", "TextColor3")
 
         local sLbl = Instance.new("TextLabel")
-        sLbl.Size = UDim2.new(1, -(iSz + 90), 0, 16)
-        sLbl.Position = UDim2.fromOffset(iSz + 20, IS_MOBILE and 34 or 39)
+        sLbl.Size = UDim2.new(1, -(textX + 60), 0, 16)
+        sLbl.Position = UDim2.fromOffset(textX, IS_MOBILE and 32 or 37)
         sLbl.BackgroundTransparency = 1
-        sLbl.Text = #mapData.spots .. " spots"
+        sLbl.Text = #mapData.spots .. " spot tersedia"
         sLbl.TextColor3 = C.Muted
         sLbl.Font = Enum.Font.GothamSemibold
         sLbl.TextSize = IS_MOBILE and 9 or 10
         sLbl.TextXAlignment = Enum.TextXAlignment.Left
+        sLbl.Active = false
+        sLbl.Selectable = false
         sLbl.ZIndex = 10
         sLbl.Parent = mapCard
         registerTheme(sLbl, "Muted", "TextColor3")
 
+        -- arrow indicator
         local arrow = Instance.new("TextButton")
         arrow.Size = UDim2.fromOffset(32, 32)
-        arrow.Position = UDim2.new(1, -40, 0.5, -16)
+        arrow.Position = UDim2.new(1, -42, 0.5, -16)
         arrow.BackgroundColor3 = C.Surface3
         arrow.BackgroundTransparency = 0.3
         arrow.BorderSizePixel = 0
@@ -8716,15 +8980,17 @@ do
         arrow.Font = Enum.Font.GothamBold
         arrow.TextSize = IS_MOBILE and 12 or 13
         arrow.AutoButtonColor = false
+        arrow.Active = true
+        arrow.Selectable = true
         arrow.ZIndex = 10
         arrow.Parent = mapCard
         registerTheme(arrow, "Surface3", "BackgroundColor3")
         registerTheme(arrow, "Text", "TextColor3")
-        local ac = Instance.new("UICorner")
-        ac.CornerRadius = UDim.new(1, 0)
-        ac.Parent = arrow
+        local arc = Instance.new("UICorner")
+        arc.CornerRadius = UDim.new(1, 0)
+        arc.Parent = arrow
 
-        -- SPOT LIST
+        -- ═══ SPOT LIST (collapsed) ═══
         local spotList = Instance.new("Frame")
         spotList.Size = UDim2.new(1, 0, 0, 0)
         spotList.BackgroundTransparency = 1
@@ -8735,168 +9001,37 @@ do
         spotList.Parent = container
 
         local spLayout = Instance.new("UIListLayout")
-        spLayout.Padding = UDim.new(0, 5)
+        spLayout.Padding = UDim.new(0, SPOT_GAP)
         spLayout.SortOrder = Enum.SortOrder.LayoutOrder
         spLayout.Parent = spotList
 
         for i, spot in ipairs(mapData.spots) do
-            local sBtn = Instance.new("TextButton")
-            sBtn.Size = UDim2.new(1, 0, 0, SPOT_H)
-            sBtn.BackgroundColor3 = C.Surface3
-            sBtn.BackgroundTransparency = 0.15
-            sBtn.BorderSizePixel = 0
-            sBtn.Text = ""
-            sBtn.AutoButtonColor = false
-            sBtn.LayoutOrder = i
-            sBtn.ZIndex = 10
-            sBtn.Parent = spotList
-            registerTheme(sBtn, "Surface3", "BackgroundColor3")
-
-            local sc = Instance.new("UICorner")
-            sc.CornerRadius = UDim.new(0, 10)
-            sc.Parent = sBtn
-
-            local ss = Instance.new("UIStroke")
-            ss.Color = mapData.color
-            ss.Thickness = 1
-            ss.Transparency = 0.7
-            ss.Parent = sBtn
-
-            local dot = Instance.new("Frame")
-            dot.Size = UDim2.fromOffset(8, 8)
-            dot.Position = UDim2.new(0, 14, 0.5, -4)
-            dot.BackgroundColor3 = mapData.color
-            dot.BorderSizePixel = 0
-            dot.ZIndex = 11
-            dot.Parent = sBtn
-            local dc = Instance.new("UICorner")
-            dc.CornerRadius = UDim.new(1, 0)
-            dc.Parent = dot
-
-            local sName = Instance.new("TextLabel")
-            sName.Size = UDim2.new(1, -110, 0, 20)
-            sName.Position = UDim2.fromOffset(28, IS_MOBILE and 6 or 8)
-            sName.BackgroundTransparency = 1
-            sName.Text = spot.name
-            sName.TextColor3 = C.Text
-            sName.Font = Enum.Font.GothamBold
-            sName.TextSize = IS_MOBILE and 11 or 12
-            sName.TextXAlignment = Enum.TextXAlignment.Left
-            sName.ZIndex = 11
-            sName.Parent = sBtn
-            registerTheme(sName, "Text", "TextColor3")
-
-            local sCoord = Instance.new("TextLabel")
-            sCoord.Size = UDim2.new(1, -110, 0, 14)
-            sCoord.Position = UDim2.fromOffset(28, IS_MOBILE and 24 or 27)
-            sCoord.BackgroundTransparency = 1
-            sCoord.Text = string.format("%d, %d, %d", spot.pos.X, spot.pos.Y, spot.pos.Z)
-            sCoord.TextColor3 = C.Muted
-            sCoord.Font = Enum.Font.GothamSemibold
-            sCoord.TextSize = IS_MOBILE and 8 or 9
-            sCoord.TextXAlignment = Enum.TextXAlignment.Left
-            sCoord.ZIndex = 11
-            sCoord.Parent = sBtn
-            registerTheme(sCoord, "Muted", "TextColor3")
-
-            -- TP BADGE
-            local bW = IS_MOBILE and 56 or 62
-            local bH = 26
-            local badge = Instance.new("TextButton")
-            badge.Size = UDim2.fromOffset(bW, bH)
-            badge.Position = UDim2.new(1, -(bW + 10), 0.5, -bH / 2)
-            badge.BackgroundColor3 = mapData.color
-            badge.BackgroundTransparency = 0.1
-            badge.BorderSizePixel = 0
-            badge.Text = ""
-            badge.AutoButtonColor = false
-            badge.ZIndex = 12
-            badge.Parent = sBtn
-
-            local bc = Instance.new("UICorner")
-            bc.CornerRadius = UDim.new(1, 0)
-            bc.Parent = badge
-
-            local bLbl = Instance.new("TextLabel")
-            bLbl.Size = UDim2.fromScale(1, 1)
-            bLbl.BackgroundTransparency = 1
-            bLbl.Text = "TP"
-            bLbl.TextColor3 = Color3.new(1, 1, 1)
-            bLbl.Font = Enum.Font.GothamBold
-            bLbl.TextSize = IS_MOBILE and 9 or 10
-            bLbl.ZIndex = 13
-            bLbl.Parent = badge
-
-            local function setBadge(st)
-                if not badge or not badge.Parent then return end
-                if st == "idle" then
-                    TweenService:Create(badge, TweenInfo.new(0.18),
-                        {BackgroundColor3 = mapData.color, BackgroundTransparency = 0.1}):Play()
-                    bLbl.Text = "TP"
-                    bLbl.TextSize = IS_MOBILE and 9 or 10
-                elseif st == "loading" then
-                    TweenService:Create(badge, TweenInfo.new(0.18),
-                        {BackgroundColor3 = Color3.fromRGB(255, 190, 70), BackgroundTransparency = 0}):Play()
-                    bLbl.Text = "..."
-                elseif st == "success" then
-                    TweenService:Create(badge, TweenInfo.new(0.18),
-                        {BackgroundColor3 = Color3.fromRGB(60, 200, 110), BackgroundTransparency = 0}):Play()
-                    bLbl.Text = "✓"
-                    bLbl.TextSize = IS_MOBILE and 12 or 13
-                    task.delay(1.4, function() setBadge("idle") end)
-                elseif st == "failed" then
-                    TweenService:Create(badge, TweenInfo.new(0.18),
-                        {BackgroundColor3 = Color3.fromRGB(230, 70, 70), BackgroundTransparency = 0}):Play()
-                    bLbl.Text = "✗"
-                    bLbl.TextSize = IS_MOBILE and 12 or 13
-                    task.delay(1.4, function() setBadge("idle") end)
-                end
-            end
-
-            badge.MouseButton1Click:Connect(function()
-                setBadge("loading")
-                notify("🚶 TP ke " .. mapData.name .. " • " .. spot.name, "info")
-                task.spawn(function()
-                    local ok = areaTpStep(spot.pos, mapData.name .. " " .. spot.name)
-                    if ok then
-                        setBadge("success")
-                        notify("✓ Sampai di " .. spot.name, "success")
-                    else
-                        setBadge("failed")
-                    end
-                end)
-            end)
-
-            badge.MouseEnter:Connect(function()
-                TweenService:Create(badge, TweenInfo.new(0.12), {BackgroundTransparency = -0.1}):Play()
-            end)
-            badge.MouseLeave:Connect(function()
-                TweenService:Create(badge, TweenInfo.new(0.12), {BackgroundTransparency = 0.1}):Play()
-            end)
+            createSpotRow(spot, mapData, i, spotList)
         end
 
-        -- EXPAND/COLLAPSE
+        -- ═══ EXPAND / COLLAPSE ═══
         local expanded = false
-        local hH = IS_MOBILE and 62 or 68
-        local gap = 6
         local function toggle()
             expanded = not expanded
             arrow.Text = expanded and "▲" or "▼"
             TweenService:Create(ms, TweenInfo.new(0.2),
                 {Transparency = expanded and 0.4 or 0.85}):Play()
 
-            local listH = #mapData.spots * SPOT_H + math.max(0, #mapData.spots - 1) * 5
+            local listH = #mapData.spots * SPOT_H + math.max(0, #mapData.spots - 1) * SPOT_GAP
             if expanded then
                 spotList.Visible = true
                 spotList.Size = UDim2.new(1, 0, 0, listH)
             end
             TweenService:Create(container, TweenInfo.new(0.2), {
-                Size = expanded and UDim2.new(1, -4, 0, hH + gap + listH)
-                    or UDim2.new(1, -4, 0, hH)
+                Size = expanded and UDim2.new(1, -4, 0, HEADER_H + SPOT_GAP + listH)
+                    or UDim2.new(1, -4, 0, HEADER_H)
             }):Play()
             if not expanded then
-                task.delay(0.2, function()
-                    if not expanded then spotList.Size = UDim2.new(1, 0, 0, 0); spotList.Visible = false end
+                task.delay(0.22, function()
+                    if not expanded then
+                        spotList.Size = UDim2.new(1, 0, 0, 0)
+                        spotList.Visible = false
+                    end
                 end)
             end
         end
