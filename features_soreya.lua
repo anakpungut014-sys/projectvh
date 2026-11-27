@@ -165,22 +165,30 @@ local FishSpeed = {
     tapsPerFrame = 12,
 }
 
--- ⭐ Speed turbo (sesuai input user)
+-- ⭐ Speed turbo — baca preset (taps/loop) kalau ada
 local function applyTurboSpeed(v)
     v = clampSpeed(v)
     FishSpeed.castCooldown = v
-    if v <= 0.15 then
+    if Shared and Shared.AutoFish_Taps and Shared.AutoFish_Loop then
+        -- ⭐ PRESET MODE: pakai taps/loop dari preset
         FishSpeed.castPowerWait = 0
-        FishSpeed.loopDelay = 0.02
-        FishSpeed.tapsPerFrame = 12
-    elseif v <= 0.3 then
-        FishSpeed.castPowerWait = 0.05
-        FishSpeed.loopDelay = 0.03
-        FishSpeed.tapsPerFrame = 9
+        FishSpeed.tapsPerFrame = tonumber(Shared.AutoFish_Taps) or 12
+        FishSpeed.loopDelay = tonumber(Shared.AutoFish_Loop) or 0.02
     else
-        FishSpeed.castPowerWait = 0.1
-        FishSpeed.loopDelay = 0.05
-        FishSpeed.tapsPerFrame = 5
+        -- ⭐ FALLBACK: tuning otomatis
+        if v <= 0.15 then
+            FishSpeed.castPowerWait = 0
+            FishSpeed.loopDelay = 0.02
+            FishSpeed.tapsPerFrame = 12
+        elseif v <= 0.3 then
+            FishSpeed.castPowerWait = 0.05
+            FishSpeed.loopDelay = 0.03
+            FishSpeed.tapsPerFrame = 9
+        else
+            FishSpeed.castPowerWait = 0.1
+            FishSpeed.loopDelay = 0.05
+            FishSpeed.tapsPerFrame = 5
+        end
     end
 end
 
@@ -201,11 +209,32 @@ local function refreshSpeed()
     end
 end
 
--- ⭐ Dipanggil dari UI pas user commit input speed
+-- ⭐ Legacy (input manual)
 _G.VRILZ_ApplyFishSpeed = function(v)
     if not isPremiumUser() then return end
-    if Shared then Shared.AutoFish_Speed = clampSpeed(v) end
+    if Shared then
+        Shared.AutoFish_Speed = clampSpeed(v)
+        -- reset preset biar fallback
+        Shared.AutoFish_Taps = nil
+        Shared.AutoFish_Loop = nil
+    end
     refreshSpeed()
+end
+
+-- ⭐ BARU: dipanggil dari dropdown preset
+_G.VRILZ_ApplyFishPreset = function(cd, taps, loopDelay)
+    if not isPremiumUser() then return end
+    if Shared then
+        Shared.AutoFish_Speed = clampSpeed(cd)
+        Shared.AutoFish_Taps  = tonumber(taps) or 12
+        Shared.AutoFish_Loop  = tonumber(loopDelay) or 0.02
+        Shared.AutoFish_Turbo = true   -- ⭐ pilih preset = Turbo AUTO ON
+    end
+    -- Apply langsung
+    FishSpeed.castCooldown = clampSpeed(cd)
+    FishSpeed.castPowerWait = 0
+    FishSpeed.tapsPerFrame = tonumber(taps) or 12
+    FishSpeed.loopDelay = tonumber(loopDelay) or 0.02
 end
 
 -- Init awal
@@ -642,17 +671,13 @@ local function initAutoFish()
             -- ⭐ re-check Turbo + speed tiap 0.3s (biar kalau user ganti input, langsung kepake)
             refreshSpeed()
 
-            -- ⭐ PRIORITAS 1: kalau AutoFish OFF tapi Turbo masih ON → matiin Turbo
-            --    (biar user bisa matiin AutoFish tanpa dipaksa ON balik)
-            if Shared.AutoFish_Enabled ~= true
-                and Shared.AutoFish_Turbo == true then
-                Shared.AutoFish_Turbo = false
-            end
-            -- ⭐ PRIORITAS 2: kalau Turbo ON tapi AutoFish OFF → paksa AutoFish ON
+            -- ⭐ Turbo ON tapi AutoFish OFF → paksa AutoFish ON
             --    (turbo butuh AutoFish jalan)
             if isTurboOn() and Shared.AutoFish_Enabled ~= true then
                 Shared.AutoFish_Enabled = true
             end
+            -- ⭐ CATATAN: gak ada auto-OFF Turbo di sini
+            --    biar user bisa manual OFF toggle Turbo kapan aja
 
             local wantOn = (Shared.AutoFish_Enabled == true)
             if wantOn ~= FishState.enabled then
