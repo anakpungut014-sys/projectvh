@@ -5685,20 +5685,24 @@ do
             end
 
             makeDropdownGlobal(presetHolder, PRESET_NAMES, curPreset, function(selected)
-                local p = PRESETS[selected]
-                if not p then return end
-                if Shared then
-                    Shared.AutoFish_Speed = p.cd
-                    Shared.AutoFish_Taps  = p.taps
-                    Shared.AutoFish_Loop  = p.loop
-                    Shared.AutoFish_PresetName = p.label
-                end
-                -- Apply langsung ke features
-                if _G.VRILZ_ApplyFishPreset then
-                    pcall(_G.VRILZ_ApplyFishPreset, p.cd, p.taps, p.loop)
-                end
-                notify("⚡ Speed: " .. p.label, "success")
-            end)
+    local p = PRESETS[selected]
+    if not p then return end
+    if Shared then
+        Shared.AutoFish_Speed = p.cd
+        Shared.AutoFish_Taps  = p.taps
+        Shared.AutoFish_Loop  = p.loop
+        Shared.AutoFish_PresetName = p.label
+    end
+    if _G.VRILZ_ApplyFishPreset then
+        pcall(_G.VRILZ_ApplyFishPreset, p.cd, p.taps, p.loop)
+    end
+    -- ⭐ Notif: kasih tau user harus ON Turbo manual
+    if Shared and Shared.AutoFish_Turbo then
+        notify("⚡ Speed: " .. p.label .. " (aktif)", "success")
+    else
+        notify("⚡ Preset: " .. p.label .. " — ON Turbo buat aktifin", "info")
+    end
+end)
 
             -- Info
             local info = Instance.new("TextLabel")
