@@ -5648,7 +5648,8 @@ do
                 if v then
                     notify("⚡ Turbo: ON", "success")
                 else
-                    notify("⚡ Turbo: OFF", "info")
+                    local lastPreset = (Shared and Shared.AutoFish_PresetName) or "Turbo"
+                    notify("⚡ Turbo: OFF (preset " .. lastPreset .. " tersimpan)", "info")
                 end
             end, "AutoFish_Turbo")
 
@@ -5669,11 +5670,18 @@ do
             }
             local PRESET_NAMES = { "🐢 Slow", "🚶 Normal", "🏃 Fast", "⚡ Turbo", "🔥 Insane" }
 
-            -- Cari preset yang cocok dengan Shared sekarang
+                        -- Cari preset yang cocok dengan Shared sekarang (cd + taps + loop)
             local curPreset = "⚡ Turbo"
-            local curCd = (Shared and Shared.AutoFish_Speed) or 0.1
+            local curCd   = (Shared and Shared.AutoFish_Speed) or 0.1
+            local curTaps = (Shared and Shared.AutoFish_Taps) or 12
+            local curLoop = (Shared and Shared.AutoFish_Loop) or 0.02
             for name, p in pairs(PRESETS) do
-                if math.abs(p.cd - curCd) < 0.01 then curPreset = name break end
+                if math.abs(p.cd - curCd) < 0.01
+                   and p.taps == curTaps
+                   and math.abs(p.loop - curLoop) < 0.005 then
+                    curPreset = name
+                    break
+                end
             end
 
             makeDropdownGlobal(presetHolder, PRESET_NAMES, curPreset, function(selected)
