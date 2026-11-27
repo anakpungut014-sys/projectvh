@@ -8381,12 +8381,558 @@ do
     end)
 end
 
+-- ========================================================
+-- 🎯 AREA TELEPORT TAB — all-in-one (UI + Logic)
+-- ========================================================
+do
+    -- ══════════════════════════════════════════════
+    -- LOGIC (langsung di UI, gak perlu file Features)
+    -- ══════════════════════════════════════════════
+    local AreaTP = {
+        enabled       = false,
+        anchorAfter   = true,
+        anchorSeconds = 5,
+        stepDistance  = 40,
+        stepDelay     = 0.03,
+        status        = "⏸️ Idle",
+        busy          = false,
+        anchored      = false,
+    }
+
+    local function areaRoot()
+        local ch = LocalPlayer.Character
+        return ch and ch:FindFirstChild("HumanoidRootPart")
+    end
+
+    local function areaAnchor(seconds)
+        local root = areaRoot()
+        if not root then return false end
+        local hum = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+        local savedWalk, savedJump, savedAnchor = nil, nil, root.Anchored
+        if hum then savedWalk, savedJump = hum.WalkSpeed, hum.JumpPower end
+        root.Anchored = true
+        root.Velocity = Vector3.zero
+        root.AssemblyLinearVelocity = Vector3.zero
+        if hum then hum.WalkSpeed, hum.JumpPower, hum.JumpHeight = 0, 0, 0 end
+        AreaTP.anchored = true
+        task.spawn(function()
+            task.wait(seconds or 5)
+            local r2 = areaRoot()
+            local h2 = LocalPlayer.Character and LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+            if r2 then r2.Anchored = savedAnchor or false end
+            if h2 then
+                if savedWalk then h2.WalkSpeed = savedWalk end
+                if savedJump then h2.JumpPower = savedJump end
+                h2.JumpHeight = savedJump or h2.JumpHeight
+            end
+            AreaTP.anchored = false
+            AreaTP.status = "✅ Anchor selesai"
+        end)
+        return true
+    end
+
+    local function areaTpStep(targetPos, label)
+        if AreaTP.busy then return false end
+        local root = areaRoot()
+        if not root then return false end
+        AreaTP.busy = true
+        AreaTP.status = "🛫 TP by Step → " .. (label or "target")
+        local start = root.Position
+        local total = (targetPos - start).Magnitude
+        local steps = math.max(1, math.ceil(total / math.max(1, AreaTP.stepDistance)))
+        local dir = targetPos - start
+        dir = Vector3.new(dir.X, 0, dir.Z)
+        if dir.Magnitude < 1 then dir = Vector3.new(0, 0, -1) else dir = dir.Unit end
+
+        for i = 1, steps do
+            if not AreaTP.enabled then AreaTP.busy = false; return false end
+            local r = areaRoot()
+            if not r then AreaTP.busy = false; return false end
+            local dist = math.min(AreaTP.stepDistance * i, total)
+            local pos = start + dir * dist
+            pos = Vector3.new(pos.X, targetPos.Y, pos.Z)
+            r.CFrame = CFrame.new(pos)
+            r.Velocity = Vector3.zero
+            r.AssemblyLinearVelocity = Vector3.zero
+            AreaTP.status = string.format("🛫 Step %d/%d → %s", i, steps, label or "target")
+            task.wait(AreaTP.stepDelay)
+        end
+
+        local rF = areaRoot()
+        if rF then
+            rF.CFrame = CFrame.new(targetPos)
+            rF.Velocity = Vector3.zero
+            rF.AssemblyLinearVelocity = Vector3.zero
+        end
+        AreaTP.busy = false
+        AreaTP.status = "✅ Sampai di " .. (label or "target")
+        if AreaTP.anchorAfter then
+            task.wait(0.15)
+            areaAnchor(AreaTP.anchorSeconds)
+        end
+        return true
+    end
+
+    local function areaTpInstant(targetPos, label)
+        local root = areaRoot()
+        if not root then return false end
+        AreaTP.status = "⚡ TP Instant → " .. (label or "target")
+        root.CFrame = CFrame.new(targetPos)
+        root.Velocity = Vector3.zero
+        root.AssemblyLinearVelocity = Vector3.zero
+        if AreaTP.anchorAfter then
+            task.wait(0.15)
+            areaAnchor(AreaTP.anchorSeconds)
+        end
+        return true
+    end
+
+    _G.VRILZ_AreaTP = {
+        TpByStep = function(x, y, z)
+            AreaTP.enabled = true
+            return areaTpStep(Vector3.new(tonumber(x) or 0, tonumber(y) or 0, tonumber(z) or 0), "Coord")
+        end,
+        TpInstant = function(x, y, z)
+            return areaTpInstant(Vector3.new(tonumber(x) or 0, tonumber(y) or 0, tonumber(z) or 0), "Coord")
+        end,
+        AnchorNow = function(sec) return areaAnchor(tonumber(sec) or AreaTP.anchorSeconds) end,
+        SetAnchorAfter = function(b) AreaTP.anchorAfter = b == true end,
+        SetAnchorSeconds = function(s) AreaTP.anchorSeconds = math.max(0, tonumber(s) or 5) end,
+        GetStatus = function() return AreaTP.status end,
+        IsBusy = function() return AreaTP.busy end,
+    }
+
+    -- ══════════════════════════════════════════════
+    -- UI
+    -- ══════════════════════════════════════════════
+    local areaPage = Instance.new("Frame")
+    areaPage.Name = "AreaTp"
+    areaPage.Size = UDim2.fromScale(1, 1)
+    areaPage.BackgroundTransparency = 1
+    areaPage.BorderSizePixel = 0
+    areaPage.Visible = false
+    areaPage.ZIndex = 7
+    areaPage.Parent = pageHolder
+    pages.AreaTp = areaPage
+
+    -- HEADER
+    local hWrap = Instance.new("Frame")
+    hWrap.Size = UDim2.new(1, -20, 0, 48)
+    hWrap.Position = UDim2.fromOffset(10, 6)
+    hWrap.BackgroundTransparency = 1
+    hWrap.ZIndex = 8
+    hWrap.Parent = areaPage
+
+    local hTitle = Instance.new("TextLabel")
+    hTitle.Size = UDim2.new(1, 0, 0, 24)
+    hTitle.BackgroundTransparency = 1
+    hTitle.Text = "🗺️  AREA TELEPORT"
+    hTitle.TextColor3 = C.Text
+    hTitle.Font = Enum.Font.GothamBold
+    hTitle.TextSize = IS_MOBILE and 13 or 15
+    hTitle.TextXAlignment = Enum.TextXAlignment.Left
+    hTitle.ZIndex = 8
+    hTitle.Parent = hWrap
+    registerTheme(hTitle, "Text", "TextColor3")
+
+    local hInfo = Instance.new("TextLabel")
+    hInfo.Size = UDim2.new(1, 0, 0, 18)
+    hInfo.Position = UDim2.fromOffset(0, 24)
+    hInfo.BackgroundTransparency = 1
+    hInfo.Text = "Pilih map → pilih spot → TP"
+    hInfo.TextColor3 = C.Muted
+    hInfo.Font = Enum.Font.GothamSemibold
+    hInfo.TextSize = CFG.FONT_MUTED
+    hInfo.TextXAlignment = Enum.TextXAlignment.Left
+    hInfo.ZIndex = 8
+    hInfo.Parent = hWrap
+    registerTheme(hInfo, "Muted", "TextColor3")
+
+    -- SCROLL LIST
+    local aList = Instance.new("ScrollingFrame")
+    aList.Size = UDim2.new(1, -20, 1, -70)
+    aList.Position = UDim2.fromOffset(10, 60)
+    aList.BackgroundTransparency = 1
+    aList.BorderSizePixel = 0
+    aList.ScrollBarThickness = 4
+    aList.ScrollBarImageColor3 = C.Accent
+    aList.CanvasSize = UDim2.new(0, 0, 0, 0)
+    aList.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    aList.ScrollingDirection = Enum.ScrollingDirection.Y
+    aList.ZIndex = 8
+    aList.Parent = areaPage
+    registerTheme(aList, "Accent", "ScrollBarImageColor3")
+
+    local aLayout = Instance.new("UIListLayout")
+    aLayout.Padding = UDim.new(0, 8)
+    aLayout.SortOrder = Enum.SortOrder.LayoutOrder
+    aLayout.Parent = aList
+
+    local aPad = Instance.new("UIPadding")
+    aPad.PaddingTop = UDim.new(0, 4)
+    aPad.PaddingBottom = UDim.new(0, 10)
+    aPad.Parent = aList
+
+    -- DATA
+    local AREA_DATA = {
+        {
+            name = "Telaga", icon = "🌊", color = Color3.fromRGB(80, 180, 255),
+            spots = {
+                { name = "Spot 1", pos = Vector3.new(0, 0, 0) },
+                { name = "Spot 2", pos = Vector3.new(0, 0, 0) },
+                { name = "Spot 3", pos = Vector3.new(0, 0, 0) },
+                { name = "Core 1", pos = Vector3.new(0, 0, 0) },
+                { name = "Core 2", pos = Vector3.new(0, 0, 0) },
+                { name = "Core 3", pos = Vector3.new(0, 0, 0) },
+                { name = "Fish 1", pos = Vector3.new(0, 0, 0) },
+                { name = "Fish 2", pos = Vector3.new(0, 0, 0) },
+                { name = "Fish 3", pos = Vector3.new(0, 0, 0) },
+            },
+        },
+        {
+            name = "Pantai", icon = "🏖️", color = Color3.fromRGB(255, 200, 80),
+            spots = {
+                { name = "Spot 1", pos = Vector3.new(0, 0, 0) },
+                { name = "Spot 2", pos = Vector3.new(0, 0, 0) },
+                { name = "Spot 3", pos = Vector3.new(0, 0, 0) },
+                { name = "Core 1", pos = Vector3.new(0, 0, 0) },
+                { name = "Core 2", pos = Vector3.new(0, 0, 0) },
+                { name = "Core 3", pos = Vector3.new(0, 0, 0) },
+                { name = "Fish 1", pos = Vector3.new(0, 0, 0) },
+                { name = "Fish 2", pos = Vector3.new(0, 0, 0) },
+                { name = "Fish 3", pos = Vector3.new(0, 0, 0) },
+            },
+        },
+        {
+            name = "Gunung", icon = "⛰️", color = Color3.fromRGB(180, 140, 255),
+            spots = {
+                { name = "Spot 1", pos = Vector3.new(0, 0, 0) },
+                { name = "Spot 2", pos = Vector3.new(0, 0, 0) },
+                { name = "Spot 3", pos = Vector3.new(0, 0, 0) },
+                { name = "Core 1", pos = Vector3.new(0, 0, 0) },
+                { name = "Core 2", pos = Vector3.new(0, 0, 0) },
+                { name = "Core 3", pos = Vector3.new(0, 0, 0) },
+                { name = "Fish 1", pos = Vector3.new(0, 0, 0) },
+                { name = "Fish 2", pos = Vector3.new(0, 0, 0) },
+                { name = "Fish 3", pos = Vector3.new(0, 0, 0) },
+            },
+        },
+    }
+
+    local SPOT_H = IS_MOBILE and 44 or 48
+
+    local function buildMapCard(mapData, order)
+        local container = Instance.new("Frame")
+        container.Size = UDim2.new(1, -4, 0, IS_MOBILE and 62 or 68)
+        container.BackgroundTransparency = 1
+        container.ClipsDescendants = true
+        container.LayoutOrder = order
+        container.ZIndex = 9
+        container.Parent = aList
+
+        local cLayout = Instance.new("UIListLayout")
+        cLayout.Padding = UDim.new(0, 6)
+        cLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        cLayout.Parent = container
+
+        -- HEADER CARD
+        local mapCard = Instance.new("Frame")
+        mapCard.Size = UDim2.new(1, 0, 0, IS_MOBILE and 62 or 68)
+        mapCard.BackgroundColor3 = C.Surface2
+        mapCard.BackgroundTransparency = 0.05
+        mapCard.BorderSizePixel = 0
+        mapCard.LayoutOrder = 1
+        mapCard.ZIndex = 9
+        mapCard.Parent = container
+        registerTheme(mapCard, "Surface2", "BackgroundColor3")
+
+        local mc = Instance.new("UICorner")
+        mc.CornerRadius = UDim.new(0, 14)
+        mc.Parent = mapCard
+
+        local ms = Instance.new("UIStroke")
+        ms.Color = C.Accent
+        ms.Thickness = 1
+        ms.Transparency = 0.85
+        ms.Parent = mapCard
+        registerTheme(ms, "Accent", "Color")
+
+        local iSz = IS_MOBILE and 42 or 46
+        local iBox = Instance.new("Frame")
+        iBox.Size = UDim2.fromOffset(iSz, iSz)
+        iBox.Position = UDim2.new(0, 10, 0.5, -iSz / 2)
+        iBox.BackgroundColor3 = mapData.color
+        iBox.BackgroundTransparency = 0.82
+        iBox.BorderSizePixel = 0
+        iBox.ZIndex = 10
+        iBox.Parent = mapCard
+        local ic = Instance.new("UICorner")
+        ic.CornerRadius = UDim.new(0, 10)
+        ic.Parent = iBox
+
+        local iLbl = Instance.new("TextLabel")
+        iLbl.Size = UDim2.fromScale(1, 1)
+        iLbl.BackgroundTransparency = 1
+        iLbl.Text = mapData.icon
+        iLbl.Font = Enum.Font.GothamBold
+        iLbl.TextSize = IS_MOBILE and 20 or 22
+        iLbl.ZIndex = 11
+        iLbl.Parent = iBox
+
+        local nLbl = Instance.new("TextLabel")
+        nLbl.Size = UDim2.new(1, -(iSz + 90), 0, 22)
+        nLbl.Position = UDim2.fromOffset(iSz + 20, IS_MOBILE and 12 or 15)
+        nLbl.BackgroundTransparency = 1
+        nLbl.Text = mapData.name
+        nLbl.TextColor3 = C.Text
+        nLbl.Font = Enum.Font.GothamBold
+        nLbl.TextSize = IS_MOBILE and 12 or 13
+        nLbl.TextXAlignment = Enum.TextXAlignment.Left
+        nLbl.ZIndex = 10
+        nLbl.Parent = mapCard
+        registerTheme(nLbl, "Text", "TextColor3")
+
+        local sLbl = Instance.new("TextLabel")
+        sLbl.Size = UDim2.new(1, -(iSz + 90), 0, 16)
+        sLbl.Position = UDim2.fromOffset(iSz + 20, IS_MOBILE and 34 or 39)
+        sLbl.BackgroundTransparency = 1
+        sLbl.Text = #mapData.spots .. " spots"
+        sLbl.TextColor3 = C.Muted
+        sLbl.Font = Enum.Font.GothamSemibold
+        sLbl.TextSize = IS_MOBILE and 9 or 10
+        sLbl.TextXAlignment = Enum.TextXAlignment.Left
+        sLbl.ZIndex = 10
+        sLbl.Parent = mapCard
+        registerTheme(sLbl, "Muted", "TextColor3")
+
+        local arrow = Instance.new("TextButton")
+        arrow.Size = UDim2.fromOffset(32, 32)
+        arrow.Position = UDim2.new(1, -40, 0.5, -16)
+        arrow.BackgroundColor3 = C.Surface3
+        arrow.BackgroundTransparency = 0.3
+        arrow.BorderSizePixel = 0
+        arrow.Text = "▼"
+        arrow.TextColor3 = C.Text
+        arrow.Font = Enum.Font.GothamBold
+        arrow.TextSize = IS_MOBILE and 12 or 13
+        arrow.AutoButtonColor = false
+        arrow.ZIndex = 10
+        arrow.Parent = mapCard
+        registerTheme(arrow, "Surface3", "BackgroundColor3")
+        registerTheme(arrow, "Text", "TextColor3")
+        local ac = Instance.new("UICorner")
+        ac.CornerRadius = UDim.new(1, 0)
+        ac.Parent = arrow
+
+        -- SPOT LIST
+        local spotList = Instance.new("Frame")
+        spotList.Size = UDim2.new(1, 0, 0, 0)
+        spotList.BackgroundTransparency = 1
+        spotList.ClipsDescendants = true
+        spotList.LayoutOrder = 2
+        spotList.Visible = false
+        spotList.ZIndex = 9
+        spotList.Parent = container
+
+        local spLayout = Instance.new("UIListLayout")
+        spLayout.Padding = UDim.new(0, 5)
+        spLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        spLayout.Parent = spotList
+
+        for i, spot in ipairs(mapData.spots) do
+            local sBtn = Instance.new("TextButton")
+            sBtn.Size = UDim2.new(1, 0, 0, SPOT_H)
+            sBtn.BackgroundColor3 = C.Surface3
+            sBtn.BackgroundTransparency = 0.15
+            sBtn.BorderSizePixel = 0
+            sBtn.Text = ""
+            sBtn.AutoButtonColor = false
+            sBtn.LayoutOrder = i
+            sBtn.ZIndex = 10
+            sBtn.Parent = spotList
+            registerTheme(sBtn, "Surface3", "BackgroundColor3")
+
+            local sc = Instance.new("UICorner")
+            sc.CornerRadius = UDim.new(0, 10)
+            sc.Parent = sBtn
+
+            local ss = Instance.new("UIStroke")
+            ss.Color = mapData.color
+            ss.Thickness = 1
+            ss.Transparency = 0.7
+            ss.Parent = sBtn
+
+            local dot = Instance.new("Frame")
+            dot.Size = UDim2.fromOffset(8, 8)
+            dot.Position = UDim2.new(0, 14, 0.5, -4)
+            dot.BackgroundColor3 = mapData.color
+            dot.BorderSizePixel = 0
+            dot.ZIndex = 11
+            dot.Parent = sBtn
+            local dc = Instance.new("UICorner")
+            dc.CornerRadius = UDim.new(1, 0)
+            dc.Parent = dot
+
+            local sName = Instance.new("TextLabel")
+            sName.Size = UDim2.new(1, -110, 0, 20)
+            sName.Position = UDim2.fromOffset(28, IS_MOBILE and 6 or 8)
+            sName.BackgroundTransparency = 1
+            sName.Text = spot.name
+            sName.TextColor3 = C.Text
+            sName.Font = Enum.Font.GothamBold
+            sName.TextSize = IS_MOBILE and 11 or 12
+            sName.TextXAlignment = Enum.TextXAlignment.Left
+            sName.ZIndex = 11
+            sName.Parent = sBtn
+            registerTheme(sName, "Text", "TextColor3")
+
+            local sCoord = Instance.new("TextLabel")
+            sCoord.Size = UDim2.new(1, -110, 0, 14)
+            sCoord.Position = UDim2.fromOffset(28, IS_MOBILE and 24 or 27)
+            sCoord.BackgroundTransparency = 1
+            sCoord.Text = string.format("%d, %d, %d", spot.pos.X, spot.pos.Y, spot.pos.Z)
+            sCoord.TextColor3 = C.Muted
+            sCoord.Font = Enum.Font.GothamSemibold
+            sCoord.TextSize = IS_MOBILE and 8 or 9
+            sCoord.TextXAlignment = Enum.TextXAlignment.Left
+            sCoord.ZIndex = 11
+            sCoord.Parent = sBtn
+            registerTheme(sCoord, "Muted", "TextColor3")
+
+            -- TP BADGE
+            local bW = IS_MOBILE and 56 or 62
+            local bH = 26
+            local badge = Instance.new("TextButton")
+            badge.Size = UDim2.fromOffset(bW, bH)
+            badge.Position = UDim2.new(1, -(bW + 10), 0.5, -bH / 2)
+            badge.BackgroundColor3 = mapData.color
+            badge.BackgroundTransparency = 0.1
+            badge.BorderSizePixel = 0
+            badge.Text = ""
+            badge.AutoButtonColor = false
+            badge.ZIndex = 12
+            badge.Parent = sBtn
+
+            local bc = Instance.new("UICorner")
+            bc.CornerRadius = UDim.new(1, 0)
+            bc.Parent = badge
+
+            local bLbl = Instance.new("TextLabel")
+            bLbl.Size = UDim2.fromScale(1, 1)
+            bLbl.BackgroundTransparency = 1
+            bLbl.Text = "TP"
+            bLbl.TextColor3 = Color3.new(1, 1, 1)
+            bLbl.Font = Enum.Font.GothamBold
+            bLbl.TextSize = IS_MOBILE and 9 or 10
+            bLbl.ZIndex = 13
+            bLbl.Parent = badge
+
+            local function setBadge(st)
+                if not badge or not badge.Parent then return end
+                if st == "idle" then
+                    TweenService:Create(badge, TweenInfo.new(0.18),
+                        {BackgroundColor3 = mapData.color, BackgroundTransparency = 0.1}):Play()
+                    bLbl.Text = "TP"
+                    bLbl.TextSize = IS_MOBILE and 9 or 10
+                elseif st == "loading" then
+                    TweenService:Create(badge, TweenInfo.new(0.18),
+                        {BackgroundColor3 = Color3.fromRGB(255, 190, 70), BackgroundTransparency = 0}):Play()
+                    bLbl.Text = "..."
+                elseif st == "success" then
+                    TweenService:Create(badge, TweenInfo.new(0.18),
+                        {BackgroundColor3 = Color3.fromRGB(60, 200, 110), BackgroundTransparency = 0}):Play()
+                    bLbl.Text = "✓"
+                    bLbl.TextSize = IS_MOBILE and 12 or 13
+                    task.delay(1.4, function() setBadge("idle") end)
+                elseif st == "failed" then
+                    TweenService:Create(badge, TweenInfo.new(0.18),
+                        {BackgroundColor3 = Color3.fromRGB(230, 70, 70), BackgroundTransparency = 0}):Play()
+                    bLbl.Text = "✗"
+                    bLbl.TextSize = IS_MOBILE and 12 or 13
+                    task.delay(1.4, function() setBadge("idle") end)
+                end
+            end
+
+            badge.MouseButton1Click:Connect(function()
+                setBadge("loading")
+                notify("🚶 TP ke " .. mapData.name .. " • " .. spot.name, "info")
+                task.spawn(function()
+                    local ok = areaTpStep(spot.pos, mapData.name .. " " .. spot.name)
+                    if ok then
+                        setBadge("success")
+                        notify("✓ Sampai di " .. spot.name, "success")
+                    else
+                        setBadge("failed")
+                    end
+                end)
+            end)
+
+            badge.MouseEnter:Connect(function()
+                TweenService:Create(badge, TweenInfo.new(0.12), {BackgroundTransparency = -0.1}):Play()
+            end)
+            badge.MouseLeave:Connect(function()
+                TweenService:Create(badge, TweenInfo.new(0.12), {BackgroundTransparency = 0.1}):Play()
+            end)
+        end
+
+        -- EXPAND/COLLAPSE
+        local expanded = false
+        local hH = IS_MOBILE and 62 or 68
+        local gap = 6
+        local function toggle()
+            expanded = not expanded
+            arrow.Text = expanded and "▲" or "▼"
+            TweenService:Create(ms, TweenInfo.new(0.2),
+                {Transparency = expanded and 0.4 or 0.85}):Play()
+
+            local listH = #mapData.spots * SPOT_H + math.max(0, #mapData.spots - 1) * 5
+            if expanded then
+                spotList.Visible = true
+                spotList.Size = UDim2.new(1, 0, 0, listH)
+            end
+            TweenService:Create(container, TweenInfo.new(0.2), {
+                Size = expanded and UDim2.new(1, -4, 0, hH + gap + listH)
+                    or UDim2.new(1, -4, 0, hH)
+            }):Play()
+            if not expanded then
+                task.delay(0.2, function()
+                    if not expanded then spotList.Size = UDim2.new(1, 0, 0, 0); spotList.Visible = false end
+                end)
+            end
+        end
+
+        arrow.MouseButton1Click:Connect(toggle)
+        mapCard.InputBegan:Connect(function(input)
+            if input.UserInputType == Enum.UserInputType.MouseButton1
+                or input.UserInputType == Enum.UserInputType.Touch then
+                if input.Position.X < mapCard.AbsolutePosition.X + mapCard.AbsoluteSize.X - 50 then
+                    toggle()
+                end
+            end
+        end)
+
+        mapCard.MouseEnter:Connect(function()
+            TweenService:Create(ms, TweenInfo.new(0.12), {Transparency = 0.4}):Play()
+        end)
+        mapCard.MouseLeave:Connect(function()
+            if not expanded then
+                TweenService:Create(ms, TweenInfo.new(0.12), {Transparency = 0.85}):Play()
+            end
+        end)
+    end
+
+    for i, mapData in ipairs(AREA_DATA) do
+        buildMapCard(mapData, i)
+    end
+end
+
 registerTab("Info", "129516985087314", "Info", true)
 registerTab("AutoSummit", "127064137622496", "Auto Summit", true)
 registerTab("AutoFish", "118895892824960", "Auto Fish", true)
 registerTab("Shop", "101498199599518", "Shop", true)
 registerTab("AutoJoin", "129516985087314", "Auto Join", true)
 registerTab("TpPlayer", "85209430814229", "Tp Player", true)
+registerTab("AreaTp",   "129516985087314", "Area TP",   true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Webhook", "78129393420657", "Webhook", true)
 registerTab("Settings", "97834340359225", "Settings", true)
