@@ -5545,6 +5545,9 @@ do
     local fishPage, fishLeft, fishRight = createTwoColumnPage("AutoFish")
     pages.AutoFish = fishPage
 
+    -- ═══════════════════════════════════════════
+    -- KIRI: card Auto Fish (toggle tunggal)
+    -- ═══════════════════════════════════════════
     local fishCard, fishContent = makeCard(fishLeft, "Auto Fish", 1)
 
     local fishStatusLbl = Instance.new("TextLabel")
@@ -5581,6 +5584,7 @@ do
         end
     end)
 
+    -- ⭐ Toggle tunggal: AutoFish (Turbo otomatis kalau premium)
     makeToggle(fishContent, "Enable Auto Fish (ALL)", false, function(v)
         if v then
             notify("🎣 Auto Fish: ON", "success")
@@ -5589,10 +5593,190 @@ do
         end
     end, "AutoFish_Enabled")
 
-    makeToggle(fishContent, "⚡ Turbo Reel", true, function(v)
-        local FS = _G.VRILZ_FishState
-        if FS then FS.turboReel = v end
-    end, "AutoFish_Turbo")
+    -- ═══════════════════════════════════════════
+    -- KANAN: card AUTO TURBO (premium / locked)
+    -- ═══════════════════════════════════════════
+    local turboCard, turboContent = makeCard(fishRight, "⚡ Auto Turbo", 1)
+
+    -- ⭐ Fungsi cek premium (sama kayak di features)
+    local function _isPremUser()
+        if LocalPlayer.UserId == OWNER_USERID then return true end
+        if Shared and Shared.KeyType then
+            local kt = tostring(Shared.KeyType):upper()
+            return kt == "PREMIUM" or kt == "OWNER" or kt == "VIP"
+        end
+        return false
+    end
+
+    -- Container buat rebuild isi (biar bisa refresh kalau key berubah)
+    local turboContainer = Instance.new("Frame")
+    turboContainer.Size = UDim2.new(1, 0, 0, 0)
+    turboContainer.AutomaticSize = Enum.AutomaticSize.Y
+    turboContainer.BackgroundTransparency = 1
+    turboContainer.ZIndex = 3
+    turboContainer.Parent = turboContent
+
+    local turboLayout = Instance.new("UIListLayout", turboContainer)
+    turboLayout.Padding = UDim.new(0, CFG.CARD_GAP)
+    turboLayout.SortOrder = Enum.SortOrder.LayoutOrder
+
+    local function rebuildTurbo()
+        -- Hapus isi lama
+        for _, c in ipairs(turboContainer:GetChildren()) do
+            if c:IsA("GuiObject") then c:Destroy() end
+        end
+
+        if _isPremUser() then
+            -- ═══ PREMIUM: tampilkan status Turbo aktif ═══
+            local statusFrame = Instance.new("Frame")
+            statusFrame.Size = UDim2.new(1, 0, 0, 60)
+            statusFrame.BackgroundColor3 = C.Surface3
+            statusFrame.BackgroundTransparency = 0.35
+            statusFrame.BorderSizePixel = 0
+            statusFrame.LayoutOrder = 1
+            statusFrame.ZIndex = 3
+            statusFrame.Parent = turboContainer
+            registerTheme(statusFrame, "Surface3", "BackgroundColor3")
+
+            local sc = Instance.new("UICorner")
+            sc.CornerRadius = UDim.new(0, 8)
+            sc.Parent = statusFrame
+
+            local sStroke = Instance.new("UIStroke")
+            sStroke.Color = C.Accent
+            sStroke.Thickness = 1.4
+            sStroke.Transparency = 0.2
+            sStroke.Parent = statusFrame
+            registerTheme(sStroke, "Accent", "Color")
+
+            local glowIcon = Instance.new("TextLabel")
+            glowIcon.Size = UDim2.fromOffset(28, 28)
+            glowIcon.Position = UDim2.fromOffset(10, 16)
+            glowIcon.BackgroundTransparency = 1
+            glowIcon.Text = "⚡"
+            glowIcon.TextColor3 = C.Accent2
+            glowIcon.Font = Enum.Font.GothamBold
+            glowIcon.TextSize = 20
+            glowIcon.ZIndex = 4
+            glowIcon.Parent = statusFrame
+
+            local title = Instance.new("TextLabel")
+            title.Size = UDim2.new(1, -50, 0, 18)
+            title.Position = UDim2.fromOffset(42, 14)
+            title.BackgroundTransparency = 1
+            title.Text = "AUTO TURBO ACTIVE"
+            title.TextColor3 = C.Accent2
+            title.Font = Enum.Font.GothamBold
+            title.TextSize = CFG.FONT_LABEL
+            title.TextXAlignment = Enum.TextXAlignment.Left
+            title.ZIndex = 4
+            title.Parent = statusFrame
+            registerTheme(title, "Accent2", "TextColor3")
+
+            local desc = Instance.new("TextLabel")
+            desc.Size = UDim2.new(1, -50, 0, 16)
+            desc.Position = UDim2.fromOffset(42, 32)
+            desc.BackgroundTransparency = 1
+            desc.Text = "Premium • Speed boost aktif"
+            desc.TextColor3 = C.Muted
+            desc.Font = Enum.Font.GothamSemibold
+            desc.TextSize = CFG.FONT_MUTED
+            desc.TextXAlignment = Enum.TextXAlignment.Left
+            desc.ZIndex = 4
+            desc.Parent = statusFrame
+            registerTheme(desc, "Muted", "TextColor3")
+
+            -- Info speed
+            local info = Instance.new("TextLabel")
+            info.Size = UDim2.new(1, 0, 0, 14)
+            info.BackgroundTransparency = 1
+            info.Text = "Cast cooldown: 0.08s  •  Taps: 12/frame"
+            info.TextColor3 = C.Muted
+            info.Font = Enum.Font.GothamSemibold
+            info.TextSize = CFG.FONT_SMALL
+            info.TextXAlignment = Enum.TextXAlignment.Left
+            info.LayoutOrder = 2
+            info.ZIndex = 3
+            info.Parent = turboContainer
+            registerTheme(info, "Muted", "TextColor3")
+
+        else
+            -- ═══ NON-PREMIUM: LOCKED ═══
+            local lockedFrame = Instance.new("Frame")
+            lockedFrame.Size = UDim2.new(1, 0, 0, 60)
+            lockedFrame.BackgroundColor3 = C.Surface3
+            lockedFrame.BackgroundTransparency = 0.5
+            lockedFrame.BorderSizePixel = 0
+            lockedFrame.LayoutOrder = 1
+            lockedFrame.ZIndex = 3
+            lockedFrame.Parent = turboContainer
+            registerTheme(lockedFrame, "Surface3", "BackgroundColor3")
+
+            local lc = Instance.new("UICorner")
+            lc.CornerRadius = UDim.new(0, 8)
+            lc.Parent = lockedFrame
+
+            local ls = Instance.new("UIStroke")
+            ls.Color = C.Muted
+            ls.Thickness = 1
+            ls.Transparency = 0.6
+            ls.Parent = lockedFrame
+
+            local lockIcon = Instance.new("TextLabel")
+            lockIcon.Size = UDim2.fromOffset(28, 28)
+            lockIcon.Position = UDim2.fromOffset(10, 16)
+            lockIcon.BackgroundTransparency = 1
+            lockIcon.Text = "🔒"
+            lockIcon.TextColor3 = C.Muted
+            lockIcon.Font = Enum.Font.GothamBold
+            lockIcon.TextSize = 18
+            lockIcon.ZIndex = 4
+            lockIcon.Parent = lockedFrame
+            registerTheme(lockIcon, "Muted", "TextColor3")
+
+            local lockTitle = Instance.new("TextLabel")
+            lockTitle.Size = UDim2.new(1, -50, 0, 18)
+            lockTitle.Position = UDim2.fromOffset(42, 14)
+            lockTitle.BackgroundTransparency = 1
+            lockTitle.Text = "AUTO TURBO LOCKED"
+            lockTitle.TextColor3 = C.Muted
+            lockTitle.Font = Enum.Font.GothamBold
+            lockTitle.TextSize = CFG.FONT_LABEL
+            lockTitle.TextXAlignment = Enum.TextXAlignment.Left
+            lockTitle.ZIndex = 4
+            lockTitle.Parent = lockedFrame
+            registerTheme(lockTitle, "Muted", "TextColor3")
+
+            local lockDesc = Instance.new("TextLabel")
+            lockDesc.Size = UDim2.new(1, -50, 0, 16)
+            lockDesc.Position = UDim2.fromOffset(42, 32)
+            lockDesc.BackgroundTransparency = 1
+            lockDesc.Text = "Premium only"
+            lockDesc.TextColor3 = C.Muted
+            lockDesc.Font = Enum.Font.GothamSemibold
+            lockDesc.TextSize = CFG.FONT_MUTED
+            lockDesc.TextXAlignment = Enum.TextXAlignment.Left
+            lockDesc.ZIndex = 4
+            lockDesc.Parent = lockedFrame
+            registerTheme(lockDesc, "Muted", "TextColor3")
+        end
+    end
+
+    -- Build awal
+    rebuildTurbo()
+
+    -- ⭐ Auto-refresh kalau key berubah (misal habis redeem)
+    task.spawn(function()
+        local lastPrem = _isPremUser()
+        while turboContainer.Parent do
+            task.wait(2)
+            local now = _isPremUser()
+            if now ~= lastPrem then
+                lastPrem = now
+                rebuildTurbo()
+            end
+        end
+    end)
 end
 
 -- ============================================================
