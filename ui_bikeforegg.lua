@@ -6115,12 +6115,32 @@ local function renderMessage(msg)
                 nameRowLayout.SortOrder = Enum.SortOrder.LayoutOrder
                 nameRowLayout.Parent = nameRow
 
+                -- ⭐ SENSOR NAMA: 2 huruf depan + ***
+                -- (kecuali diri sendiri & owner, biar tetap kebaca)
+                local function censorName(rawName)
+                    if not rawName or rawName == "" then return "**" end
+                    rawName = tostring(rawName)
+                    if #rawName <= 2 then
+                        return rawName:sub(1, 2) .. "***"
+                    end
+                    return rawName:sub(1, 2) .. "***"
+                end
+
+                local displayText
+                if isOwner then
+                    displayText = msg.displayName  -- owner tetap kebaca
+                elseif isMe then
+                    displayText = "You"            -- diri sendiri tetap "You"
+                else
+                    displayText = censorName(msg.displayName)  -- orang lain disensor
+                end
+
                 -- Nama
                 local nameLbl = Instance.new("TextLabel")
                 nameLbl.Size = UDim2.new(0, 0, 1, 0)
                 nameLbl.AutomaticSize = Enum.AutomaticSize.X
                 nameLbl.BackgroundTransparency = 1
-                nameLbl.Text = (isMe and "You" or msg.displayName)
+                nameLbl.Text = displayText
                 nameLbl.TextColor3 = isOwner
                     and Color3.fromRGB(255, 210, 100)
                     or (isMe and PC_ACCENT2 or PC_ACCENT)
