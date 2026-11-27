@@ -8559,35 +8559,38 @@ do
     -- ══════════════════════════════════════════════
     -- ⭐ DATA — 3 SPOT PER AREA
     -- ══════════════════════════════════════════════
-    local AREA_DATA = {
-    {
-        name = "Core", icon = "💎",
-        color = Color3.fromRGB(180, 120, 255),
-        spots = {
-            { name = "Spot 1", pos = Vector3.new(-9185, 1250, -6634) },
-            { name = "Spot 2", pos = Vector3.new(-9098, 1251, -6592) },
-            { name = "Spot 3", pos = Vector3.new(-9013, 1250, -6560) },
+        local AREA_DATA = {
+        {
+            name = "Telaga", icon = "🌊",
+            assetId = "92465070257053",
+            color = Color3.fromRGB(80, 180, 255),
+            spots = {
+                { name = "Spot 1", pos = Vector3.new(-9377, 1334, -10380) },
+                { name = "Spot 2", pos = Vector3.new(-9291, 1336, -10362) },
+                { name = "Spot 3", pos = Vector3.new(-9504, 1334, -10428) },
+            },
         },
-    },
-    {
-        name = "Fish", icon = "🐟",
-        color = Color3.fromRGB(255, 200, 80),
-        spots = {
-            { name = "Spot 1", pos = Vector3.new(-8295, 1228, -6312) },
-            { name = "Spot 2", pos = Vector3.new(-8381, 1245, -6157) },
-            { name = "Spot 3", pos = Vector3.new(-7871, 1236, -6306) },
+        {
+            name = "Core", icon = "💎",
+            assetId = "114410599270643",
+            color = Color3.fromRGB(180, 120, 255),
+            spots = {
+                { name = "Spot 1", pos = Vector3.new(-9185, 1250, -6634) },
+                { name = "Spot 2", pos = Vector3.new(-9098, 1251, -6592) },
+                { name = "Spot 3", pos = Vector3.new(-9013, 1250, -6560) },
+            },
         },
-    },
-    {
-        name = "Telaga", icon = "🌊",
-        color = Color3.fromRGB(80, 180, 255),
-        spots = {
-            { name = "Spot 1", pos = Vector3.new(-9377, 1334, -10380) },
-            { name = "Spot 2", pos = Vector3.new(-9291, 1336, -10362) },
-            { name = "Spot 3", pos = Vector3.new(-9504, 1334, -10428) },
+        {
+            name = "Fish", icon = "🐟",
+            assetId = "127234197393484",
+            color = Color3.fromRGB(255, 200, 80),
+            spots = {
+                { name = "Spot 1", pos = Vector3.new(-8295, 1228, -6312) },
+                { name = "Spot 2", pos = Vector3.new(-8381, 1245, -6157) },
+                { name = "Spot 3", pos = Vector3.new(-7871, 1236, -6306) },
+            },
         },
-    },
-}
+    }
 
     -- ══════════════════════════════════════════════
     -- BADGE STATE — sama persis TpPlayer
@@ -8629,6 +8632,25 @@ do
                 end
             end)
         end
+    end
+
+    -- ══════════════════════════════════════════════
+    -- HELPER: bikin ImageLabel buat asset icon
+    -- ══════════════════════════════════════════════
+    local function createIconImage(parent, assetId, size, zIndex)
+        local img = Instance.new("ImageLabel")
+        img.Name = "IconImage"
+        img.Size = UDim2.fromOffset(size, size)
+        img.Position = UDim2.new(0.5, 0, 0.5, 0)
+        img.AnchorPoint = Vector2.new(0.5, 0.5)
+        img.BackgroundTransparency = 1
+        img.Image = "rbxassetid://" .. tostring(assetId)
+        img.ScaleType = Enum.ScaleType.Fit
+        img.ZIndex = zIndex or 11
+        img.Active = false
+        img.Selectable = false
+        img.Parent = parent
+        return img
     end
 
     -- ══════════════════════════════════════════════
@@ -8694,16 +8716,21 @@ do
         iconBoxCorner.CornerRadius = UDim.new(1, 0)
         iconBoxCorner.Parent = iconBox
 
-        local iconLbl = Instance.new("TextLabel")
-        iconLbl.Size = UDim2.fromScale(1, 1)
-        iconLbl.BackgroundTransparency = 1
-        iconLbl.Text = mapData.icon
-        iconLbl.Font = Enum.Font.GothamBold
-        iconLbl.TextSize = IS_MOBILE and 22 or 24
-        iconLbl.Active = false
-        iconLbl.Selectable = false
-        iconLbl.ZIndex = 11
-        iconLbl.Parent = iconBox
+        -- ⭐ pakai asset image (fallback ke emoji kalau assetId gak ada)
+        if mapData.assetId then
+            createIconImage(iconBox, mapData.assetId, iconSize - 10, 11)
+        else
+            local iconLbl = Instance.new("TextLabel")
+            iconLbl.Size = UDim2.fromScale(1, 1)
+            iconLbl.BackgroundTransparency = 1
+            iconLbl.Text = mapData.icon
+            iconLbl.Font = Enum.Font.GothamBold
+            iconLbl.TextSize = IS_MOBILE and 22 or 24
+            iconLbl.Active = false
+            iconLbl.Selectable = false
+            iconLbl.ZIndex = 11
+            iconLbl.Parent = iconBox
+        end
 
         -- TEXT 2 BARIS
         local textX = pad + iconSize + 12
@@ -8924,16 +8951,21 @@ do
         ibc.CornerRadius = UDim.new(1, 0)
         ibc.Parent = iBox
 
-        local iLbl = Instance.new("TextLabel")
-        iLbl.Size = UDim2.fromScale(1, 1)
-        iLbl.BackgroundTransparency = 1
-        iLbl.Text = mapData.icon
-        iLbl.Font = Enum.Font.GothamBold
-        iLbl.TextSize = IS_MOBILE and 22 or 24
-        iLbl.Active = false
-        iLbl.Selectable = false
-        iLbl.ZIndex = 11
-        iLbl.Parent = iBox
+        -- ⭐ pakai asset image
+        if mapData.assetId then
+            createIconImage(iBox, mapData.assetId, iSz - 10, 11)
+        else
+            local iLbl = Instance.new("TextLabel")
+            iLbl.Size = UDim2.fromScale(1, 1)
+            iLbl.BackgroundTransparency = 1
+            iLbl.Text = mapData.icon
+            iLbl.Font = Enum.Font.GothamBold
+            iLbl.TextSize = IS_MOBILE and 22 or 24
+            iLbl.Active = false
+            iLbl.Selectable = false
+            iLbl.ZIndex = 11
+            iLbl.Parent = iBox
+        end
 
         -- nama map + jumlah spot
         local textX = 10 + iSz + 12
