@@ -5546,7 +5546,7 @@ do
     pages.AutoFish = fishPage
 
     -- ═══════════════════════════════════════════
-    -- KIRI: card Auto Fish (toggle tunggal)
+    -- KIRI: card Auto Fish (toggle AutoFish)
     -- ═══════════════════════════════════════════
     local fishCard, fishContent = makeCard(fishLeft, "Auto Fish", 1)
 
@@ -5584,7 +5584,6 @@ do
         end
     end)
 
-    -- ⭐ Toggle tunggal: AutoFish (Turbo otomatis kalau premium)
     makeToggle(fishContent, "Enable Auto Fish (ALL)", false, function(v)
         if v then
             notify("🎣 Auto Fish: ON", "success")
@@ -5598,7 +5597,6 @@ do
     -- ═══════════════════════════════════════════
     local turboCard, turboContent = makeCard(fishRight, "⚡ Auto Turbo", 1)
 
-    -- ⭐ Fungsi cek premium (sama kayak di features)
     local function _isPremUser()
         if LocalPlayer.UserId == OWNER_USERID then return true end
         if Shared and Shared.KeyType then
@@ -5608,7 +5606,6 @@ do
         return false
     end
 
-    -- Container buat rebuild isi (biar bisa refresh kalau key berubah)
     local turboContainer = Instance.new("Frame")
     turboContainer.Size = UDim2.new(1, 0, 0, 0)
     turboContainer.AutomaticSize = Enum.AutomaticSize.Y
@@ -5620,85 +5617,194 @@ do
     turboLayout.Padding = UDim.new(0, CFG.CARD_GAP)
     turboLayout.SortOrder = Enum.SortOrder.LayoutOrder
 
+    local SPEED_MIN = 0.1
+    local SPEED_MAX = 0.5
+    local SPEED_DEFAULT = 0.1
+
+    local function _clampSpeed(v)
+        v = tonumber(v) or SPEED_DEFAULT
+        if v < SPEED_MIN then v = SPEED_MIN end
+        if v > SPEED_MAX then v = SPEED_MAX end
+        return v
+    end
+
+    local function _getSpeed()
+        local s = Shared and Shared.AutoFish_Speed
+        if type(s) ~= "number" then
+            if Shared then Shared.AutoFish_Speed = SPEED_DEFAULT end
+            s = SPEED_DEFAULT
+        end
+        return _clampSpeed(s)
+    end
+
     local function rebuildTurbo()
-        -- Hapus isi lama
         for _, c in ipairs(turboContainer:GetChildren()) do
             if c:IsA("GuiObject") then c:Destroy() end
         end
 
         if _isPremUser() then
-            -- ═══ PREMIUM: tampilkan status Turbo aktif ═══
-            local statusFrame = Instance.new("Frame")
-            statusFrame.Size = UDim2.new(1, 0, 0, 60)
-            statusFrame.BackgroundColor3 = C.Surface3
-            statusFrame.BackgroundTransparency = 0.35
-            statusFrame.BorderSizePixel = 0
-            statusFrame.LayoutOrder = 1
-            statusFrame.ZIndex = 3
-            statusFrame.Parent = turboContainer
-            registerTheme(statusFrame, "Surface3", "BackgroundColor3")
+            -- ⭐ Toggle Turbo
+            makeToggle(turboContainer, "⚡ Enable Turbo Mode", false, function(v)
+                if v then
+                    notify("⚡ Turbo: ON", "success")
+                else
+                    notify("⚡ Turbo: OFF", "info")
+                end
+            end, "AutoFish_Turbo")
 
-            local sc = Instance.new("UICorner")
-            sc.CornerRadius = UDim.new(0, 8)
-            sc.Parent = statusFrame
+            -- ⭐ Input speed
+            local inputHolder = Instance.new("Frame")
+            inputHolder.Size = UDim2.new(1, 0, 0, CFG.DROPDOWN_H)
+            inputHolder.BackgroundColor3 = C.Surface3
+            inputHolder.BackgroundTransparency = 0.4
+            inputHolder.BorderSizePixel = 0
+            inputHolder.LayoutOrder = 2
+            inputHolder.ZIndex = 3
+            inputHolder.Parent = turboContainer
+            registerTheme(inputHolder, "Surface3", "BackgroundColor3")
 
-            local sStroke = Instance.new("UIStroke")
-            sStroke.Color = C.Accent
-            sStroke.Thickness = 1.4
-            sStroke.Transparency = 0.2
-            sStroke.Parent = statusFrame
-            registerTheme(sStroke, "Accent", "Color")
+            local ihc = Instance.new("UICorner")
+            ihc.CornerRadius = UDim.new(0, 8)
+            ihc.Parent = inputHolder
 
-            local glowIcon = Instance.new("TextLabel")
-            glowIcon.Size = UDim2.fromOffset(28, 28)
-            glowIcon.Position = UDim2.fromOffset(10, 16)
-            glowIcon.BackgroundTransparency = 1
-            glowIcon.Text = "⚡"
-            glowIcon.TextColor3 = C.Accent2
-            glowIcon.Font = Enum.Font.GothamBold
-            glowIcon.TextSize = 20
-            glowIcon.ZIndex = 4
-            glowIcon.Parent = statusFrame
+            local ihs = Instance.new("UIStroke")
+            ihs.Color = C.Accent
+            ihs.Thickness = 1
+            ihs.Transparency = 0.5
+            ihs.Parent = inputHolder
+            registerTheme(ihs, "Accent", "Color")
 
-            local title = Instance.new("TextLabel")
-            title.Size = UDim2.new(1, -50, 0, 18)
-            title.Position = UDim2.fromOffset(42, 14)
-            title.BackgroundTransparency = 1
-            title.Text = "AUTO TURBO ACTIVE"
-            title.TextColor3 = C.Accent2
-            title.Font = Enum.Font.GothamBold
-            title.TextSize = CFG.FONT_LABEL
-            title.TextXAlignment = Enum.TextXAlignment.Left
-            title.ZIndex = 4
-            title.Parent = statusFrame
-            registerTheme(title, "Accent2", "TextColor3")
+            local lbl = Instance.new("TextLabel")
+            lbl.Size = UDim2.new(1, -90, 1, 0)
+            lbl.Position = UDim2.fromOffset(12, 0)
+            lbl.BackgroundTransparency = 1
+            lbl.Text = "Cast Speed"
+            lbl.TextColor3 = C.Text
+            lbl.Font = Enum.Font.GothamSemibold
+            lbl.TextSize = CFG.FONT_LABEL
+            lbl.TextXAlignment = Enum.TextXAlignment.Left
+            lbl.ZIndex = 4
+            lbl.Parent = inputHolder
+            registerTheme(lbl, "Text", "TextColor3")
 
-            local desc = Instance.new("TextLabel")
-            desc.Size = UDim2.new(1, -50, 0, 16)
-            desc.Position = UDim2.fromOffset(42, 32)
-            desc.BackgroundTransparency = 1
-            desc.Text = "Premium • Speed boost aktif"
-            desc.TextColor3 = C.Muted
-            desc.Font = Enum.Font.GothamSemibold
-            desc.TextSize = CFG.FONT_MUTED
-            desc.TextXAlignment = Enum.TextXAlignment.Left
-            desc.ZIndex = 4
-            desc.Parent = statusFrame
-            registerTheme(desc, "Muted", "TextColor3")
+            local box = Instance.new("TextBox")
+            box.Size = UDim2.fromOffset(70, 26)
+            box.Position = UDim2.new(1, -80, 0.5, 0)
+            box.AnchorPoint = Vector2.new(0, 0.5)
+            box.BackgroundColor3 = C.Surface2
+            box.BorderSizePixel = 0
+            box.Text = string.format("%.2f", _getSpeed())
+            box.TextColor3 = C.Accent2
+            box.PlaceholderText = "0.1 - 0.5"
+            box.PlaceholderColor3 = C.Muted
+            box.Font = Enum.Font.GothamBold
+            box.TextSize = CFG.FONT_MED
+            box.ZIndex = 4
+            box.Parent = inputHolder
+            registerTheme(box, "Accent2", "TextColor3")
 
-            -- Info speed
+            local bc = Instance.new("UICorner")
+            bc.CornerRadius = UDim.new(0, 6)
+            bc.Parent = box
+
+            local bs = Instance.new("UIStroke")
+            bs.Color = C.Accent
+            bs.Thickness = 1
+            bs.Transparency = 0.6
+            bs.Parent = box
+            registerTheme(bs, "Accent", "Color")
+
+            -- ⭐ Disable input kalau Turbo OFF
+            local function refreshInputEnabled()
+                local on = Shared and Shared.AutoFish_Turbo == true
+                box.TextEditable = on
+                box.BackgroundTransparency = on and 0 or 0.4
+                lbl.TextColor3 = on and C.Text or C.Muted
+                box.TextColor3 = on and C.Accent2 or C.Muted
+            end
+            refreshInputEnabled()
+
+            if _G.VRILZ_RegisterWidget then
+                _G.VRILZ_RegisterWidget(function()
+                    if box.Parent then refreshInputEnabled() end
+                end)
+            end
+
+            box.FocusLost:Connect(function()
+                if not (Shared and Shared.AutoFish_Turbo) then
+                    box.Text = string.format("%.2f", _getSpeed())
+                    return
+                end
+                local v = _clampSpeed(box.Text)
+                box.Text = string.format("%.2f", v)
+                if Shared then Shared.AutoFish_Speed = v end
+                if _G.VRILZ_ApplyFishSpeed then
+                    pcall(_G.VRILZ_ApplyFishSpeed, v)
+                end
+                notify(string.format("⚡ Speed: %.2fs", v), "success")
+            end)
+
+            -- Info range
             local info = Instance.new("TextLabel")
             info.Size = UDim2.new(1, 0, 0, 14)
             info.BackgroundTransparency = 1
-            info.Text = "Cast cooldown: 0.08s  •  Taps: 12/frame"
+            info.Text = string.format("Range: %.1f (fast) - %.1f (slow)", SPEED_MIN, SPEED_MAX)
             info.TextColor3 = C.Muted
             info.Font = Enum.Font.GothamSemibold
             info.TextSize = CFG.FONT_SMALL
             info.TextXAlignment = Enum.TextXAlignment.Left
-            info.LayoutOrder = 2
+            info.LayoutOrder = 3
             info.ZIndex = 3
             info.Parent = turboContainer
             registerTheme(info, "Muted", "TextColor3")
+
+            -- Status
+            local statusFrame = Instance.new("Frame")
+            statusFrame.Size = UDim2.new(1, 0, 0, 40)
+            statusFrame.BackgroundColor3 = C.Surface3
+            statusFrame.BackgroundTransparency = 0.5
+            statusFrame.BorderSizePixel = 0
+            statusFrame.LayoutOrder = 4
+            statusFrame.ZIndex = 3
+            statusFrame.Parent = turboContainer
+            registerTheme(statusFrame, "Surface3", "BackgroundColor3")
+
+            local sfc = Instance.new("UICorner")
+            sfc.CornerRadius = UDim.new(0, 8)
+            sfc.Parent = statusFrame
+
+            local sfs = Instance.new("UIStroke")
+            sfs.Color = C.Accent2
+            sfs.Thickness = 1
+            sfs.Transparency = 0.3
+            sfs.Parent = statusFrame
+            registerTheme(sfs, "Accent2", "Color")
+
+            local st = Instance.new("TextLabel")
+            st.Size = UDim2.new(1, -20, 1, 0)
+            st.Position = UDim2.fromOffset(10, 0)
+            st.BackgroundTransparency = 1
+            st.Text = "Turbo: OFF"
+            st.TextColor3 = C.Muted
+            st.Font = Enum.Font.GothamBold
+            st.TextSize = CFG.FONT_LABEL
+            st.TextXAlignment = Enum.TextXAlignment.Left
+            st.ZIndex = 4
+            st.Parent = statusFrame
+
+            -- ⭐ Update status label tiap 0.5s
+            task.spawn(function()
+                while st.Parent do
+                    task.wait(0.5)
+                    if Shared and Shared.AutoFish_Turbo then
+                        st.Text = string.format("✅ Turbo ACTIVE  •  %.2fs", _getSpeed())
+                        st.TextColor3 = C.Accent2
+                    else
+                        st.Text = "Turbo: OFF"
+                        st.TextColor3 = C.Muted
+                    end
+                end
+            end)
 
         else
             -- ═══ NON-PREMIUM: LOCKED ═══
@@ -5762,10 +5868,9 @@ do
         end
     end
 
-    -- Build awal
     rebuildTurbo()
 
-    -- ⭐ Auto-refresh kalau key berubah (misal habis redeem)
+    -- Auto-refresh kalau key berubah
     task.spawn(function()
         local lastPrem = _isPremUser()
         while turboContainer.Parent do
