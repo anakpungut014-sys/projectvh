@@ -228,13 +228,10 @@ _G.VRILZ_ApplyFishPreset = function(cd, taps, loopDelay)
         Shared.AutoFish_Speed = clampSpeed(cd)
         Shared.AutoFish_Taps  = tonumber(taps) or 12
         Shared.AutoFish_Loop  = tonumber(loopDelay) or 0.02
-        Shared.AutoFish_Turbo = true   -- ⭐ pilih preset = Turbo AUTO ON
+        -- ⭐ TIDAK auto ON Turbo — user harus ON manual
     end
-    -- Apply langsung
-    FishSpeed.castCooldown = clampSpeed(cd)
-    FishSpeed.castPowerWait = 0
-    FishSpeed.tapsPerFrame = tonumber(taps) or 12
-    FishSpeed.loopDelay = tonumber(loopDelay) or 0.02
+    -- Gak apply langsung — nunggu Turbo ON
+    -- refreshSpeed() akan apply kalau isTurboOn() = true
 end
 
 -- Init awal
