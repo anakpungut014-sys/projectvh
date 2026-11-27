@@ -136,7 +136,7 @@ local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
 Shared = Shared or {}
 
 -- ⚙ CONFIG
-local SPEED_MIN = 0.05
+local SPEED_MIN = 0
 local SPEED_MAX = 0.5
 local SPEED_DEFAULT = 0.1
 
@@ -165,31 +165,12 @@ local FishSpeed = {
     tapsPerFrame = 12,
 }
 
--- ⭐ Speed turbo — baca preset (taps/loop) kalau ada
 local function applyTurboSpeed(v)
     v = clampSpeed(v)
-    FishSpeed.castCooldown = v
-    if Shared and Shared.AutoFish_Taps and Shared.AutoFish_Loop then
-        -- ⭐ PRESET MODE: pakai taps/loop dari preset
-        FishSpeed.castPowerWait = 0
-        FishSpeed.tapsPerFrame = tonumber(Shared.AutoFish_Taps) or 12
-        FishSpeed.loopDelay = tonumber(Shared.AutoFish_Loop) or 0.02
-    else
-        -- ⭐ FALLBACK: tuning otomatis
-        if v <= 0.15 then
-            FishSpeed.castPowerWait = 0
-            FishSpeed.loopDelay = 0.02
-            FishSpeed.tapsPerFrame = 12
-        elseif v <= 0.3 then
-            FishSpeed.castPowerWait = 0.05
-            FishSpeed.loopDelay = 0.03
-            FishSpeed.tapsPerFrame = 9
-        else
-            FishSpeed.castPowerWait = 0.1
-            FishSpeed.loopDelay = 0.05
-            FishSpeed.tapsPerFrame = 5
-        end
-    end
+    FishSpeed.castCooldown = 0
+    FishSpeed.castPowerWait = 0
+    FishSpeed.loopDelay = 0
+    FishSpeed.tapsPerFrame = tonumber(Shared and Shared.AutoFish_Taps) or 10
 end
 
 -- ⭐ Speed normal (Turbo OFF / non-premium)
@@ -516,6 +497,25 @@ _G.VRILZ_HideMiniRemove = function(n)
     print("[HideMini] removed:", n)
 end
 
+local recasting = false
+local function recastNow()
+    if recasting or not FishState.enabled or not FishState.autoCast then return end
+    recasting = true
+    task.spawn(function()
+        for _ = 1, 30 do
+            local rod = getEquippedRod()
+            if not FishState.enabled or not rod then break end
+            if not getStatusValue(rod, "FishingActive")
+               and not getStatusValue(rod, "MiniGameActive") then
+                FishState.lastCastTime = 0
+                if autoCast() then break end
+            end
+            RunService.Heartbeat:Wait()
+        end
+        recasting = false
+    end)
+end
+
 -- ============================================================
 -- ⚡ REEL — MULTI-TAP PER FRAME
 -- ============================================================
@@ -541,7 +541,7 @@ local function doReelSpam()
                 miss = 0
             elseif minigameSeen then
                 miss += 1
-                if miss >= 2 then break end
+                if miss >= 1 then break end
             end
         end
 
@@ -556,6 +556,7 @@ local function doReelSpam()
     local dur = os.clock() - start
     FishState.reeling = false
     FishState.status = string.format("✅ Reel %.1fs (%d tap) → cast lagi", dur, taps)
+    recastNow()
 end
 
 -- ============================================================
@@ -582,9 +583,10 @@ local function hookRod(rod)
             if not FishState.reeling then
                 task.spawn(doReelSpam)
             end
-        elseif action == "Stop" then
+                elseif action == "Stop" then
             FishState.reelAbort = true
             FishState.status = "Reel done"
+            recastNow()
         end
     end)
 
@@ -600,9 +602,10 @@ local function hookRod(rod)
             FishState.stats.caught += 1
             local name = (typeof(info) == "table" and info.baseName) or tostring(info) or "Fish"
             FishState.status = "✅ Caught: " .. name
-            if Shared and Shared.WebhookNotifyFish and _G.VRILZ_SendFishWebhook then
+                if Shared and Shared.WebhookNotifyFish and _G.VRILZ_SendFishWebhook then
                 task.spawn(function() _G.VRILZ_SendFishWebhook(info) end)
             end
+            recastNow()
         elseif action == "CastFailed" then
             FishState.stats.fail += 1
             FishState.status = "❌ Cast failed"
