@@ -137,8 +137,8 @@ Shared = Shared or {}
 
 -- ⚙ CONFIG
 local FishSpeed = {
-    reelMaxTime = 8, castCooldown = 0.15, castPowerWait = 0.15,
-    loopDelay = 0.05, tapsPerFrame = 5,
+    reelMaxTime = 8, castCooldown = 0.08, castPowerWait = 0,
+    loopDelay = 0.02, tapsPerFrame = 12,
 }
 local FishState = {
     enabled = false,
@@ -202,9 +202,9 @@ local function autoCast()
     local castEvent = remotes and remotes:FindFirstChild("CastEvent")
     if not castEvent then FishState.status = "❌ CastEvent tidak ada"; return false end
     FishState.status = "Casting..."
+    -- ⚡ FAST CAST: fire true & false langsung, tanpa delay
     pcall(function()
         castEvent:FireServer(true)
-        task.wait(FishSpeed.castPowerWait)
         castEvent:FireServer(false, 100, Vector3.new(0, 0, -1))
     end)
     FishState.stats.cast += 1
@@ -213,14 +213,16 @@ local function autoCast()
 end
 
 local function tapOnce()
+    -- ⚡ Prioritas: panggil MobileTap module (paling cepat, langsung ke logic game)
     if FishMiniGame and FishMiniGame.MobileTap then
         pcall(function() FishMiniGame.MobileTap() end)
-    else
-        pcall(function()
-            VIM:SendMouseButtonEvent(0, 0, 0, true,  game, 0)
-            VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
-        end)
+        return
     end
+    -- Fallback: VIM tap
+    pcall(function()
+        VIM:SendMouseButtonEvent(0, 0, 0, true,  game, 0)
+        VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+    end)
 end
 
 -- ============================================================
@@ -415,7 +417,7 @@ local function doReelSpam()
     local rod   = getEquippedRod()
     local start = os.clock()
     local taps  = 0
-    FishState.status = "⚡ MULTI-TAP REEL..."
+    FishState.status = "⚡ FAST MULTI-TAP REEL..."
 
     local miss = 0
     local minigameSeen = false
@@ -434,12 +436,13 @@ local function doReelSpam()
             end
         end
 
+        -- ⚡ Spam tap TANPA Heartbeat (task.wait 0.001 = ~1000 tap/detik)
         for _ = 1, FishSpeed.tapsPerFrame do
             tapOnce()
             taps += 1
         end
 
-        RunService.Heartbeat:Wait()
+        task.wait(0.001)  -- ⚡ lebih cepat dari Heartbeat
     end
 
     local dur = os.clock() - start
@@ -461,30 +464,32 @@ local function hookRod(rod)
     fishHookedRods[rod] = true
 
     miniGame.OnClientEvent:Connect(function(action, info)
-        -- ⭐ hide INSTAN pas minigame mulai
-        if action == "Start" and HideMini.enabled then
-            hideTargets()
+    -- ⭐ hide INSTAN pas minigame mulai
+    if action == "Start" and HideMini.enabled then
+        hideTargets()
+    end
+    if not FishState.enabled then return end
+    if action == "Start" then
+        FishState.lastBiteTime = os.clock()
+        FishState.status = "🐟 Minigame START → REEL NOW!"
+        -- ⚡ langsung spawn reel spam, gak nunggu apa-apa
+        if not FishState.reeling then
+            task.spawn(doReelSpam)
         end
-        if not FishState.enabled then return end
-        if action == "Start" then
-            FishState.lastBiteTime = os.clock()
-            if not FishState.reeling then
-                task.spawn(doReelSpam)
-            end
-        elseif action == "Stop" then
-            FishState.reelAbort = true
-            FishState.status = "Reel done"
-        end
-    end)
+    elseif action == "Stop" then
+        FishState.reelAbort = true
+        FishState.status = "Reel done"
+    end
+end)
 
     notifyClient.OnClientEvent:Connect(function(action, info)
         if not FishState.enabled then return end
         if action == "Bite" then
-            FishState.lastBiteTime = os.clock()
-            FishState.status = "🐟 Ikan nyangkut! LANGSUNG REEL..."
-            if FishState.autoReel and not FishState.reeling then
-                task.spawn(doReelSpam)
-            end
+    FishState.lastBiteTime = os.clock()
+    FishState.status = "🐟 Bite! REEL NOW!"
+    if FishState.autoReel and not FishState.reeling then
+        task.spawn(doReelSpam)  -- ⚡ langsung, tanpa delay
+    end
         elseif action == "GotFish" then
             FishState.stats.caught += 1
             local name = (typeof(info) == "table" and info.baseName) or tostring(info) or "Fish"
