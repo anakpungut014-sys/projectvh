@@ -9066,8 +9066,8 @@ registerTab("AutoSummit", "127064137622496", "Auto Summit", true)
 registerTab("AutoFish", "118895892824960", "Auto Fish", true)
 registerTab("Shop", "101498199599518", "Shop", true)
 registerTab("AutoJoin", "129516985087314", "Auto Join", true)
-registerTab("TpPlayer", "85209430814229", "Tp Player", true)
-registerTab("AreaTp",   "129516985087314", "Area TP",   true)
+registerTab("TpPlayer", "82564543475021", "Tp Player", true)
+registerTab("AreaTp",   "76481180163232", "Area TP",   true)
 registerTab("LiveChat", "83047761221446", "Live Chat", true)
 registerTab("Webhook", "78129393420657", "Webhook", true)
 registerTab("Settings", "97834340359225", "Settings", true)
@@ -12006,7 +12006,8 @@ task.spawn(function()
             "rbxassetid://127064137622496",  -- AutoSummit
             "rbxassetid://118895892824960",  -- AutoFish
             "rbxassetid://101498199599518",  -- Shop
-            "rbxassetid://85209430814229",  -- Tp Player
+            "rbxassetid://82564543475021",  -- Tp Player
+            "rbxassetid://76481180163232",  -- Area TP
             "rbxassetid://83047761221446",   -- Live Chat
             "rbxassetid://78129393420657",   -- Webhook
             "rbxassetid://97834340359225",   -- Settings
