@@ -5652,103 +5652,51 @@ do
                 end
             end, "AutoFish_Turbo")
 
-            -- ⭐ Input speed
-            local inputHolder = Instance.new("Frame")
-            inputHolder.Size = UDim2.new(1, 0, 0, CFG.DROPDOWN_H)
-            inputHolder.BackgroundColor3 = C.Surface3
-            inputHolder.BackgroundTransparency = 0.4
-            inputHolder.BorderSizePixel = 0
-            inputHolder.LayoutOrder = 2
-            inputHolder.ZIndex = 3
-            inputHolder.Parent = turboContainer
-            registerTheme(inputHolder, "Surface3", "BackgroundColor3")
+                        -- ⭐ Dropdown preset speed (GANTI input manual)
+            local presetHolder = Instance.new("Frame")
+            presetHolder.Size = UDim2.new(1, 0, 0, CFG.DROPDOWN_H)
+            presetHolder.BackgroundTransparency = 1
+            presetHolder.LayoutOrder = 2
+            presetHolder.ZIndex = 3
+            presetHolder.Parent = turboContainer
 
-            local ihc = Instance.new("UICorner")
-            ihc.CornerRadius = UDim.new(0, 8)
-            ihc.Parent = inputHolder
+            local PRESETS = {
+                ["🐢 Slow"]   = { cd = 0.5,  taps = 3,  loop = 0.08, label = "Slow"   },
+                ["🚶 Normal"] = { cd = 0.35, taps = 5,  loop = 0.05, label = "Normal" },
+                ["🏃 Fast"]   = { cd = 0.2,  taps = 8,  loop = 0.03, label = "Fast"   },
+                ["⚡ Turbo"]  = { cd = 0.1,  taps = 12, loop = 0.02, label = "Turbo"  },
+                ["🔥 Insane"] = { cd = 0.1,  taps = 20, loop = 0.01, label = "Insane" },
+            }
+            local PRESET_NAMES = { "🐢 Slow", "🚶 Normal", "🏃 Fast", "⚡ Turbo", "🔥 Insane" }
 
-            local ihs = Instance.new("UIStroke")
-            ihs.Color = C.Accent
-            ihs.Thickness = 1
-            ihs.Transparency = 0.5
-            ihs.Parent = inputHolder
-            registerTheme(ihs, "Accent", "Color")
-
-            local lbl = Instance.new("TextLabel")
-            lbl.Size = UDim2.new(1, -90, 1, 0)
-            lbl.Position = UDim2.fromOffset(12, 0)
-            lbl.BackgroundTransparency = 1
-            lbl.Text = "Cast Speed"
-            lbl.TextColor3 = C.Text
-            lbl.Font = Enum.Font.GothamSemibold
-            lbl.TextSize = CFG.FONT_LABEL
-            lbl.TextXAlignment = Enum.TextXAlignment.Left
-            lbl.ZIndex = 4
-            lbl.Parent = inputHolder
-            registerTheme(lbl, "Text", "TextColor3")
-
-            local box = Instance.new("TextBox")
-            box.Size = UDim2.fromOffset(70, 26)
-            box.Position = UDim2.new(1, -80, 0.5, 0)
-            box.AnchorPoint = Vector2.new(0, 0.5)
-            box.BackgroundColor3 = C.Surface2
-            box.BorderSizePixel = 0
-            box.Text = string.format("%.2f", _getSpeed())
-            box.TextColor3 = C.Accent2
-            box.PlaceholderText = "0.1 - 0.5"
-            box.PlaceholderColor3 = C.Muted
-            box.Font = Enum.Font.GothamBold
-            box.TextSize = CFG.FONT_MED
-            box.ZIndex = 4
-            box.Parent = inputHolder
-            registerTheme(box, "Accent2", "TextColor3")
-
-            local bc = Instance.new("UICorner")
-            bc.CornerRadius = UDim.new(0, 6)
-            bc.Parent = box
-
-            local bs = Instance.new("UIStroke")
-            bs.Color = C.Accent
-            bs.Thickness = 1
-            bs.Transparency = 0.6
-            bs.Parent = box
-            registerTheme(bs, "Accent", "Color")
-
-            -- ⭐ Disable input kalau Turbo OFF
-            local function refreshInputEnabled()
-                local on = Shared and Shared.AutoFish_Turbo == true
-                box.TextEditable = on
-                box.BackgroundTransparency = on and 0 or 0.4
-                lbl.TextColor3 = on and C.Text or C.Muted
-                box.TextColor3 = on and C.Accent2 or C.Muted
-            end
-            refreshInputEnabled()
-
-            if _G.VRILZ_RegisterWidget then
-                _G.VRILZ_RegisterWidget(function()
-                    if box.Parent then refreshInputEnabled() end
-                end)
+            -- Cari preset yang cocok dengan Shared sekarang
+            local curPreset = "⚡ Turbo"
+            local curCd = (Shared and Shared.AutoFish_Speed) or 0.1
+            for name, p in pairs(PRESETS) do
+                if math.abs(p.cd - curCd) < 0.01 then curPreset = name break end
             end
 
-            box.FocusLost:Connect(function()
-                if not (Shared and Shared.AutoFish_Turbo) then
-                    box.Text = string.format("%.2f", _getSpeed())
-                    return
+            makeDropdownGlobal(presetHolder, PRESET_NAMES, curPreset, function(selected)
+                local p = PRESETS[selected]
+                if not p then return end
+                if Shared then
+                    Shared.AutoFish_Speed = p.cd
+                    Shared.AutoFish_Taps  = p.taps
+                    Shared.AutoFish_Loop  = p.loop
+                    Shared.AutoFish_PresetName = p.label
                 end
-                local v = _clampSpeed(box.Text)
-                box.Text = string.format("%.2f", v)
-                if Shared then Shared.AutoFish_Speed = v end
-                if _G.VRILZ_ApplyFishSpeed then
-                    pcall(_G.VRILZ_ApplyFishSpeed, v)
+                -- Apply langsung ke features
+                if _G.VRILZ_ApplyFishPreset then
+                    pcall(_G.VRILZ_ApplyFishPreset, p.cd, p.taps, p.loop)
                 end
-                notify(string.format("⚡ Speed: %.2fs", v), "success")
+                notify("⚡ Speed: " .. p.label, "success")
             end)
 
-            -- Info range
+            -- Info
             local info = Instance.new("TextLabel")
             info.Size = UDim2.new(1, 0, 0, 14)
             info.BackgroundTransparency = 1
-            info.Text = string.format("Range: %.1f (fast) - %.1f (slow)", SPEED_MIN, SPEED_MAX)
+            info.Text = "Makin kanan = makin cepat"
             info.TextColor3 = C.Muted
             info.Font = Enum.Font.GothamSemibold
             info.TextSize = CFG.FONT_SMALL
@@ -5793,11 +5741,12 @@ do
             st.Parent = statusFrame
 
             -- ⭐ Update status label tiap 0.5s
-            task.spawn(function()
+                task.spawn(function()
                 while st.Parent do
                     task.wait(0.5)
                     if Shared and Shared.AutoFish_Turbo then
-                        st.Text = string.format("✅ Turbo ACTIVE  •  %.2fs", _getSpeed())
+                        local name = (Shared and Shared.AutoFish_PresetName) or "Turbo"
+                        st.Text = "✅ " .. name .. "  •  " .. string.format("%.2fs", _getSpeed())
                         st.TextColor3 = C.Accent2
                     else
                         st.Text = "Turbo: OFF"
