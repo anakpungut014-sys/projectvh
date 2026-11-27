@@ -674,11 +674,10 @@ _G.VRILZ_FishUI = {
 local function initAutoFish()
     startFishLoop()
 
-    -- 🔄 sinkron toggle AutoFish → Ghost & HideMinigame ikut
+    -- 🔄 sinkron toggle AutoFish → HideMinigame (Ghost Mode TIDAK diaktifin)
     task.spawn(function()
         while true do
             task.wait(0.3)
-            -- ⭐ re-check Turbo + speed tiap 0.3s (biar kalau user ganti input, langsung kepake)
             refreshSpeed()
 
             local wantOn = (Shared.AutoFish_Enabled == true)
@@ -690,7 +689,7 @@ local function initAutoFish()
                     FishState.autoReel    = true
                     FishState.reelAbort   = false
                     FishState.enabled     = true
-                    Shared.GhostMode_Enabled = true   -- ⭐ Ghost ON
+                    -- ⭐ Ghost Mode TIDAK diaktifin (biar gak pake anchor + clone)
                     HideMini.enabled         = true   -- ⭐ Hide ON
                     local rod = getEquippedRod()
                     if rod and getStatusValue(rod, "MiniGameActive") then
@@ -699,7 +698,7 @@ local function initAutoFish()
                 else
                     FishState.enabled   = false
                     FishState.reelAbort = true
-                    Shared.GhostMode_Enabled = false  -- ⭐ Ghost OFF
+                    -- ⭐ Ghost Mode TIDAK dimatiin
                     HideMini.enabled         = false  -- ⭐ Hide OFF
                     restoreAll()                      -- ⭐ GUI minigame balik normal
                 end
