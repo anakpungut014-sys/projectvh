@@ -135,11 +135,85 @@ local LocalPlayer = Players.LocalPlayer
 local PlayerGui   = LocalPlayer:WaitForChild("PlayerGui")
 Shared = Shared or {}
 
--- ⚙ CONFIG
+-- ⚙ CONFIG — speed dinamis dari UI (0.1 - 0.5)
+local SPEED_MIN = 0.1
+local SPEED_MAX = 0.5
+local SPEED_DEFAULT = 0.1
+
+local function clampSpeed(v)
+    v = tonumber(v) or SPEED_DEFAULT
+    if v < SPEED_MIN then v = SPEED_MIN end
+    if v > SPEED_MAX then v = SPEED_MAX end
+    return v
+end
+
+local function isPremiumUser()
+    if not Shared then return false end
+    local kt = tostring(Shared.KeyType or ""):upper()
+    return kt == "PREMIUM" or kt == "OWNER" or kt == "VIP"
+end
+
+local function isTurboOn()
+    return isPremiumUser() and Shared and Shared.AutoFish_Turbo == true
+end
+
 local FishSpeed = {
-    reelMaxTime = 8, castCooldown = 0.15, castPowerWait = 0.15,
-    loopDelay = 0.05, tapsPerFrame = 5,
+    reelMaxTime = 8,
+    castCooldown = SPEED_DEFAULT,
+    castPowerWait = 0,
+    loopDelay = 0.02,
+    tapsPerFrame = 12,
 }
+
+-- ⭐ Speed turbo (sesuai input user)
+local function applyTurboSpeed(v)
+    v = clampSpeed(v)
+    FishSpeed.castCooldown = v
+    if v <= 0.15 then
+        FishSpeed.castPowerWait = 0
+        FishSpeed.loopDelay = 0.02
+        FishSpeed.tapsPerFrame = 12
+    elseif v <= 0.3 then
+        FishSpeed.castPowerWait = 0.05
+        FishSpeed.loopDelay = 0.03
+        FishSpeed.tapsPerFrame = 9
+    else
+        FishSpeed.castPowerWait = 0.1
+        FishSpeed.loopDelay = 0.05
+        FishSpeed.tapsPerFrame = 5
+    end
+end
+
+-- ⭐ Speed normal (Turbo OFF / non-premium)
+local function applyNormalSpeed()
+    FishSpeed.castCooldown = 0.15
+    FishSpeed.castPowerWait = 0.15
+    FishSpeed.loopDelay = 0.05
+    FishSpeed.tapsPerFrame = 5
+end
+
+-- ⭐ Recompute berdasarkan Turbo + premium
+local function refreshSpeed()
+    if isTurboOn() then
+        applyTurboSpeed(Shared.AutoFish_Speed or SPEED_DEFAULT)
+    else
+        applyNormalSpeed()
+    end
+end
+
+-- ⭐ Dipanggil dari UI pas user commit input speed
+_G.VRILZ_ApplyFishSpeed = function(v)
+    if not isPremiumUser() then return end
+    if Shared then Shared.AutoFish_Speed = clampSpeed(v) end
+    refreshSpeed()
+end
+
+-- Init awal
+if Shared and Shared.AutoFish_Speed == nil then
+    Shared.AutoFish_Speed = SPEED_DEFAULT
+end
+refreshSpeed()
+
 local FishState = {
     enabled = false,
     autoEquip = true, autoCast = true, autoPerfect = true, autoReel = true,
@@ -204,7 +278,10 @@ local function autoCast()
     FishState.status = "Casting..."
     pcall(function()
         castEvent:FireServer(true)
-        task.wait(FishSpeed.castPowerWait)
+        -- ⚡ kalau castPowerWait = 0 → langsung fire, gak nunggu frame
+        if FishSpeed.castPowerWait > 0 then
+            task.wait(FishSpeed.castPowerWait)
+        end
         castEvent:FireServer(false, 100, Vector3.new(0, 0, -1))
     end)
     FishState.stats.cast += 1
@@ -562,6 +639,21 @@ local function initAutoFish()
     task.spawn(function()
         while true do
             task.wait(0.3)
+            -- ⭐ re-check Turbo + speed tiap 0.3s (biar kalau user ganti input, langsung kepake)
+            refreshSpeed()
+
+            -- ⭐ PRIORITAS 1: kalau AutoFish OFF tapi Turbo masih ON → matiin Turbo
+            --    (biar user bisa matiin AutoFish tanpa dipaksa ON balik)
+            if Shared.AutoFish_Enabled ~= true
+                and Shared.AutoFish_Turbo == true then
+                Shared.AutoFish_Turbo = false
+            end
+            -- ⭐ PRIORITAS 2: kalau Turbo ON tapi AutoFish OFF → paksa AutoFish ON
+            --    (turbo butuh AutoFish jalan)
+            if isTurboOn() and Shared.AutoFish_Enabled ~= true then
+                Shared.AutoFish_Enabled = true
+            end
+
             local wantOn = (Shared.AutoFish_Enabled == true)
             if wantOn ~= FishState.enabled then
                 if wantOn then
@@ -588,8 +680,6 @@ local function initAutoFish()
         end
     end)
 end
-
-initAutoFish()
 
 -- ============================================================
 -- 🏔 AUTO SUMMIT v2 — STANDALONE (Baca AutoSummit_StartCP dari UI)
