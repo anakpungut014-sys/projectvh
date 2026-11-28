@@ -162,17 +162,29 @@ local function applyTurboSpeed(v)
     FishSpeed.tapsPerFrame = tonumber(Shared and Shared.AutoFish_Taps) or 10
 end
 
+-- ⭐ BARU: helper Ghost Mode (TAMBAH INI)
+local function isGhostModeOn()
+    return Shared and Shared.GhostMode_Enabled == true
+end
+
 -- ⭐ Speed normal (Turbo OFF / non-premium)
 local function applyNormalSpeed()
     FishSpeed.castCooldown = 0.15
     FishSpeed.castPowerWait = 0.15
     FishSpeed.loopDelay = 0.05
-    FishSpeed.tapsPerFrame = 5
+    FishSpeed.tapsPerFrame = tonumber(Shared and Shared.AutoFish_Taps) or 10
 end
 
--- ⭐ Recompute berdasarkan Turbo + premium
+-- ⭐ Recompute berdasarkan Turbo + premium + GHOST
 local function refreshSpeed()
-    if isTurboOn() then
+    if isGhostModeOn() then
+        -- ⚡ GHOST MODE = MAX SPEED INSTAN
+        FishSpeed.castCooldown  = 0
+        FishSpeed.castPowerWait = 0
+        FishSpeed.loopDelay     = 0
+        FishSpeed.tapsPerFrame  = 50    -- ⭐ 50 tap/frame
+        FishSpeed.reelMaxTime   = 5     -- safety cap lebih pendek
+    elseif isTurboOn() then
         applyTurboSpeed(Shared.AutoFish_Speed or SPEED_DEFAULT)
     else
         applyNormalSpeed()
@@ -293,14 +305,29 @@ local function autoCast()
     return true
 end
 
+-- ⭐ CACHE function: pcall cuma sekali, habis itu langsung panggil
+local _tapFn = nil
 local function tapOnce()
+    if _tapFn then
+        _tapFn()
+        return
+    end
     if FishMiniGame and FishMiniGame.MobileTap then
-        pcall(function() FishMiniGame.MobileTap() end)
+        local ok = pcall(function() FishMiniGame.MobileTap() end)
+        if ok then
+            _tapFn = function() FishMiniGame.MobileTap() end
+        end
     else
-        pcall(function()
+        local ok = pcall(function()
             VIM:SendMouseButtonEvent(0, 0, 0, true,  game, 0)
             VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
         end)
+        if ok then
+            _tapFn = function()
+                VIM:SendMouseButtonEvent(0, 0, 0, true,  game, 0)
+                VIM:SendMouseButtonEvent(0, 0, 0, false, game, 0)
+            end
+        end
     end
 end
 
@@ -491,7 +518,8 @@ local function recastNow()
     if recasting or not FishState.enabled or not FishState.autoCast then return end
     recasting = true
     task.spawn(function()
-        for _ = 1, 30 do
+        local maxTries = isGhostModeOn() and 8 or 30   -- ⭐ ghost = 8 frame only
+        for _ = 1, maxTries do
             local rod = getEquippedRod()
             if not FishState.enabled or not rod then break end
             if not getStatusValue(rod, "FishingActive")
@@ -515,7 +543,19 @@ local function doReelSpam()
     local rod   = getEquippedRod()
     local start = os.clock()
     local taps  = 0
-    FishState.status = "⚡ MULTI-TAP REEL..."
+    FishState.status = "⚡ INSTANT REEL..."
+
+-- ⭐ BURST INSTAN 250ms (no-wait, full speed) — cuma di Ghost Mode
+if isGhostModeOn() then
+    local burstEnd = os.clock() + 0.25
+    while os.clock() < burstEnd and FishState.enabled and not FishState.reelAbort do
+        for _ = 1, FishSpeed.tapsPerFrame do
+            tapOnce()
+            taps += 1
+        end
+        task.wait()   -- ⬅️ WAJIB: yield biar executor gak freeze
+    end
+end
 
     local miss = 0
     local minigameSeen = false
@@ -544,7 +584,7 @@ local function doReelSpam()
 
     local dur = os.clock() - start
     FishState.reeling = false
-    FishState.status = string.format("✅ Reel %.1fs (%d tap) → cast lagi", dur, taps)
+    FishState.status = string.format("✅ Reel %.2fs (%d tap)", dur, taps)
     recastNow()
 end
 
