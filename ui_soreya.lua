@@ -12018,7 +12018,7 @@ function UI.Init(sharedState)
     Shared.ShowTitle = true 
     Shared.AutoFish_Enabled = false
     Shared.AutoSummit_Enabled = false
-    Shared.AutoFish_Turbo = true
+    Shared.AutoFish_Turbo = false
 
     -- ⭐ SHOP defaults (OFF + rarity NONE)
     Shared.Shop_AutoSell_Enabled       = false
