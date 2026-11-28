@@ -368,7 +368,6 @@ local function learn(name)
     local n = name:lower()
     if not knownExact[n] then
         knownExact[n] = true
-        print("[HideMini] 🧠 Learned:", name)
     end
 end
 
