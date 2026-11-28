@@ -535,7 +535,7 @@ end
 -- ============================================================
 -- ⚡ REEL — MULTI-TAP PER FRAME
 -- ============================================================
-local function doReelSpam()
+local function doReelSpamTap()
     if FishState.reeling then return end
     FishState.reeling   = true
     FishState.reelAbort = false
@@ -585,6 +585,96 @@ end
     FishState.reeling = false
     FishState.status = string.format("✅ Reel %.2fs (%d tap)", dur, taps)
     recastNow()
+end
+
+-- ============================================================
+-- ⚡ FAST REEL — fire remote MiniGame langsung (tanpa tap)
+-- ============================================================
+local FastReel = {
+    enabled  = true,
+    minDelay = 0.45,   -- batas bawah
+    default  = 0.60,   -- kalau preset belum dipilih (= Turbo)
+    delays = {
+        Godmode = 0.45,
+        Extreme = 0.50,
+        Insane  = 0.55,
+        Turbo   = 0.60,
+        Fast    = 0.65,
+        Normal  = 0.70,
+        Slow    = 0.75,
+    },
+}
+_G.VRILZ_FastReel = FastReel
+
+local function shouldFastReel()
+    return FastReel.enabled and (isGhostModeOn() or isTurboOn())
+end
+
+local function getFastDelay()
+    local d
+    if isGhostModeOn() then
+        d = FastReel.delays.Godmode
+    else
+        local name = Shared and Shared.AutoFish_PresetName
+        d = (name and FastReel.delays[name]) or FastReel.default
+    end
+    return math.max(d, FastReel.minDelay)
+end
+
+local function doReelSpam()
+    if FishState.reeling then return end
+
+    -- Turbo OFF / Ghost OFF → pakai cara lama (tap spam)
+    if not shouldFastReel() then
+        return doReelSpamTap()
+    end
+
+    local rod = getEquippedRod()
+    local remotes = rod and getRodRemotes(rod)
+    local mg = remotes and remotes:FindFirstChild("MiniGame")
+    if not mg then
+        return doReelSpamTap()
+    end
+
+    FishState.reeling   = true
+    FishState.reelAbort = false
+    local start = os.clock()
+    local delay = getFastDelay()
+    FishState.status = string.format("⚡ Fast reel (%.2fs)", delay)
+
+    -- tunggu delay preset
+    while os.clock() - start < delay do
+        if not FishState.enabled or FishState.reelAbort then break end
+        RunService.Heartbeat:Wait()
+    end
+
+    -- dibatalin (AutoFish OFF / minigame udah Stop) → jangan fire
+    if not FishState.enabled or FishState.reelAbort then
+        FishState.reeling = false
+        return
+    end
+
+    pcall(function() mg:FireServer(true) end)
+
+    -- tunggu minigame beres (max 1.5s)
+    local t1 = os.clock()
+    while os.clock() - t1 < 1.5
+        and FishState.enabled
+        and not FishState.reelAbort
+        and getStatusValue(rod, "MiniGameActive") do
+        RunService.Heartbeat:Wait()
+    end
+
+    if not getStatusValue(rod, "MiniGameActive") then
+        FishState.reeling = false
+        FishState.status = string.format("⚡ Fast reel %.2fs", os.clock() - start)
+        recastNow()
+        return
+    end
+
+    -- masih aktif = server nolak → balik ke tap spam
+    FishState.reeling = false
+    return doReelSpamTap()
 end
 
 -- ============================================================
