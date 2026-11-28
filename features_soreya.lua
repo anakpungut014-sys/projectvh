@@ -592,16 +592,16 @@ end
 -- ============================================================
 local FastReel = {
     enabled  = true,
-    minDelay = 0.45,   -- batas bawah
-    default  = 0.60,   -- kalau preset belum dipilih (= Turbo)
+    minDelay = 0.38,
+    default  = 0.50,
     delays = {
-        Godmode = 0.45,
-        Extreme = 0.50,
-        Insane  = 0.55,
-        Turbo   = 0.60,
-        Fast    = 0.65,
-        Normal  = 0.70,
-        Slow    = 0.75,
+        Godmode = 0.38,
+        Extreme = 0.40,
+        Insane  = 0.45,
+        Turbo   = 0.50,
+        Fast    = 0.55,
+        Normal  = 0.60,
+        Slow    = 0.65,
     },
 }
 _G.VRILZ_FastReel = FastReel
